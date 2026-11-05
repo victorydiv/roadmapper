@@ -1,0 +1,256 @@
+@page "/products/{ProductId:int}/dashboard"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var items = Roadmap.Items;
+    var goals = Roadmap.ChildrenOf(null).Where(g => g.Status != ItemStatus.Cancelled).ToList();
+    var overall = goals.Count == 0 ? 0 : (int)Math.Round(goals.Average(g => g.ProgressPct));
+    var overdue = items.Where(i => ProductRoadmap.IsOverdue(i, today)).OrderBy(i => i.EndDate).ToList();
+    var blocked = items.Where(i => ProductRoadmap.IsOpen(i) && Roadmap.IsBlocked(i.Id)).ToList();
+    var horizonEnd = today.AddDays(upcomingDays);
+    var upcoming = items.Where(i => ProductRoadmap.IsOpen(i) && i.EndDate is { } e && e >= today && e <= horizonEnd)
+                        .OrderBy(i => i.EndDate).ThenBy(i => i.ItemType).ToList();
+
+    <ProductHeader Roadmap="Roadmap" Section="Dashboard" />
+
+    @if (items.Count == 0)
+    {
+        <div class="card empty">Nothing to summarize yet. Add goals and items from the <a href="/products/@ProductId">Tree</a>.</div>
+    }
+    else
+    {
+        <div class="dash-top">
+            <div class="card hero">
+                <div class="tile-label">Overall progress</div>
+                <div class="hero-value">@overall%</div>
+                <div class="meter"><span style="width:@(overall)%"></span></div>
+                <div class="muted small">Average of @goals.Count active goal@(goals.Count == 1 ? "" : "s"), each rolled up from its work</div>
+            </div>
+            <div class="tiles">
+                <div class="card tile"><div class="tile-label">Items</div><div class="tile-value">@items.Count</div></div>
+                <div class="card tile"><div class="tile-label">In progress</div><div class="tile-value">@items.Count(i => i.Status == ItemStatus.InProgress)</div></div>
+                <div class="card tile"><div class="tile-label">Due in 30 days</div><div class="tile-value">@items.Count(i => ProductRoadmap.IsOpen(i) && i.EndDate is { } e && e >= today && e <= today.AddDays(30))</div></div>
+                <div class="card tile">
+                    <div class="tile-label">Overdue</div>
+                    <div class="tile-value">@overdue.Count</div>
+                    @if (overdue.Count > 0) { <div class="status-note"><span class="sdot critical">●</span> needs attention</div> }
+                </div>
+                <div class="card tile">
+                    <div class="tile-label">Blocked</div>
+                    <div class="tile-value">@blocked.Count</div>
+                    @if (blocked.Count > 0) { <div class="status-note"><span class="sdot serious">●</span> waiting on others</div> }
+                </div>
+            </div>
+        </div>
+
+        <div class="dash-grid">
+            <div class="card stack">
+                <h2>Progress by goal</h2>
+                @foreach (var g in goals)
+                {
+                    var work = Roadmap.Descendants(g.Id).ToList();
+                    <div class="goal-row">
+                        <div class="row">
+                            <span class="title-link" @onclick="() => OpenEdit(g)">@g.Title</span>
+                            <StatusBadge Status="g.Status" />
+                            <span class="spacer"></span>
+                            <b>@(g.ProgressPct)%</b>
+                        </div>
+                        <div class="meter"><span style="width:@(g.ProgressPct)%"></span></div>
+                        <div class="muted small">
+                            @Ui.DateRange(g.StartDate, g.EndDate)
+                            @if (work.Count > 0)
+                            {
+                                <span> · @work.Count(i => i.Status == ItemStatus.Done) of @work.Count items done</span>
+                            }
+                            @if (work.Count(i => ProductRoadmap.IsOverdue(i, today)) is > 0 and var late)
+                            {
+                                <span> · @late overdue</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="card stack">
+                <div class="row">
+                    <h2 style="margin:0">Status by level</h2>
+                    <span class="spacer"></span>
+                    <button class="btn sm" @onclick="() => statusAsTable = !statusAsTable">@(statusAsTable ? "Show bars" : "Show table")</button>
+                </div>
+                @if (statusAsTable)
+                {
+                    <table class="tree">
+                        <thead><tr><th>Level</th>@foreach (var s in Enum.GetValues<ItemStatus>()) { <th class="num">@Ui.Label(s)</th> }<th class="num">Total</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in Enum.GetValues<ItemType>())
+                            {
+                                var ofType = items.Where(i => i.ItemType == t).ToList();
+                                <tr>
+                                    <td>@(t)s</td>
+                                    @foreach (var s in Enum.GetValues<ItemStatus>()) { <td class="num">@ofType.Count(i => i.Status == s)</td> }
+                                    <td class="num"><b>@ofType.Count</b></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="legend">
+                        @foreach (var s in Enum.GetValues<ItemStatus>())
+                        {
+                            <span><span class="swatch" style="background:@StatusFill(s)"></span>@Ui.Label(s)</span>
+                        }
+                    </div>
+                    @foreach (var t in Enum.GetValues<ItemType>())
+                    {
+                        var ofType = items.Where(i => i.ItemType == t).ToList();
+                        <div class="seg-row">
+                            <span class="seg-label">@(t)s</span>
+                            @if (ofType.Count == 0)
+                            {
+                                <span class="muted small">none</span>
+                            }
+                            else
+                            {
+                                <div class="segbar" role="img" aria-label="@SegmentSummary(t, ofType)">
+                                    @foreach (var s in Enum.GetValues<ItemStatus>())
+                                    {
+                                        var n = ofType.Count(i => i.Status == s);
+                                        if (n == 0) continue;
+                                        var share = n * 100.0 / ofType.Count;
+                                        <div class="seg" title="@Ui.Label(s): @n of @ofType.Count (@share.ToString("0")%)"
+                                             style="flex:@n 1 0;background:@StatusFill(s);color:@StatusInk(s)">
+                                            @if (share >= 12) { <span>@n</span> }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <span class="muted small seg-total">@ofType.Count</span>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="card stack">
+                <div class="row">
+                    <h2 style="margin:0">Upcoming deadlines</h2>
+                    <span class="spacer"></span>
+                    <div class="segmented">
+                        @foreach (var d in new[] { 30, 60, 90 })
+                        {
+                            <button class="@(upcomingDays == d ? "on" : "")" @onclick="() => upcomingDays = d">@d days</button>
+                        }
+                    </div>
+                </div>
+                @if (upcoming.Count == 0)
+                {
+                    <div class="muted small">Nothing open is due in the next @upcomingDays days.</div>
+                }
+                <ul class="item-list">
+                    @foreach (var i in upcoming)
+                    {
+                        var days = i.EndDate!.Value.DayNumber - today.DayNumber;
+                        <li>
+                            <TypeBadge Type="i.ItemType" />
+                            <span class="title-link" @onclick="() => OpenEdit(i)">@i.Title</span>
+                            <span class="spacer"></span>
+                            <StatusBadge Status="i.Status" />
+                            <span class="small muted due">@i.EndDate.Value.ToString("MMM d") · @(days == 0 ? "today" : $"{days}d")</span>
+                        </li>
+                    }
+                </ul>
+                @if (overdue.Count > 0)
+                {
+                    <h3 class="sub">Overdue</h3>
+                    <ul class="item-list">
+                        @foreach (var i in overdue)
+                        {
+                            <li>
+                                <TypeBadge Type="i.ItemType" />
+                                <span class="title-link" @onclick="() => OpenEdit(i)">@i.Title</span>
+                                <span class="spacer"></span>
+                                <StatusBadge Status="i.Status" />
+                                <span class="small overdue due">@i.EndDate!.Value.ToString("MMM d") · @(today.DayNumber - i.EndDate.Value.DayNumber)d late</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="card stack">
+                <h2>Blocked items</h2>
+                @if (blocked.Count == 0)
+                {
+                    <div class="muted small">Nothing is blocked.</div>
+                }
+                <ul class="item-list">
+                    @foreach (var i in blocked)
+                    {
+                        var waitingOn = Roadmap.BlockedBy(i.Id).Select(d => Roadmap.Find(d.PredecessorId)).Where(p => p is not null && ProductRoadmap.IsOpen(p)).ToList();
+                        <li style="flex-wrap:wrap">
+                            <TypeBadge Type="i.ItemType" />
+                            <span class="title-link" @onclick="() => OpenEdit(i)">@i.Title</span>
+                            <span class="small muted" style="flex-basis:100%;padding-left:.2rem">
+                                waiting on @string.Join(", ", waitingOn.Select(p => $"{p!.Title} ({Ui.Label(p.Status)})"))
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </div>
+
+            <div class="card stack wide">
+                <h2>Recent activity</h2>
+                <ActivityList Entries="activity" ShowItem="true" />
+            </div>
+        </div>
+    }
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private int upcomingDays = 30;
+    private bool statusAsTable;
+    private List<AuditEntry> activity = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        await LoadActivityAsync();
+    }
+
+    protected override async Task OnEditorClosed(bool changed)
+    {
+        await base.OnEditorClosed(changed);
+        if (changed) await LoadActivityAsync();
+    }
+
+    private async Task LoadActivityAsync() => activity = await Svc.GetActivityAsync(ProductId, take: 15);
+
+    // Ordinal blue ramp (steps 250 → 700): darker = further along. Cancelled is neutral gray.
+    private static string StatusFill(ItemStatus s) => s switch
+    {
+        ItemStatus.Idea => "#86b6ef",
+        ItemStatus.Planned => "#3987e5",
+        ItemStatus.InProgress => "#1c5cab",
+        ItemStatus.Done => "#0d366b",
+        _ => "#c3c2b7",
+    };
+
+    private static string StatusInk(ItemStatus s) => s is ItemStatus.Idea or ItemStatus.Cancelled ? "#0b0b0b" : "#ffffff";
+
+    private static string SegmentSummary(ItemType t, List<RoadmapItem> ofType) =>
+        $"{t}s by status: " + string.Join(", ", Enum.GetValues<ItemStatus>()
+            .Select(s => (s, n: ofType.Count(i => i.Status == s))).Where(x => x.n > 0).Select(x => $"{Ui.Label(x.s)} {x.n}"));
+}

@@ -1,0 +1,21 @@
+<label class="row small muted">Show
+    <select value="@Value?.ToString()" @onchange="OnChange" style="width:auto">
+        @if (AllowAll)
+        {
+            <option value="">All types</option>
+        }
+        @foreach (var t in Enum.GetValues<ItemType>())
+        {
+            <option value="@t">@(t)s</option>
+        }
+    </select>
+</label>
+
+@code {
+    [Parameter] public ItemType? Value { get; set; }
+    [Parameter] public EventCallback<ItemType?> ValueChanged { get; set; }
+    [Parameter] public bool AllowAll { get; set; } = true;
+
+    private Task OnChange(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Enum.TryParse<ItemType>(e.Value as string, out var t) ? t : null);
+}

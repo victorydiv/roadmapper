@@ -1,0 +1,36 @@
+<PageTitle>@Roadmap.Product.Name · @Section</PageTitle>
+
+<div class="product-header">
+    <div>
+        <div class="small"><a href="/">Products</a> /</div>
+        <h1>@Roadmap.Product.Name</h1>
+        @if (Roadmap.Product.Description is { } desc)
+        {
+            <div class="muted small">@desc</div>
+        }
+    </div>
+    <span class="spacer"></span>
+    <span class="badge tag">Scoring: @Ui.Label(Roadmap.Product.ScoringModel)</span>
+    @ChildContent
+</div>
+
+<nav class="tabs">
+    <NavLink href="@($"{Base}/dashboard")">Dashboard</NavLink>
+    <NavLink href="@Base" Match="NavLinkMatch.All">Tree</NavLink>
+    <NavLink href="@($"{Base}/timeline")">Timeline</NavLink>
+    <NavLink href="@($"{Base}/board")">Now / Next / Later</NavLink>
+    <NavLink href="@($"{Base}/kanban")">Kanban</NavLink>
+    <NavLink href="@($"{Base}/priorities")">Priorities</NavLink>
+    <NavLink href="@($"{Base}/snapshots")">Snapshots</NavLink>
+    <NavLink href="@($"{Base}/exchange")">Import / Export</NavLink>
+    <NavLink href="@($"{Base}/settings")">Settings</NavLink>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public ProductRoadmap Roadmap { get; set; } = default!;
+    [Parameter, EditorRequired] public string Section { get; set; } = "";
+    /// <summary>Page-specific actions shown at the right of the header.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Base => $"/products/{Roadmap.Product.Id}";
+}

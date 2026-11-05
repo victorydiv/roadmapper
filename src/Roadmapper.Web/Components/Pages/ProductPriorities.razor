@@ -1,0 +1,208 @@
+@page "/products/{ProductId:int}/priorities"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var strategy = Roadmap.Strategy;
+    var model = Roadmap.Product.ScoringModel;
+    var items = Roadmap.Items.Where(i => i.ItemType == itemType && (showDone || ProductRoadmap.IsOpen(i))).ToList();
+    var matrix = PriorityMatrix.Build(items, strategy);
+    var xMax = NiceMax(matrix.Points.Select(p => p.Effort));
+    var yMax = NiceMax(matrix.Points.Select(p => p.Value));
+    var labelled = matrix.Points.Select(p => p.Item).InRankOrder().Take(3).Select(i => i.Id).ToHashSet();
+    var quadrantOf = matrix.Points.ToDictionary(p => p.Item.Id, p => p);
+
+    <ProductHeader Roadmap="Roadmap" Section="Priorities" />
+
+    <div class="toolbar">
+        <TypeFilter Value="itemType" ValueChanged="t => itemType = t ?? ItemType.Feature" AllowAll="false" />
+        <label class="check"><input type="checkbox" @bind="showDone" /> Include done / cancelled</label>
+        <span class="spacer"></span>
+        <span class="muted small">Scoring: @strategy.DisplayName. Quadrants split at the median value and effort.</span>
+    </div>
+
+    <div class="priorities">
+        <div class="card chart-card">
+            <h2>Impact vs. effort: @(itemType)s</h2>
+            @if (matrix.Points.Count == 0)
+            {
+                <div class="empty">
+                    No @(itemType.ToString().ToLower())s have enough scoring inputs to plot yet.
+                    @if (model == ScoringModel.Moscow)
+                    {
+                        <span>Under MoSCoW, set both a priority and an Effort in the item editor.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="matrix-wrap" @onmouseleave="() => hovered = null">
+                    <svg viewBox="0 0 @W @H" class="matrix" role="img" aria-label="Scatter of @(itemType)s by @strategy.ValueLabel and @strategy.EffortLabel; see the ranked table for values">
+                        @* Gridlines and tick labels *@
+                        @foreach (var t in Ticks(yMax))
+                        {
+                            var y = Y(t, yMax);
+                            <line x1="@L" x2="@(W - R)" y1="@F(y)" y2="@F(y)" class="grid" />
+                            <g><text x="@(L - 8)" y="@F(y + 4)" text-anchor="end" class="tick">@Compact(t)</text></g>
+                        }
+                        @foreach (var t in Ticks(xMax))
+                        {
+                            var x = X(t, xMax);
+                            <line x1="@F(x)" x2="@F(x)" y1="@T" y2="@(H - B)" class="grid" />
+                            <g><text x="@F(x)" y="@(H - B + 18)" text-anchor="middle" class="tick">@Compact(t)</text></g>
+                        }
+                        <line x1="@L" x2="@(W - R)" y1="@(H - B)" y2="@(H - B)" class="axis" />
+                        <line x1="@L" x2="@L" y1="@T" y2="@(H - B)" class="axis" />
+
+                        @* Median split lines and quadrant names *@
+                        <line x1="@F(X(matrix.EffortSplit, xMax))" x2="@F(X(matrix.EffortSplit, xMax))" y1="@T" y2="@(H - B)" class="split" />
+                        <line x1="@L" x2="@(W - R)" y1="@F(Y(matrix.ValueSplit, yMax))" y2="@F(Y(matrix.ValueSplit, yMax))" class="split" />
+                        <text x="@(L + 8)" y="@(T + 16)" class="quad">Quick wins</text>
+                        <text x="@(W - R - 8)" y="@(T + 16)" text-anchor="end" class="quad">Big bets</text>
+                        <text x="@(L + 8)" y="@(H - B - 8)" class="quad">Fill-ins</text>
+                        <text x="@(W - R - 8)" y="@(H - B - 8)" text-anchor="end" class="quad">Time sinks</text>
+
+                        <text x="@(L + (W - L - R) / 2)" y="@(H - 6)" text-anchor="middle" class="axis-title">@strategy.EffortLabel →</text>
+                        <text transform="translate(16 @(T + (H - T - B) / 2)) rotate(-90)" text-anchor="middle" class="axis-title">@strategy.ValueLabel →</text>
+
+                        @foreach (var p in matrix.Points)
+                        {
+                            var cx = X(p.Effort, xMax);
+                            var cy = Y(p.Value, yMax);
+                            var isHovered = hovered?.Item.Id == p.Item.Id;
+                            <circle cx="@F(cx)" cy="@F(cy)" r="@(isHovered ? 7 : 5)" class="dot" />
+                            @if (labelled.Contains(p.Item.Id))
+                            {
+                                <g><text x="@F(cx + 10)" y="@F(cy + 4)" class="dot-label">@Truncate(p.Item.Title, 26)</text></g>
+                            }
+                            @* Larger invisible hit target so small dots are easy to hover and click *@
+                            <circle cx="@F(cx)" cy="@F(cy)" r="14" class="hit"
+                                    @onmouseenter="() => hovered = p" @onclick="() => OpenEdit(p.Item)" />
+                        }
+                    </svg>
+                    @if (hovered is { } h)
+                    {
+                        var left = X(h.Effort, xMax) / W * 100;
+                        var top = Y(h.Value, yMax) / H * 100;
+                        <div class="chart-tip" style="left:@F(left)%;top:@F(top)%;@(left > 60 ? "transform:translate(calc(-100% - 14px), -50%)" : "")">
+                            <b>@h.Item.Title</b>
+                            <div class="muted">@Roadmap.PathOf(h.Item)</div>
+                            <div class="tip-grid">
+                                <span>@strategy.ValueLabel</span><b>@Compact(h.Value)</b>
+                                <span>@strategy.EffortLabel</span><b>@Compact(h.Effort)</b>
+                                <span>@strategy.DisplayName score</span><b>@Ui.ScoreText(h.Item, model)</b>
+                                <span>Quadrant</span><b>@QuadrantLabel(h.Quadrant)</b>
+                            </div>
+                            <div class="muted small">Click to edit</div>
+                        </div>
+                    }
+                </div>
+                @if (matrix.Unplotted.Count > 0)
+                {
+                    <div class="muted small">@matrix.Unplotted.Count not plotted because their scoring inputs are incomplete (listed in the table).</div>
+                }
+            }
+        </div>
+
+        <div class="table-wrap">
+            <table class="tree">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>@itemType</th>
+                        <th>Score</th>
+                        <th>@strategy.ValueLabel</th>
+                        <th>@strategy.EffortLabel</th>
+                        <th>Quadrant</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var rank = 0; }
+                    @foreach (var item in items.InRankOrder())
+                    {
+                        rank++;
+                        var point = quadrantOf.GetValueOrDefault(item.Id);
+                        <tr @key="item.Id" class="@(hovered?.Item.Id == item.Id ? "hl" : "")">
+                            <td class="num">@rank</td>
+                            <td class="title-cell">
+                                <div class="small muted">@Roadmap.PathOf(item)</div>
+                                <span class="title-link" @onclick="() => OpenEdit(item)">@item.Title</span>
+                                @if (item.ManualRank is { } mr)
+                                {
+                                    <span class="badge tag" title="Pinned by manual rank">pinned #@mr</span>
+                                }
+                            </td>
+                            <td class="num">@Ui.ScoreText(item, model)</td>
+                            <td class="num">@(point is null ? "–" : Compact(point.Value))</td>
+                            <td class="num">@(point is null ? "–" : Compact(point.Effort))</td>
+                            <td>
+                                @if (point is null)
+                                {
+                                    <span class="muted small">needs inputs</span>
+                                }
+                                else
+                                {
+                                    <span class="badge tag">@QuadrantLabel(point.Quadrant)</span>
+                                }
+                            </td>
+                            <td><StatusBadge Status="item.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    // Chart geometry in viewBox units: width/height and left/right/top/bottom margins.
+    private const double W = 720, H = 440, L = 64, R = 20, T = 16, B = 52;
+
+    private ItemType itemType = ItemType.Feature;
+    private bool showDone;
+    private MatrixPoint? hovered;
+
+    private static double X(double v, double max) => L + v / max * (W - L - R);
+    private static double Y(double v, double max) => H - B - v / max * (H - T - B);
+    private static string F(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A round axis maximum (1, 2, 2.5 or 5 × 10ⁿ) at or above the largest value.</summary>
+    private static double NiceMax(IEnumerable<double> values)
+    {
+        var max = values.DefaultIfEmpty(1).Max();
+        if (max <= 0) return 1;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(max)));
+        foreach (var m in new[] { 1, 2, 2.5, 5, 10 })
+            if (m * magnitude >= max) return m * magnitude;
+        return 10 * magnitude;
+    }
+
+    private static IEnumerable<double> Ticks(double max) => Enumerable.Range(0, 6).Select(i => max * i / 5);
+
+    private static string Compact(double v) => Math.Abs(v) switch
+    {
+        >= 1_000_000 => (v / 1_000_000).ToString("0.#") + "M",
+        >= 10_000 => (v / 1_000).ToString("0.#") + "K",
+        _ => v.ToString(v % 1 == 0 ? "#,0" : "#,0.##"),
+    };
+
+    private static string Truncate(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "…";
+
+    private static string QuadrantLabel(Quadrant q) => q switch
+    {
+        Quadrant.QuickWin => "Quick win",
+        Quadrant.BigBet => "Big bet",
+        Quadrant.FillIn => "Fill-in",
+        _ => "Time sink",
+    };
+}

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Roadmapper.Core/Roadmapper.Core.csproj" />
+    <Project Path="src/Roadmapper.Data/Roadmapper.Data.csproj" />
+    <Project Path="src/Roadmapper.Web/Roadmapper.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Roadmapper.Tests/Roadmapper.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,59 @@
+@page "/products/{ProductId:int}/kanban"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    <ProductHeader Roadmap="Roadmap" Section="Kanban" />
+
+    <div class="toolbar">
+        <TypeFilter @bind-Value="typeFilter" />
+        <label class="row small muted">Horizon
+            <select @bind="horizonFilter" style="width:auto">
+                <option value="">Any</option>
+                @foreach (var h in Enum.GetValues<Horizon>())
+                {
+                    <option value="@h">@h</option>
+                }
+            </select>
+        </label>
+        <label class="check"><input type="checkbox" @bind="showCancelled" /> Show Cancelled column</label>
+        <span class="spacer"></span>
+        <span class="muted small">Drag a card to change its status. Moving to Done sets progress to 100%.</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    <DragBoard TKey="ItemStatus" Roadmap="Roadmap" KeyOf="i => i.Status"
+               Columns="showCancelled ? AllColumns : AllColumns.Where(c => c.Key != ItemStatus.Cancelled).ToList()"
+               Items="Roadmap.Items.Where(i => (typeFilter is null || i.ItemType == typeFilter) && (horizonFilter is null || i.Horizon == horizonFilter))"
+               OnMove="m => RunAsync(() => Svc.SetStatusAsync(m.Item.Id, m.To))"
+               OnEdit="OpenEdit">
+        <CardBadges Context="item">
+            @if (item.Horizon is { } h)
+            {
+                <span class="badge tag">@h</span>
+            }
+        </CardBadges>
+    </DragBoard>
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private static readonly IReadOnlyList<DragBoard<ItemStatus>.Column> AllColumns =
+        Enum.GetValues<ItemStatus>().Select(s => new DragBoard<ItemStatus>.Column(s, Ui.Label(s))).ToList();
+
+    private ItemType? typeFilter = ItemType.Feature;
+    private Horizon? horizonFilter;
+    private bool showCancelled;
+}

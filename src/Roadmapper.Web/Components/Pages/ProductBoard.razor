@@ -1,0 +1,45 @@
+@page "/products/{ProductId:int}/board"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    <ProductHeader Roadmap="Roadmap" Section="Now / Next / Later" />
+
+    <div class="toolbar">
+        <TypeFilter @bind-Value="typeFilter" />
+        <label class="check"><input type="checkbox" @bind="showDone" /> Include done / cancelled</label>
+        <span class="spacer"></span>
+        <span class="muted small">Drag cards between columns. Each column is sorted by priority.</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    <DragBoard TKey="Horizon?" Roadmap="Roadmap" Columns="Columns" KeyOf="i => i.Horizon"
+               Items="Roadmap.Items.Where(i => (typeFilter is null || i.ItemType == typeFilter) && (showDone || ProductRoadmap.IsOpen(i)))"
+               OnMove="m => RunAsync(() => Svc.SetHorizonAsync(m.Item.Id, m.To))"
+               OnEdit="OpenEdit">
+        <CardBadges Context="item"><StatusBadge Status="item.Status" /></CardBadges>
+    </DragBoard>
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private static readonly IReadOnlyList<DragBoard<Horizon?>.Column> Columns =
+    [
+        new(Horizon.Now, "Now"), new(Horizon.Next, "Next"), new(Horizon.Later, "Later"), new(null, "Unassigned"),
+    ];
+
+    private ItemType? typeFilter = ItemType.Feature;
+    private bool showDone;
+}

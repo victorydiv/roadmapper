@@ -1,0 +1,254 @@
+@page "/products/{ProductId:int}/exchange"
+@using Roadmapper.Core.Exchange
+@using Roadmapper.Data.Exchange
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    <ProductHeader Roadmap="Roadmap" Section="Import / Export" />
+
+    <div class="stack">
+        <div class="card stack">
+            <h2>Export</h2>
+            <div class="export-grid">
+                <a class="export-option" href="/export/@ProductId/roadmap.xlsx" download>
+                    <b>Excel (.xlsx)</b>
+                    <span class="muted small">Every item and field, plus a Dependencies sheet. Edit it and import it back.</span>
+                </a>
+                <a class="export-option" href="/export/@ProductId/roadmap.csv" download>
+                    <b>CSV</b>
+                    <span class="muted small">The same columns as Excel, for other tools.</span>
+                </a>
+                <a class="export-option" href="/export/@ProductId/roadmap.pdf" target="_blank">
+                    <b>PDF report</b>
+                    <span class="muted small">Summary and full hierarchy for stakeholders. Opens in a new tab.</span>
+                </a>
+                <a class="export-option" href="/products/@ProductId/timeline">
+                    <b>Timeline image</b>
+                    <span class="muted small">Use the SVG / PNG buttons on the Timeline tab to export exactly what you see.</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Import</h2>
+                <span class="spacer"></span>
+                <a class="btn sm" href="/export/template.csv" download>Download template</a>
+            </div>
+            <div class="steps">
+                <span class="@(step == Step.Upload ? "on" : "")">1. Choose file</span>
+                <span class="@(step == Step.Map ? "on" : "")">2. Match columns</span>
+                <span class="@(step == Step.Preview ? "on" : "")">3. Review &amp; import</span>
+            </div>
+
+            @if (Error is not null)
+            {
+                <div class="alert">@Error</div>
+            }
+
+            @switch (step)
+            {
+                case Step.Upload:
+                    <div class="muted small">
+                        A .csv or .xlsx file with a header row (first sheet only). Items are always <b>added</b>; nothing existing is changed.
+                        Parents can be in the file or already in this product. Use the full path (e.g. <i>Goal › Initiative</i>) or just the title if it's unique.
+                        A blank Type is worked out from the parent. Missing themes and tags are created.
+                    </div>
+                    <div class="row">
+                        <InputFile OnChange="LoadFileAsync" accept=".csv,.xlsx,.txt" disabled="@reading" />
+                        @if (reading) { <span class="muted small">Reading…</span> }
+                    </div>
+                    break;
+
+                case Step.Map:
+                    <div class="row">
+                        <span><b>@fileName</b> · @dataRows.Count rows</span>
+                        <span class="spacer"></span>
+                        <button class="btn" @onclick="Reset">Choose another file</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="tree">
+                            <thead><tr><th>Column in file</th><th>Sample values</th><th>Import as</th></tr></thead>
+                            <tbody>
+                                @for (var c = 0; c < headers.Length; c++)
+                                {
+                                    var col = c;
+                                    <tr>
+                                        <td><b>@headers[col]</b></td>
+                                        <td class="small muted" style="white-space:normal">@string.Join(" · ", dataRows.Take(3).Select(r => col < r.Length ? r[col] : "").Where(v => v.Length > 0).Select(v => v.Length > 40 ? v[..39] + "…" : v))</td>
+                                        <td>
+                                            <select value="@(mapping[col] ?? "")" @onchange="e => mapping[col] = string.IsNullOrEmpty(e.Value as string) ? null : (string)e.Value!" style="width:auto">
+                                                <option value="">— ignore —</option>
+                                                @foreach (var f in RoadmapColumns.Importable)
+                                                {
+                                                    <option value="@f">@f</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (MappingProblem is { } problem)
+                    {
+                        <div class="alert warn small">@problem</div>
+                    }
+                    <div class="row">
+                        <button class="btn primary" disabled="@(MappingProblem is not null)" @onclick="PreviewImport">Preview</button>
+                    </div>
+                    break;
+
+                case Step.Preview:
+                    var ok = plans.Count(p => p.IsValid);
+                    var bad = plans.Count - ok;
+                    var warned = plans.Count(p => p.IsValid && p.Warnings.Count > 0);
+                    <div class="row">
+                        <span><b>@ok</b> ready to import</span>
+                        @if (bad > 0) { <span class="badge blocked">@bad with errors will be skipped</span> }
+                        @if (warned > 0) { <span class="badge status-InProgress">@warned with warnings</span> }
+                        <span class="spacer"></span>
+                        <label class="check"><input type="checkbox" @bind="problemsOnly" /> Only show rows with problems</label>
+                    </div>
+                    <div class="table-wrap" style="max-height:60vh;overflow:auto">
+                        <table class="tree">
+                            <thead><tr><th>Row</th><th></th><th>Type</th><th>Title</th><th>Parent</th><th>Dates</th><th>Status</th><th>Notes</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in plans.Where(p => !problemsOnly || !p.IsValid || p.Warnings.Count > 0))
+                                {
+                                    <tr @key="p.RowNumber">
+                                        <td class="num">@p.RowNumber</td>
+                                        <td title="@(p.IsValid ? p.Warnings.Count > 0 ? "Will import, with warnings" : "Ready" : "Will be skipped")">
+                                            @(p.IsValid ? p.Warnings.Count > 0 ? "⚠" : "✓" : "✕")
+                                        </td>
+                                        <td>@if (p.IsValid) { <TypeBadge Type="p.Draft.ItemType" /> }</td>
+                                        <td class="title-cell">@p.Draft.Title</td>
+                                        <td class="small muted" style="white-space:normal">@p.ParentDisplay</td>
+                                        <td class="small">@Ui.DateRange(p.Draft.StartDate, p.Draft.EndDate)</td>
+                                        <td><StatusBadge Status="p.Draft.Status" /></td>
+                                        <td class="small" style="white-space:normal">
+                                            @foreach (var e in p.Errors) { <div class="overdue">@e</div> }
+                                            @foreach (var w in p.Warnings) { <div class="muted">@w</div> }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="row">
+                        <button class="btn" @onclick="() => step = Step.Map">Back to columns</button>
+                        <span class="spacer"></span>
+                        <button class="btn primary" disabled="@(ok == 0 || importing)" @onclick="ImportAsync">
+                            @(importing ? "Importing…" : $"Import {ok} item{(ok == 1 ? "" : "s")}")
+                        </button>
+                    </div>
+                    break;
+
+                case Step.Done:
+                    <div class="alert ok">
+                        Imported @importedCount item@(importedCount == 1 ? "" : "s") into @Roadmap.Product.Name.
+                    </div>
+                    <div class="row">
+                        <a class="btn primary" href="/products/@ProductId">Open the tree</a>
+                        <button class="btn" @onclick="Reset">Import another file</button>
+                    </div>
+                    break;
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private enum Step { Upload, Map, Preview, Done }
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    private Step step = Step.Upload;
+    private bool reading, importing, problemsOnly;
+    private string fileName = "";
+    private string[] headers = [];
+    private List<string[]> dataRows = [];
+    private string?[] mapping = [];
+    private List<PlannedItem> plans = [];
+    private int importedCount;
+
+    private string? MappingProblem
+    {
+        get
+        {
+            if (!mapping.Contains(RoadmapColumns.Title)) return "Choose which column holds the item Title.";
+            var dupes = mapping.OfType<string>().GroupBy(m => m).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            return dupes.Count > 0 ? $"Each field can only come from one column: {string.Join(", ", dupes)}." : null;
+        }
+    }
+
+    private async Task LoadFileAsync(InputFileChangeEventArgs e)
+    {
+        Error = null;
+        reading = true;
+        try
+        {
+            var file = e.File;
+            if (file.Size > MaxFileBytes) throw new InvalidOperationException("That file is larger than 5 MB.");
+            // ClosedXML needs a seekable stream; the upload stream isn't one.
+            using var buffer = new MemoryStream();
+            await using (var upload = file.OpenReadStream(MaxFileBytes)) await upload.CopyToAsync(buffer);
+            buffer.Position = 0;
+
+            var rows = TableReader.Read(buffer, file.Name);
+            fileName = file.Name;
+            headers = rows[0].Select((h, i) => string.IsNullOrWhiteSpace(h) ? $"Column {i + 1}" : h.Trim()).ToArray();
+            dataRows = rows.Skip(1).ToList();
+            // Guess each column's field, keeping only the first column that claims a field.
+            var claimed = new HashSet<string>();
+            mapping = headers.Select(h => RoadmapColumns.Guess(h) is { } f && claimed.Add(f) ? f : null).ToArray();
+            step = Step.Map;
+        }
+        catch (InvalidOperationException ex) { Error = ex.Message; }
+        catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException)
+        {
+            Error = $"Couldn't read that file: {ex.Message}";
+        }
+        finally { reading = false; }
+    }
+
+    private void PreviewImport()
+    {
+        var rows = dataRows.Select((cells, i) => new ImportRow(i + 2, mapping
+            .Select((field, col) => (field, value: col < cells.Length ? cells[col] : ""))
+            .Where(x => x.field is not null)
+            .ToDictionary(x => x.field!, x => x.value))).ToList();
+        plans = ImportPlanner.Plan(rows, Roadmap!);
+        problemsOnly = plans.Any(p => !p.IsValid);
+        step = Step.Preview;
+    }
+
+    private async Task ImportAsync()
+    {
+        importing = true;
+        Error = null;
+        try
+        {
+            importedCount = await Svc.ImportAsync(ProductId, plans);
+            plans = [];
+            step = Step.Done;
+            await ReloadAsync();
+        }
+        catch (InvalidOperationException ex) { Error = ex.Message; }
+        finally { importing = false; }
+    }
+
+    private void Reset()
+    {
+        step = Step.Upload;
+        Error = null;
+        headers = [];
+        dataRows = [];
+        mapping = [];
+        plans = [];
+    }
+}

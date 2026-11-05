@@ -1,0 +1,155 @@
+@page "/products/{ProductId:int}"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var model = Roadmap.Product.ScoringModel;
+    <ProductHeader Roadmap="Roadmap" Section="Tree">
+        <button class="btn primary" @onclick="() => OpenNew(ItemType.Goal, null)">+ Goal</button>
+    </ProductHeader>
+
+    <div class="toolbar">
+        <div class="segmented" title="Sibling order">
+            <button class="@(byPriority ? "" : "on")" @onclick="() => byPriority = false">Manual order</button>
+            <button class="@(byPriority ? "on" : "")" @onclick="() => byPriority = true">By priority</button>
+        </div>
+        <button class="btn" @onclick="() => collapsed.Clear()">Expand all</button>
+        <button class="btn" @onclick="CollapseAll">Collapse all</button>
+        <span class="spacer"></span>
+        <span class="muted small">@Roadmap.Items.Count items</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    @if (Roadmap.Items.Count == 0)
+    {
+        <div class="card empty">
+            <p>This roadmap is empty. Start with a <b>Goal</b>, the outcome you're aiming for.</p>
+            <button class="btn primary" @onclick="() => OpenNew(ItemType.Goal, null)">+ Add the first goal</button>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="tree">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Dates</th>
+                        <th>Horizon</th>
+                        <th>Owner</th>
+                        <th>Theme / tags</th>
+                        <th title="@Roadmap.Strategy.DisplayName (manual rank in brackets)">Score</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Roadmap.Flatten(i => !collapsed.Contains(i.Id), byPriority))
+                    {
+                        var item = row.Item;
+                        var rolled = row.HasChildren && !item.IsRollupOverridden;
+                        var childType = HierarchyRules.ChildTypeOf(item.ItemType);
+                        <tr class="depth-@row.Depth" @key="item.Id">
+                            <td class="title-cell">
+                                <div class="inner" style="padding-left:@(row.Depth * 1.4)rem">
+                                    @if (row.HasChildren)
+                                    {
+                                        <button class="caret" @onclick="() => Toggle(item.Id)" title="Expand / collapse">@(collapsed.Contains(item.Id) ? "▶" : "▼")</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="caret"></span>
+                                    }
+                                    <TypeBadge Type="item.ItemType" />
+                                    <span class="title-link" @onclick="() => OpenEdit(item)">@item.Title</span>
+                                    @if (Roadmap.IsBlocked(item.Id))
+                                    {
+                                        <span class="badge blocked" title="Has unfinished predecessors">blocked</span>
+                                    }
+                                </div>
+                            </td>
+                            <td><StatusBadge Status="item.Status" /></td>
+                            <td>
+                                <div class="progress-cell @(rolled ? "rolled" : "")" title="@(rolled ? "Rolled up from children" : "")">
+                                    <div class="progress"><span style="width:@(item.ProgressPct)%"></span></div>
+                                    @(item.ProgressPct)%
+                                </div>
+                            </td>
+                            <td class="small @(rolled ? "rolled" : "")">@Ui.DateRange(item.StartDate, item.EndDate)</td>
+                            <td class="small">@item.Horizon</td>
+                            <td class="small">@item.Owner</td>
+                            <td>
+                                <div class="row" style="gap:.25rem">
+                                    @if (item.Theme is { } theme)
+                                    {
+                                        <span class="badge tag"><span class="theme-dot" style="background:@theme.Color"></span> @theme.Name</span>
+                                    }
+                                    @foreach (var tag in item.Tags)
+                                    {
+                                        <span class="badge tag">#@tag.Name</span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="small">
+                                @Ui.ScoreText(item, model)
+                                @if (item.ManualRank is { } rank)
+                                {
+                                    <span class="muted" title="Manual rank"> [@rank]</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="row-actions">
+                                    @if (childType is { } ct)
+                                    {
+                                        <button class="btn icon" title="Add @ct" @onclick="() => AddChild(item, ct)">+ @ct</button>
+                                    }
+                                    @if (!byPriority)
+                                    {
+                                        <button class="btn icon" title="Move up" @onclick="() => RunAsync(() => Svc.MoveItemAsync(item.Id, -1))">↑</button>
+                                        <button class="btn icon" title="Move down" @onclick="() => RunAsync(() => Svc.MoveItemAsync(item.Id, 1))">↓</button>
+                                    }
+                                    <button class="btn icon" title="Edit" @onclick="() => OpenEdit(item)">Edit</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private readonly HashSet<int> collapsed = new();
+    private bool byPriority;
+
+    private void Toggle(int id)
+    {
+        if (!collapsed.Remove(id)) collapsed.Add(id);
+    }
+
+    private void CollapseAll()
+    {
+        foreach (var i in Roadmap!.Items.Where(i => Roadmap.HasChildren(i.Id))) collapsed.Add(i.Id);
+    }
+
+    private void AddChild(RoadmapItem parent, ItemType type)
+    {
+        collapsed.Remove(parent.Id);
+        OpenNew(type, parent.Id);
+    }
+}

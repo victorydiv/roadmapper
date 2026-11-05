@@ -1,0 +1,252 @@
+@page "/products/{ProductId:int}/timeline"
+@inherits ProductPageBase
+@inject IJSRuntime JS
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var rows = Roadmap.Flatten(deepest: deepest);
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var range = TimelineLayout.Range(
+        rows.Select(r => TimelineLayout.Span(r.Item))
+            .Concat(rows.Select(r => BaselineOf(r.Item) is { } b ? TimelineLayout.Span(b.StartDate, b.EndDate) : null))
+            .OfType<(DateOnly Start, DateOnly End)>(),
+        today);
+    var width = (range.End.DayNumber - range.Start.DayNumber) * PxPerDay;
+    var rowIndex = rows.Select((r, i) => (r.Item.Id, i)).ToDictionary(p => p.Id, p => p.i);
+
+    <ProductHeader Roadmap="Roadmap" Section="Timeline">
+        <button class="btn primary" @onclick="() => OpenNew(ItemType.Goal, null)">+ Goal</button>
+    </ProductHeader>
+
+    <div class="toolbar">
+        <div class="segmented" title="Zoom">
+            <button class="@(quarterScale ? "" : "on")" @onclick="() => quarterScale = false">Months</button>
+            <button class="@(quarterScale ? "on" : "")" @onclick="() => quarterScale = true">Quarters</button>
+        </div>
+        <label class="row small muted">Show down to
+            <select @bind="deepest">
+                @foreach (var t in Enum.GetValues<ItemType>())
+                {
+                    <option value="@t">@(t)s</option>
+                }
+            </select>
+        </label>
+        <label class="row small muted">Compare to
+            <select value="@(selectedBaseline?.ToString() ?? "")" @onchange="OnBaselineChanged" style="width:auto">
+                <option value="">No baseline</option>
+                @foreach (var s in snapshots)
+                {
+                    <option value="@s.Id">@s.Name (@s.TakenAt.ToLocalTime().ToString("MMM d"))</option>
+                }
+            </select>
+        </label>
+        <span class="spacer"></span>
+        <a class="btn" href="@PdfUrl" target="_blank" title="Report with this Gantt fitted to landscape pages, plus the item and dependency tables">PDF</a>
+        <a class="btn" href="@SvgUrl(download: true)" title="Download this view as a vector image">SVG</a>
+        <button class="btn" disabled="@exportingPng" @onclick="DownloadPngAsync" title="Download this view as an image">@(exportingPng ? "Rendering…" : "PNG")</button>
+    </div>
+
+    <div class="legend" style="margin-bottom:.6rem">
+        <span><span class="swatch" style="background:#7c4dcc;height:.35rem"></span>Parent (rolled up)</span>
+        <span><span class="swatch" style="background:#128a8a"></span>Item (lighter part = progress)</span>
+        @if (baselineItems is not null)
+        {
+            <span><span class="swatch" style="background:#9aa3b2;height:4px"></span>Baseline: @baselineName</span>
+        }
+        <span><span class="swatch" style="background:#9aa3b2;height:2px"></span>Dependency</span>
+        <span><span class="swatch" style="background:#c8372d;height:2px"></span>Schedule overlap</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    @if (rows.Count == 0)
+    {
+        <div class="card empty">Nothing to show yet. Add items with dates from the Tree view.</div>
+    }
+    else
+    {
+        <div class="timeline">
+            <div class="tl-labels">
+                <div class="tl-head">Item</div>
+                @foreach (var row in rows)
+                {
+                    var item = row.Item;
+                    var slip = SlipDays(item);
+                    <div class="tl-label" style="padding-left:@(0.5 + row.Depth * 1.1)rem" title="@item.Title" @onclick="() => OpenEdit(item)">
+                        <span class="theme-dot" style="background:@Ui.TypeColor(item.ItemType)" title="@item.ItemType"></span>
+                        <span class="t" style="font-weight:@(row.Depth == 0 ? 600 : 400)">@item.Title</span>
+                        @if (slip is { } d && d != 0)
+                        {
+                            <span class="slip @(d > 0 ? "late" : "early")" title="End date vs. baseline">@(d > 0 ? "+" : "−")@Math.Abs(d)d</span>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="tl-scroll">
+                <div class="tl-canvas" style="width:@(Px(width))px">
+                    <div class="tl-months">
+                        @for (var m = range.Start; m < range.End; m = m.AddMonths(1))
+                        {
+                            var left = (m.DayNumber - range.Start.DayNumber) * PxPerDay;
+                            var w = DateTime.DaysInMonth(m.Year, m.Month) * PxPerDay;
+                            <div class="tl-month" style="left:@(Px(left))px;width:@(Px(w))px">
+                                <b>@m.ToString(quarterScale ? "MMM" : "MMMM")</b>
+                                @TimelineLayout.MonthCaption(m, range.Start, quarterScale)
+                            </div>
+                            <div class="tl-grid" style="left:@(Px(left))px"></div>
+                        }
+                    </div>
+
+                    @if (today >= range.Start && today < range.End)
+                    {
+                        <div class="tl-today" title="Today" style="left:@(Px((today.DayNumber - range.Start.DayNumber) * PxPerDay))px"></div>
+                    }
+
+                    @foreach (var row in rows)
+                    {
+                        var item = row.Item;
+                        <div class="tl-row">
+                            @if (BaselineOf(item) is { } b && TimelineLayout.Span(b.StartDate, b.EndDate) is { } bs)
+                            {
+                                <div class="tl-ghost" title="Baseline “@baselineName”: @Ui.DateRange(b.StartDate, b.EndDate)"
+                                     style="left:@(Px((bs.Start.DayNumber - range.Start.DayNumber) * PxPerDay))px;width:@(Px((bs.End.DayNumber - bs.Start.DayNumber + 1) * PxPerDay))px"></div>
+                            }
+                            @if (TimelineLayout.Span(item) is { } span)
+                            {
+                                var x = (span.Start.DayNumber - range.Start.DayNumber) * PxPerDay;
+                                var w = (span.End.DayNumber - span.Start.DayNumber + 1) * PxPerDay;
+                                <div class="tl-bar @(row.HasChildren ? "parent" : "") @(item.Status == ItemStatus.Cancelled ? "cancelled" : "")"
+                                     style="left:@(Px(x))px;width:@(Px(w))px;background:@Ui.ColorOf(item)"
+                                     title="@item.Title · @Ui.DateRange(item.StartDate, item.EndDate) · @Ui.Label(item.Status) · @(item.ProgressPct)%"
+                                     @onclick="() => OpenEdit(item)">
+                                    <span class="fill" style="width:@(item.ProgressPct)%"></span>
+                                    <span class="lbl">@item.Title</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="tl-nodate">no dates</span>
+                            }
+                        </div>
+                    }
+
+                    <svg class="tl-arrows" width="@Px(width)" height="@(rows.Count * RowHeight)">
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M0,0 L8,4 L0,8 z" fill="#9aa3b2" />
+                            </marker>
+                            <marker id="arrow-bad" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M0,0 L8,4 L0,8 z" fill="#c8372d" />
+                            </marker>
+                        </defs>
+                        @foreach (var dep in Roadmap.Dependencies)
+                        {
+                            if (!rowIndex.TryGetValue(dep.PredecessorId, out var pi) || !rowIndex.TryGetValue(dep.SuccessorId, out var si)) continue;
+                            if (TimelineLayout.Span(rows[pi].Item) is not { } ps || TimelineLayout.Span(rows[si].Item) is not { } ss) continue;
+                            var x1 = (ps.End.DayNumber - range.Start.DayNumber + 1) * PxPerDay;
+                            var x2 = (ss.Start.DayNumber - range.Start.DayNumber) * PxPerDay;
+                            var y1 = pi * RowHeight + RowHeight / 2.0;
+                            var y2 = si * RowHeight + RowHeight / 2.0;
+                            var bad = Roadmap.HasScheduleConflict(dep);
+                            <path d="M @Px(x1) @Px(y1) C @Px(x1 + 28) @Px(y1), @Px(x2 - 28) @Px(y2), @Px(x2) @Px(y2)"
+                                  fill="none" stroke="@(bad ? "#c8372d" : "#9aa3b2")" stroke-width="1.5"
+                                  stroke-dasharray="@(bad ? "4 3" : "")" marker-end="url(#@(bad ? "arrow-bad" : "arrow"))" />
+                        }
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <p class="muted small">
+            Click any bar or label to edit. Parent bars span their children and update automatically.
+            @if (baselineItems is not null)
+            {
+                <span>Thin gray bars show each item's dates in the baseline; +Nd / −Nd is how far its end date moved.</span>
+            }
+        </p>
+    }
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private const int RowHeight = 34;
+
+    /// <summary>Snapshot id to overlay; settable from the Snapshots page via ?baseline=.</summary>
+    [SupplyParameterFromQuery] public int? Baseline { get; set; }
+
+    private bool quarterScale, exportingPng;
+    private ItemType deepest = ItemType.Task;
+    private List<Snapshot> snapshots = [];
+    private Dictionary<int, SnapshotItem>? baselineItems;
+    private string? baselineName;
+    private int? selectedBaseline, seenQueryBaseline;
+    private bool queryApplied;
+
+    private double PxPerDay => quarterScale ? TimelineLayout.QuarterPxPerDay : TimelineLayout.MonthPxPerDay;
+
+    private static string Px(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        snapshots = await Svc.GetSnapshotsAsync(ProductId);
+        // Apply ?baseline= on first load or when the query changes; later picks are kept in selectedBaseline.
+        if (!queryApplied || Baseline != seenQueryBaseline)
+        {
+            queryApplied = true;
+            seenQueryBaseline = Baseline;
+            await LoadBaselineAsync(Baseline);
+        }
+    }
+
+    private async Task OnBaselineChanged(ChangeEventArgs e) =>
+        await LoadBaselineAsync(int.TryParse(e.Value as string, out var id) ? id : null);
+
+    private async Task LoadBaselineAsync(int? snapshotId)
+    {
+        selectedBaseline = snapshotId;
+        baselineItems = null;
+        baselineName = null;
+        if (snapshotId is { } id && await Svc.GetSnapshotAsync(id) is { } s && s.Snapshot.ProductId == ProductId)
+        {
+            baselineItems = s.Items.ToDictionary(i => i.Id);
+            baselineName = s.Snapshot.Name;
+        }
+    }
+
+    private SnapshotItem? BaselineOf(RoadmapItem item) => baselineItems?.GetValueOrDefault(item.Id);
+
+    private int? SlipDays(RoadmapItem item) =>
+        BaselineOf(item) is { EndDate: { } before } && item.EndDate is { } after ? after.DayNumber - before.DayNumber : null;
+
+    private string SvgUrl(bool download) =>
+        $"/export/{ProductId}/timeline.svg?scale={(quarterScale ? "quarter" : "month")}&depth={deepest}" +
+        (baselineItems is not null ? $"&baseline={selectedBaseline}" : "") + (download ? "&download=true" : "");
+
+    private string PdfUrl =>
+        $"/export/{ProductId}/roadmap.pdf?depth={deepest}" + (baselineItems is not null ? $"&baseline={selectedBaseline}" : "");
+
+    private async Task DownloadPngAsync()
+    {
+        exportingPng = true;
+        Error = null;
+        try
+        {
+            await JS.InvokeVoidAsync("roadmapper.downloadSvgAsPng", SvgUrl(download: false),
+                $"{Roadmap!.Product.Name} timeline {DateTime.Today:yyyy-MM-dd}.png");
+        }
+        catch (JSException ex) { Error = ex.Message; }
+        finally { exportingPng = false; }
+    }
+}

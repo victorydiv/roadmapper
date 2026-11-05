@@ -1,0 +1,97 @@
+﻿@page "/"
+@inject RoadmapService Svc
+@inject NavigationManager Nav
+
+<PageTitle>Products · Roadmapper</PageTitle>
+
+<div class="product-header">
+    <div>
+        <h1>Products</h1>
+        <div class="muted small">Each product has its own roadmap: Goals › Initiatives › Features › Tasks.</div>
+    </div>
+    <span class="spacer"></span>
+    @if (!creating)
+    {
+        <button class="btn primary" @onclick="() => creating = true">+ New product</button>
+    }
+</div>
+
+@if (creating)
+{
+    <div class="card stack" style="margin-bottom:1rem;max-width:640px">
+        <h2>New product</h2>
+        @if (error is not null)
+        {
+            <div class="alert">@error</div>
+        }
+        <label class="field">Name
+            <input @bind="newName" @bind:event="oninput" autofocus />
+        </label>
+        <label class="field">Description
+            <textarea @bind="newDescription"></textarea>
+        </label>
+        <label class="field">Prioritization model
+            <select @bind="newModel">
+                <option value="@ScoringModel.Rice">RICE: (Reach × Impact × Confidence) ÷ Effort</option>
+                <option value="@ScoringModel.Wsjf">WSJF: Cost of delay ÷ Job size</option>
+                <option value="@ScoringModel.Moscow">MoSCoW: Must / Should / Could / Won't</option>
+            </select>
+        </label>
+        <div class="row">
+            <button class="btn primary" disabled="@string.IsNullOrWhiteSpace(newName)" @onclick="CreateAsync">Create</button>
+            <button class="btn" @onclick="() => creating = false">Cancel</button>
+        </div>
+    </div>
+}
+
+@if (products is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (products.Count == 0)
+{
+    <div class="card empty">No products yet. Create one to start a roadmap.</div>
+}
+else
+{
+    <div class="product-grid">
+        @foreach (var p in products)
+        {
+            <a class="card product-card" href="/products/@p.Id">
+                <div class="row">
+                    <h2 style="margin:0">@p.Name</h2>
+                    <span class="spacer"></span>
+                    <span class="badge tag">@Ui.Label(p.ScoringModel)</span>
+                </div>
+                @if (p.Description is { } d)
+                {
+                    <div class="muted small">@d</div>
+                }
+                <div class="muted small">@p.GoalCount goals · @p.ItemCount items · @p.DoneCount done</div>
+                <div class="progress"><span style="width:@(p.ItemCount == 0 ? 0 : p.DoneCount * 100 / p.ItemCount)%"></span></div>
+            </a>
+        }
+    </div>
+}
+
+@code {
+    private List<ProductSummary>? products;
+    private bool creating;
+    private string newName = "";
+    private string? newDescription;
+    private ScoringModel newModel = ScoringModel.Rice;
+    private string? error;
+
+    protected override async Task OnInitializedAsync() => products = await Svc.GetProductsAsync();
+
+    private async Task CreateAsync()
+    {
+        error = null;
+        try
+        {
+            var product = await Svc.CreateProductAsync(newName, newDescription, newModel);
+            Nav.NavigateTo($"/products/{product.Id}");
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+}

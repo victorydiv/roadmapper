@@ -1,0 +1,159 @@
+@page "/products/{ProductId:int}/settings"
+@inherits ProductPageBase
+@inject NavigationManager Nav
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var product = Roadmap.Product;
+    <ProductHeader Roadmap="Roadmap" Section="Settings" />
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Product</h2>
+            <label class="field">Name
+                <input @bind="name" />
+            </label>
+            <label class="field">Description
+                <textarea @bind="description"></textarea>
+            </label>
+            <label class="field">Prioritization model
+                <select @bind="model">
+                    <option value="@ScoringModel.Rice">RICE: (Reach × Impact × Confidence) ÷ Effort</option>
+                    <option value="@ScoringModel.Wsjf">WSJF: Cost of delay ÷ Job size</option>
+                    <option value="@ScoringModel.Moscow">MoSCoW: Must / Should / Could / Won't</option>
+                </select>
+            </label>
+            @if (model != product.ScoringModel)
+            {
+                <div class="alert warn small">
+                    Scores will be recalculated with @Ui.Label(model). Inputs entered for other models are kept,
+                    so you can switch back without losing them.
+                </div>
+            }
+            <div class="row">
+                <button class="btn primary" @onclick="SaveProductAsync">Save</button>
+                @if (saved)
+                {
+                    <span class="muted small">Saved ✓</span>
+                }
+            </div>
+        </div>
+
+        <div class="card stack">
+            <h2>Themes</h2>
+            <div class="muted small">Themes group work across the hierarchy and color the timeline bars.</div>
+            <div class="chip-list">
+                @foreach (var theme in product.Themes)
+                {
+                    <span class="chip">
+                        <span class="theme-dot" style="background:@theme.Color"></span>@theme.Name
+                        <button class="btn icon sm" title="Delete theme" @onclick="() => RunAsync(() => Svc.DeleteThemeAsync(theme.Id))">✕</button>
+                    </span>
+                }
+                @if (product.Themes.Count == 0)
+                {
+                    <span class="muted small">No themes yet.</span>
+                }
+            </div>
+            <div class="row">
+                <input type="color" @bind="newThemeColor" />
+                <input placeholder="New theme name" @bind="newTheme" @bind:event="oninput" style="flex:1;width:auto" />
+                <button class="btn" disabled="@string.IsNullOrWhiteSpace(newTheme)" @onclick="AddThemeAsync">Add</button>
+            </div>
+        </div>
+
+        <div class="card stack">
+            <h2>Tags</h2>
+            <div class="chip-list">
+                @foreach (var tag in product.Tags)
+                {
+                    <span class="chip">
+                        #@tag.Name
+                        <button class="btn icon sm" title="Delete tag" @onclick="() => RunAsync(() => Svc.DeleteTagAsync(tag.Id))">✕</button>
+                    </span>
+                }
+                @if (product.Tags.Count == 0)
+                {
+                    <span class="muted small">No tags yet.</span>
+                }
+            </div>
+            <div class="row">
+                <input placeholder="New tag" @bind="newTag" @bind:event="oninput" style="flex:1;width:auto" />
+                <button class="btn" disabled="@string.IsNullOrWhiteSpace(newTag)" @onclick="AddTagAsync">Add</button>
+            </div>
+        </div>
+
+        <div class="card stack">
+            <h2>Danger zone</h2>
+            <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies.</div>
+            @if (confirmingDelete)
+            {
+                <label class="field">Type the product name to confirm
+                    <input @bind="confirmName" @bind:event="oninput" />
+                </label>
+                <div class="row">
+                    <button class="btn danger" disabled="@(confirmName != product.Name)" @onclick="DeleteProductAsync">Delete permanently</button>
+                    <button class="btn" @onclick="() => confirmingDelete = false">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div><button class="btn danger" @onclick="() => confirmingDelete = true">Delete product…</button></div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string name = "";
+    private string? description;
+    private ScoringModel model;
+    private bool saved, confirmingDelete;
+    private string? newTheme, newTag, confirmName;
+    private string newThemeColor = "#4f7cff";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        if (Roadmap is { Product: var p })
+        {
+            name = p.Name;
+            description = p.Description;
+            model = p.ScoringModel;
+        }
+    }
+
+    private async Task SaveProductAsync()
+    {
+        saved = false;
+        await RunAsync(() => Svc.UpdateProductAsync(ProductId, name, description, model));
+        saved = Error is null;
+    }
+
+    private async Task AddThemeAsync()
+    {
+        await RunAsync(() => Svc.AddThemeAsync(ProductId, newTheme!, newThemeColor));
+        if (Error is null) newTheme = null;
+    }
+
+    private async Task AddTagAsync()
+    {
+        await RunAsync(() => Svc.AddTagAsync(ProductId, newTag!));
+        if (Error is null) newTag = null;
+    }
+
+    private async Task DeleteProductAsync()
+    {
+        await Svc.DeleteProductAsync(ProductId);
+        Nav.NavigateTo("/");
+    }
+}

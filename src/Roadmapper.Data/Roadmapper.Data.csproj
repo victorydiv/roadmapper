@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Roadmapper.Core\Roadmapper.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+    <!-- Pinned exactly: 6.2.x is MIT. PDFsharp 6.5+ is AGPL-3.0 with a runtime license check;
+         don't upgrade without a license review. -->
+    <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />
+    <!-- Overrides the vulnerable 8.0.1 that PDFsharp 6.2.4 pulls in transitively. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

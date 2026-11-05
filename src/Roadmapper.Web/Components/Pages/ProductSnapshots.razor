@@ -1,0 +1,234 @@
+@page "/products/{ProductId:int}/snapshots"
+@inherits ProductPageBase
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    <ProductHeader Roadmap="Roadmap" Section="Snapshots" />
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    <div class="snap-layout">
+        <div class="stack">
+            <div class="card stack">
+                <h2>Take a snapshot</h2>
+                <div class="muted small">Saves every item's dates, status and progress as they are now, so you can compare plan against actual later.</div>
+                <label class="field">Name
+                    <input @bind="newName" @bind:event="oninput" />
+                </label>
+                <label class="field">Note (optional)
+                    <input @bind="newNote" placeholder="e.g. Q1 plan agreed with leadership" />
+                </label>
+                <div><button class="btn primary" disabled="@string.IsNullOrWhiteSpace(newName)" @onclick="TakeAsync">Save snapshot</button></div>
+            </div>
+
+            <div class="card stack">
+                <h2>Saved snapshots</h2>
+                @if (snapshots.Count == 0)
+                {
+                    <div class="muted small">None yet.</div>
+                }
+                <ul class="item-list">
+                    @foreach (var s in snapshots)
+                    {
+                        <li class="@(selected?.Snapshot.Id == s.Id ? "selected" : "")" style="flex-wrap:wrap">
+                            <div style="flex:1;min-width:0">
+                                <div class="title-link" @onclick="() => SelectAsync(s.Id)">@s.Name</div>
+                                <div class="small muted">@s.TakenAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt") · @s.ItemCount items</div>
+                                @if (s.Note is { } note)
+                                {
+                                    <div class="small muted">@note</div>
+                                }
+                            </div>
+                            @if (confirmDeleteId == s.Id)
+                            {
+                                <button class="btn sm danger" @onclick="() => DeleteAsync(s.Id)">Confirm delete</button>
+                                <button class="btn sm" @onclick="() => confirmDeleteId = null">Keep</button>
+                            }
+                            else
+                            {
+                                <button class="btn sm" @onclick="() => SelectAsync(s.Id)">Compare</button>
+                                <button class="btn icon sm" title="Delete snapshot" @onclick="() => confirmDeleteId = s.Id">✕</button>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+
+        <div class="stack">
+            @if (selected is { } sel && diff is not null)
+            {
+                <div class="card stack">
+                    <div class="row">
+                        <h2 style="margin:0">Now vs. “@sel.Snapshot.Name”</h2>
+                        <span class="spacer"></span>
+                        <a class="btn" href="/products/@ProductId/timeline?baseline=@sel.Snapshot.Id">View on timeline</a>
+                    </div>
+                    <div class="muted small">Baseline taken @sel.Snapshot.TakenAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt").</div>
+                    <div class="tiles">
+                        <div class="tile-mini"><div class="tile-label">Slipped</div><div class="tile-value">@diff.Slipped</div></div>
+                        <div class="tile-mini"><div class="tile-label">Pulled in</div><div class="tile-value">@diff.PulledIn</div></div>
+                        <div class="tile-mini"><div class="tile-label">Completed since</div><div class="tile-value">@diff.Completed</div></div>
+                        <div class="tile-mini"><div class="tile-label">Added</div><div class="tile-value">@diff.Added</div></div>
+                        <div class="tile-mini"><div class="tile-label">Removed</div><div class="tile-value">@diff.Removed</div></div>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <label class="check"><input type="checkbox" @bind="changedOnly" /> Only show differences</label>
+                    <span class="spacer"></span>
+                    <span class="muted small">@diff.Changed changed · @(diff.Items.Count(i => i.Kind == DiffKind.Unchanged)) unchanged</span>
+                </div>
+
+                var shown = diff.Items.Where(i => !changedOnly || i.Kind != DiffKind.Unchanged).ToList();
+                @if (shown.Count == 0)
+                {
+                    <div class="card empty">Nothing has changed since this snapshot.</div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="tree">
+                            <thead>
+                                <tr><th>Item</th><th>Changes</th><th>Baseline dates</th><th>Current dates</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var d in shown)
+                                {
+                                    <tr @key="d.Id">
+                                        <td class="title-cell">
+                                            <div class="inner">
+                                                <TypeBadge Type="d.ItemType" />
+                                                @if (d.Current is { } cur)
+                                                {
+                                                    <span class="title-link" @onclick="() => OpenEdit(cur)">@d.Title</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="muted" style="text-decoration:line-through">@d.Title</span>
+                                                }
+                                            </div>
+                                            @if (d.Renamed)
+                                            {
+                                                <div class="small muted">was “@d.Baseline!.Title”</div>
+                                            }
+                                        </td>
+                                        <td style="white-space:normal">
+                                            <div class="chip-list">
+                                                @foreach (var change in Changes(d))
+                                                {
+                                                    <span class="badge @change.Css">@change.Text</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td class="small muted">@(d.Baseline is { } b ? Ui.DateRange(b.StartDate, b.EndDate) : "")</td>
+                                        <td class="small">@(d.Current is { } c ? Ui.DateRange(c.StartDate, c.EndDate) : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="card empty">
+                    @(snapshots.Count == 0
+                        ? "Take a snapshot to save today's plan as a baseline. Later, compare against it to see what slipped, what finished, and what changed."
+                        : "Pick a snapshot to compare it with the roadmap as it is now.")
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private List<Snapshot> snapshots = [];
+    private (Snapshot Snapshot, List<SnapshotItem> Items)? selected;
+    private SnapshotDiff? diff;
+    private string newName = $"Baseline {DateTime.Today:yyyy-MM-dd}";
+    private string? newNote;
+    private int? confirmDeleteId;
+    private bool changedOnly = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        snapshots = await Svc.GetSnapshotsAsync(ProductId);
+    }
+
+    protected override async Task OnEditorClosed(bool changed)
+    {
+        await base.OnEditorClosed(changed);
+        Recompare();
+    }
+
+    private async Task TakeAsync()
+    {
+        Error = null;
+        try
+        {
+            var s = await Svc.TakeSnapshotAsync(ProductId, newName, newNote);
+            newNote = null;
+            snapshots = await Svc.GetSnapshotsAsync(ProductId);
+            await SelectAsync(s.Id);
+        }
+        catch (InvalidOperationException ex) { Error = ex.Message; }
+    }
+
+    private async Task SelectAsync(int id)
+    {
+        selected = await Svc.GetSnapshotAsync(id);
+        Recompare();
+    }
+
+    private void Recompare() =>
+        diff = selected is { } s && Roadmap is not null ? SnapshotComparer.Compare(s.Items, Roadmap) : null;
+
+    private async Task DeleteAsync(int id)
+    {
+        await Svc.DeleteSnapshotAsync(id);
+        confirmDeleteId = null;
+        if (selected?.Snapshot.Id == id) { selected = null; diff = null; }
+        snapshots = await Svc.GetSnapshotsAsync(ProductId);
+    }
+
+    private static IEnumerable<(string Text, string Css)> Changes(ItemDiff d)
+    {
+        if (d.Kind == DiffKind.Added) { yield return ("Added", "status-Planned"); yield break; }
+        if (d.Kind == DiffKind.Removed) { yield return ("Removed", "blocked"); yield break; }
+        if (d.Kind == DiffKind.Unchanged) { yield return ("No change", "tag"); yield break; }
+
+        var (b, c) = (d.Baseline!, d.Current!);
+        if (d.EndSlipDays is { } end && end != 0)
+            yield return ($"End {(end > 0 ? "+" : "−")}{Math.Abs(end)}d", end > 0 ? "blocked" : "status-Done");
+        if (d.StartSlipDays is { } start && start != 0)
+            yield return ($"Start {(start > 0 ? "+" : "−")}{Math.Abs(start)}d", "tag");
+        if (d.DatesSetOrCleared)
+            yield return (c.EndDate is null && c.StartDate is null ? "Dates cleared" : "Dates set", "tag");
+        if (d.StatusChanged)
+            yield return ($"{Ui.Label(b.Status)} → {Ui.Label(c.Status)}", $"status-{c.Status}");
+        if (d.ProgressDelta is { } p && p != 0)
+            yield return ($"Progress {b.ProgressPct}% → {c.ProgressPct}%", "tag");
+        if (d.HorizonChanged)
+            yield return ($"Horizon {b.Horizon?.ToString() ?? "none"} → {c.Horizon?.ToString() ?? "none"}", "tag");
+        if (b.Owner != c.Owner)
+            yield return ($"Owner {b.Owner ?? "none"} → {c.Owner ?? "none"}", "tag");
+        if (b.ParentId != c.ParentId)
+            yield return ("Moved to another parent", "tag");
+        if (d.Renamed)
+            yield return ("Renamed", "tag");
+    }
+}

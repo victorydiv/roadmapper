@@ -1,0 +1,50 @@
+@if (Entries.Count == 0)
+{
+    <div class="muted small">No changes recorded yet.</div>
+}
+else
+{
+    <ul class="activity">
+        @foreach (var e in Entries)
+        {
+            <li>
+                <span class="when" title="@e.ChangedAt.ToLocalTime().ToString("f")">@When(e.ChangedAt)</span>
+                <span>
+                    @if (ShowItem && e.ItemTitle is not null)
+                    {
+                        <b>@e.ItemTitle</b>
+                        <span class="muted"> · </span>
+                    }
+                    @Describe(e)
+                </span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<AuditEntry> Entries { get; set; } = [];
+    /// <summary>Prefix each line with the item title (product-wide feeds).</summary>
+    [Parameter] public bool ShowItem { get; set; }
+
+    private static string Describe(AuditEntry e) => (e.Action, e.Field) switch
+    {
+        (AuditAction.Created, null) => "created",
+        (AuditAction.Deleted, null) => "deleted",
+        (AuditAction.Created, "Blocked by") => $"now blocked by “{e.NewValue}”",
+        (AuditAction.Deleted, "Blocked by") => $"no longer blocked by “{e.OldValue}”",
+        (_, var field) => $"{field}: {Show(e.OldValue)} → {Show(e.NewValue)}",
+    };
+
+    private static string Show(string? v) => string.IsNullOrEmpty(v) ? "(none)" : v;
+
+    private static string When(DateTime utc)
+    {
+        var local = utc.ToLocalTime();
+        var ago = DateTime.Now - local;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes}m ago";
+        if (local.Date == DateTime.Today) return local.ToString("h:mm tt");
+        return local.ToString(local.Year == DateTime.Today.Year ? "MMM d" : "MMM d, yyyy");
+    }
+}

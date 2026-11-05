@@ -1,0 +1,373 @@
+@inject RoadmapService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="Draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <TypeBadge Type="Draft.ItemType" />
+                <h2>@(Draft.IsNew ? $"New {Draft.ItemType}" : "Edit item")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync()">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+
+                <label class="field">Title
+                    <InputText @bind-Value="Draft.Title" autofocus />
+                </label>
+
+                <div class="grid-2">
+                    @if (Draft.IsNew)
+                    {
+                        <label class="field">Type
+                            <InputSelect @bind-Value="Draft.ItemType" @bind-Value:after="OnTypeChanged">
+                                @foreach (var t in Enum.GetValues<ItemType>())
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    }
+                    @if (parentType is { } pt)
+                    {
+                        <label class="field">Parent @pt
+                            <InputSelect @bind-Value="Draft.ParentId">
+                                <option value="">— choose a @pt.ToString().ToLower() —</option>
+                                @foreach (var p in roadmap.Items.Where(i => i.ItemType == pt).OrderBy(i => roadmap.PathOf(i)).ThenBy(i => i.Title))
+                                {
+                                    <option value="@p.Id">@Display(p)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    }
+                </div>
+
+                <label class="field">Description
+                    <InputTextArea @bind-Value="Draft.Description" />
+                </label>
+
+                <fieldset>
+                    <legend>Status &amp; schedule</legend>
+                    <div class="grid-3">
+                        <label class="field">Status
+                            <InputSelect @bind-Value="Draft.Status">
+                                @foreach (var s in Enum.GetValues<ItemStatus>())
+                                {
+                                    <option value="@s">@Ui.Label(s)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Horizon
+                            <InputSelect @bind-Value="Draft.Horizon">
+                                <option value="">Unassigned</option>
+                                @foreach (var h in Enum.GetValues<Horizon>())
+                                {
+                                    <option value="@h">@h</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Progress % @(RolledUp ? "(rolled up)" : "")
+                            <InputNumber @bind-Value="Draft.ProgressPct" min="0" max="100" disabled="@(RolledUp || Draft.Status == ItemStatus.Done)" />
+                        </label>
+                        <label class="field">Start @(RolledUp ? "(rolled up)" : "")
+                            <InputDate @bind-Value="Draft.StartDate" disabled="@RolledUp" />
+                        </label>
+                        <label class="field">End @(RolledUp ? "(rolled up)" : "")
+                            <InputDate @bind-Value="Draft.EndDate" disabled="@RolledUp" />
+                        </label>
+                        <label class="field">Owner
+                            <InputText @bind-Value="Draft.Owner" />
+                        </label>
+                    </div>
+                    @if (HasChildren)
+                    {
+                        <label class="check">
+                            <InputCheckbox @bind-Value="Draft.IsRollupOverridden" />
+                            Set dates and progress manually instead of rolling them up from children
+                        </label>
+                    }
+                </fieldset>
+
+                <fieldset>
+                    <legend>Priority: @strategy.DisplayName</legend>
+                    @switch (roadmap.Product.ScoringModel)
+                    {
+                        case ScoringModel.Rice:
+                            <div class="grid-4">
+                                <label class="field" title="People or events affected per period">Reach
+                                    <InputNumber @bind-Value="Draft.Score.Reach" min="0" />
+                                </label>
+                                <label class="field" title="3 = massive, 2 = high, 1 = medium, 0.5 = low, 0.25 = minimal">Impact (0.25–3)
+                                    <InputNumber @bind-Value="Draft.Score.Impact" min="0" step="0.25" />
+                                </label>
+                                <label class="field" title="100 = high, 80 = medium, 50 = low">Confidence %
+                                    <InputNumber @bind-Value="Draft.Score.Confidence" min="0" max="100" />
+                                </label>
+                                <label class="field" title="Person-months">Effort
+                                    <InputNumber @bind-Value="Draft.Score.Effort" min="0" step="0.5" />
+                                </label>
+                            </div>
+                            break;
+                        case ScoringModel.Wsjf:
+                            <div class="grid-4">
+                                <label class="field">Business value
+                                    <InputNumber @bind-Value="Draft.Score.BusinessValue" min="0" />
+                                </label>
+                                <label class="field">Time criticality
+                                    <InputNumber @bind-Value="Draft.Score.TimeCriticality" min="0" />
+                                </label>
+                                <label class="field">Risk reduction
+                                    <InputNumber @bind-Value="Draft.Score.RiskReduction" min="0" />
+                                </label>
+                                <label class="field">Job size
+                                    <InputNumber @bind-Value="Draft.Score.JobSize" min="0" />
+                                </label>
+                            </div>
+                            break;
+                        case ScoringModel.Moscow:
+                            <div class="grid-2">
+                                <label class="field">Priority
+                                    <InputSelect @bind-Value="Draft.Score.Moscow">
+                                        <option value="">Not set</option>
+                                        @foreach (var m in Enum.GetValues<MoscowPriority>().Reverse())
+                                        {
+                                            <option value="@m">@Ui.Label(m)</option>
+                                        }
+                                    </InputSelect>
+                                </label>
+                                <label class="field" title="Only used to place the item on the prioritization matrix">Effort (for the matrix)
+                                    <InputNumber @bind-Value="Draft.Score.Effort" min="0" step="0.5" />
+                                </label>
+                            </div>
+                            break;
+                    }
+                    <div class="row">
+                        <span class="muted small">Score: <b>@PreviewScore</b></span>
+                        <span class="spacer"></span>
+                        <label class="field" style="flex-direction:row;align-items:center;gap:.5rem" title="Pins this item ahead of computed scores (1 = top)">
+                            Manual rank
+                            <InputNumber @bind-Value="Draft.ManualRank" min="1" style="width:6rem" />
+                        </label>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Classification</legend>
+                    <label class="field">Theme
+                        <InputSelect @bind-Value="Draft.ThemeId">
+                            <option value="">None</option>
+                            @foreach (var t in roadmap.Product.Themes)
+                            {
+                                <option value="@t.Id">@t.Name</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    @if (roadmap.Product.Tags.Count > 0)
+                    {
+                        <div class="row">
+                            @foreach (var tag in roadmap.Product.Tags)
+                            {
+                                <label class="check">
+                                    <input type="checkbox" checked="@Draft.TagIds.Contains(tag.Id)" @onchange="e => ToggleTag(tag.Id, (bool)e.Value!)" />
+                                    @tag.Name
+                                </label>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="muted small">No tags yet. Add them in Settings.</span>
+                    }
+                </fieldset>
+
+                @if (!Draft.IsNew)
+                {
+                    <fieldset>
+                        <legend>Dependencies</legend>
+                        @{ var blockedBy = roadmap.BlockedBy(Draft.Id).ToList(); var blocks = roadmap.Blocks(Draft.Id).ToList(); }
+                        @if (blockedBy.Count + blocks.Count == 0)
+                        {
+                            <span class="muted small">No dependencies.</span>
+                        }
+                        <ul class="dep-list">
+                            @foreach (var d in blockedBy)
+                            {
+                                <li>
+                                    <span class="badge blocked">blocked by</span>
+                                    @Display(roadmap.Find(d.PredecessorId))
+                                    @if (roadmap.HasScheduleConflict(d))
+                                    {
+                                        <span class="badge blocked" title="This item starts before its predecessor ends">⚠ schedule overlap</span>
+                                    }
+                                    <span class="spacer"></span>
+                                    <button type="button" class="btn sm" @onclick="() => RemoveDependencyAsync(d.Id)">Remove</button>
+                                </li>
+                            }
+                            @foreach (var d in blocks)
+                            {
+                                <li>
+                                    <span class="badge tag">blocks</span>
+                                    @Display(roadmap.Find(d.SuccessorId))
+                                    @if (roadmap.HasScheduleConflict(d))
+                                    {
+                                        <span class="badge blocked" title="The successor starts before this item ends">⚠ schedule overlap</span>
+                                    }
+                                    <span class="spacer"></span>
+                                    <button type="button" class="btn sm" @onclick="() => RemoveDependencyAsync(d.Id)">Remove</button>
+                                </li>
+                            }
+                        </ul>
+                        <div class="row">
+                            <select @bind="newDepDirection" style="width:auto">
+                                <option value="blockedBy">This is blocked by</option>
+                                <option value="blocks">This blocks</option>
+                            </select>
+                            <select @bind="newDepItemId" style="flex:1;width:auto">
+                                <option value="0">— choose an item —</option>
+                                @foreach (var i in roadmap.Items.Where(i => i.Id != Draft.Id).OrderBy(i => i.ItemType).ThenBy(i => i.Title))
+                                {
+                                    <option value="@i.Id">@i.ItemType: @Display(i)</option>
+                                }
+                            </select>
+                            <button type="button" class="btn" disabled="@(newDepItemId == 0)" @onclick="AddDependencyAsync">Add</button>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>History</legend>
+                        @if (history is null)
+                        {
+                            <div><button type="button" class="btn sm" @onclick="LoadHistoryAsync">Show change history</button></div>
+                        }
+                        else
+                        {
+                            <ActivityList Entries="history" />
+                        }
+                    </fieldset>
+                }
+            </div>
+
+            <div class="modal-foot">
+                @if (!Draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">
+                            Confirm delete@(DescendantCount > 0 ? $" (+{DescendantCount} child items)" : "")
+                        </button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync()">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(Draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProductRoadmap Roadmap { get; set; } = default!;
+    [Parameter, EditorRequired] public ItemDraft Draft { get; set; } = default!;
+    /// <summary>Invoked with true when anything was persisted, so the host page reloads.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    // Local copy so dependency edits show immediately without the host re-rendering us.
+    private ProductRoadmap roadmap = default!;
+    private string? error;
+    private bool saving, confirmingDelete, changed;
+    private string newDepDirection = "blockedBy";
+    private int newDepItemId;
+    private List<AuditEntry>? history;
+
+    private IScoringStrategy strategy => roadmap.Strategy;
+    private ItemType? parentType => HierarchyRules.ParentTypeOf(Draft.ItemType);
+    private bool HasChildren => !Draft.IsNew && roadmap.HasChildren(Draft.Id);
+    private bool RolledUp => HasChildren && !Draft.IsRollupOverridden;
+    private string PreviewScore => strategy.Compute(Draft.Score) is { } s
+        ? roadmap.Product.ScoringModel == ScoringModel.Moscow ? Ui.Label((MoscowPriority)(int)s) : s.ToString("0.##")
+        : "not enough inputs";
+    private int DescendantCount => Descendants(Draft.Id);
+
+    protected override void OnInitialized() => roadmap = Roadmap;
+
+    private int Descendants(int id) => roadmap.ChildrenOf(id).Sum(c => 1 + Descendants(c.Id));
+
+    private string Display(RoadmapItem? i)
+    {
+        if (i is null) return "(deleted)";
+        var path = roadmap.PathOf(i);
+        return path.Length == 0 ? i.Title : $"{path} › {i.Title}";
+    }
+
+    private void OnTypeChanged()
+    {
+        // The previous parent can't be valid for a different type.
+        if (Draft.ParentId is { } pid && roadmap.Find(pid)?.ItemType != parentType) Draft.ParentId = null;
+    }
+
+    private void ToggleTag(int id, bool on)
+    {
+        if (on) Draft.TagIds.Add(id); else Draft.TagIds.Remove(id);
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveItemAsync(Draft);
+            changed = true;
+            await CloseAsync();
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteItemAsync(Draft.Id);
+        changed = true;
+        await CloseAsync();
+    }
+
+    private async Task AddDependencyAsync()
+    {
+        error = null;
+        try
+        {
+            if (newDepDirection == "blocks") await Svc.AddDependencyAsync(Draft.Id, newDepItemId);
+            else await Svc.AddDependencyAsync(newDepItemId, Draft.Id);
+            newDepItemId = 0;
+            await RefreshAsync();
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveDependencyAsync(int dependencyId)
+    {
+        await Svc.RemoveDependencyAsync(dependencyId);
+        await RefreshAsync();
+    }
+
+    private async Task LoadHistoryAsync() =>
+        history = await Svc.GetActivityAsync(roadmap.Product.Id, Draft.Id, take: 100);
+
+    private async Task RefreshAsync()
+    {
+        changed = true;
+        roadmap = await Svc.GetRoadmapAsync(roadmap.Product.Id) ?? roadmap;
+        if (history is not null) await LoadHistoryAsync();
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync(changed);
+}
