@@ -49,7 +49,7 @@ h1:focus { outline: none; }
     padding: .4rem .8rem; border-radius: 6px; font: inherit; cursor: pointer; line-height: 1.2;
 }
 .btn:hover { background: var(--surface-2); text-decoration: none; }
-.btn:disabled { opacity: .5; cursor: default; }
+.btn:disabled, .btn.disabled { opacity: .5; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.danger { color: var(--danger); border-color: #f0c3bf; }

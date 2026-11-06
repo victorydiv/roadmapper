@@ -49,12 +49,13 @@ You can change the location with the `Database:Path` setting in `appsettings.jso
 
 On a brand-new database, Roadmapper creates a demo product, **Sample: Customer Portal**, for you to explore. Delete it from its Settings tab when you're done.
 
-**Backups:** stop the app and copy `roadmapper.db`. The Excel export is also a good human-readable copy, but see [what import does and doesn't restore](#what-import-restores).
+**Backups:** the easiest way to back up one product is to export a [Roadmapper file (.rmp)](#roadmapper-files-rmp), which holds the complete product. To back up everything at once, stop the app and copy `roadmapper.db`.
 
 ### Moving around
 
 - The **Products** page (home) lists every product. Each card shows its scoring model, how many goals and items it has, and how many are done.
 - **+ New product** asks for a name, an optional description, and a prioritization model (RICE, WSJF or MoSCoW; you can change it later).
+- **Open .rmp file…** opens a [Roadmapper file](#roadmapper-files-rmp) as a new product.
 - Opening a product shows its tabs: **Dashboard · Tree · Timeline · Now / Next / Later · Kanban · Priorities · Snapshots · Import / Export · Settings**.
 - Clicking any item title, bar or card anywhere in the app opens the [item editor](#4-editing-an-item).
 
@@ -357,10 +358,33 @@ Snapshots match items by their internal id, so renaming or moving an item still 
 
 Find these under **Import / Export**.
 
+### Roadmapper files (.rmp)
+
+A `.rmp` file holds **one complete product**, so it works as a backup and for sharing with anyone who has Roadmapper. It contains:
+
+- The product's name, description and scoring model.
+- Its themes and tags.
+- Every item with all its fields and scoring inputs.
+- Dependencies, task templates and snapshots.
+- The full change history.
+
+**To save one:** go to Import / Export → **Roadmapper file (.rmp)**. The file is named like `LoadProof roadmap 2026-11-06.rmp`.
+
+**To open one:** go to the **Products** page → **Open .rmp file…** and choose the file. Roadmapper checks the file, then:
+
+- It always creates a **new product** and never changes or replaces an existing one. To restore a backup over a product, open the file, check the new product, then delete the old one.
+- If a product with the same name already exists, the new one is called "Name (imported)", then "Name (imported 2)", and so on. Rename it in Settings.
+- Every link between items comes across: parents, dependencies, snapshot comparisons (including items deleted before the export), history, and template batches. Undo works on the copy's batches without affecting the original product.
+- Opening the file isn't itself recorded as edits in the history.
+- If the file is damaged or from a newer version of Roadmapper, nothing is created and you'll see the reason (for example, "This file was made by a newer version of Roadmapper").
+
+A `.rmp` is plain JSON, so it can be opened in any text editor. See [the file format](#roadmapper-file-format) for details.
+
 ### Export
 
 | Format | Contents |
 |---|---|
+| **Roadmapper (.rmp)** | The complete product, as described above. |
 | **Excel (.xlsx)** | A **Roadmap** sheet with every item and field, a **Dependencies** sheet, and a **Templates** sheet with the product's task templates. You can edit it and import it back. |
 | **CSV** | The same columns as the Roadmap sheet. |
 | **PDF report** | **Gantt pages:** the whole timeline fitted to landscape page(s), with a color key, dependency arrows and blocked markers. **Summary line:** overall progress, item count, in progress, overdue, blocked, and the scoring model. **Item table:** every item, with blocked items marked. **Dependency table:** each dependency and its effect (Blocked, Cleared or Successor closed). Opens in a new browser tab, where you can save or print it. |
@@ -401,7 +425,7 @@ Import is a three-step wizard:
 - A row whose parent has errors is skipped too.
 - If the Excel file has a **Templates** sheet, its templates are added as well. Any whose name already exists in the product are skipped.
 
-<a id="what-import-restores"></a>**What import doesn't restore:** dependencies (the Dependencies sheet is for reading only), snapshots, and change history. To keep a complete copy, back up the database file.
+<a id="what-import-restores"></a>**What spreadsheet import doesn't restore:** dependencies (the Dependencies sheet is for reading only), snapshots and change history. For a complete copy, use a [.rmp file](#roadmapper-files-rmp).
 
 ---
 
@@ -464,10 +488,28 @@ Import is a three-step wizard:
 | Route | Returns |
 |---|---|
 | `GET /export/template.csv` | Sample import CSV |
+| `GET /export/{productId}/roadmap.rmp` | Roadmapper file (whole product as JSON) |
 | `GET /export/{productId}/roadmap.csv` | CSV export |
 | `GET /export/{productId}/roadmap.xlsx` | Excel export (Roadmap, Dependencies, Templates) |
 | `GET /export/{productId}/roadmap.pdf?depth={Goal\|Initiative\|Feature\|Task}&baseline={snapshotId}` | PDF report, shown in the browser (`inline`) |
 | `GET /export/{productId}/timeline.svg?scale=quarter&depth=…&baseline=…&download=true` | Timeline SVG |
+
+### Roadmapper file format
+
+A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and import live in `Data/RoadmapService.Files.cs` (`ExportFileAsync` / `ImportFileAsync`).
+
+- **Formatting:** property names are camelCase, enums are strings (for example `"InProgress"`), dates are `yyyy-MM-dd`, and empty values are left out.
+- **Top level:** `format` (always `"roadmapper"`), `version` (currently `1`), `exportedAt`, `product` {name, description, scoringModel}, `themes`, `tags`, `items`, `dependencies`, `templates`, `snapshots`, `history`.
+- **References:**
+  - `items`, `themes` and `tags` have an `id` that only applies inside the file.
+  - Items refer to each other by `parentId`; dependencies use `predecessorId`/`successorId`; items and template lines use `themeId` and `tagIds`.
+  - Snapshot rows and history entries also use item ids. History entries for items that no longer exist have no `itemId`.
+- **Items:** `type`, `title`, `status`, `progressPct`, `startDate`, `endDate`, `horizon`, `owner`, `sortOrder`, `manualRank`, `isRollupOverridden`, `score` (scoring inputs only; the score itself is recalculated), the template reference fields, and `createdAt`/`updatedAt`.
+- **Template lines:** `title`, `description`, `owner`, `gapDays`, `durationDays`, `tagIds`.
+- **Import:**
+  - Validates the whole file first and creates nothing if any check fails. It checks the format and version, hierarchy rules, missing references, dependency loops, duplicate ids, tag names or template names, empty templates, and dates where End is before Start.
+  - Then creates a new product in one transaction with change history recording turned off, assigning new ids and new template-batch ids, then recalculates roll-ups and scores.
+- **Version rule:** files with a higher `version` than the app supports are refused. If the format changes, bump `CurrentVersion` and keep reading older versions.
 
 ### Page routes
 
@@ -532,7 +574,10 @@ The Feature had no start date. Set one, then undo and re-apply. Or set the task 
 The template's lines have no durations. Add durations under Settings → Task templates → Edit.
 
 **Importing created duplicates.**
-Import only ever adds items. Delete the extras, or restore your database backup.
+Spreadsheet import only ever adds items. Delete the extras, or open a .rmp backup you made before the import.
+
+**How do I share a roadmap with someone?**
+Export a Roadmapper file (.rmp) from Import / Export and send it. They open it with **Open .rmp file…** on their Products page.
 
 **`dotnet run` says the project path doesn't exist.**
 Run it from the repository root, not from `src`.

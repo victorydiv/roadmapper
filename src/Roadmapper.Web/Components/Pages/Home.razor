@@ -1,6 +1,7 @@
 ﻿@page "/"
 @inject RoadmapService Svc
 @inject NavigationManager Nav
+@using Roadmapper.Core.Exchange
 
 <PageTitle>Products · Roadmapper</PageTitle>
 
@@ -12,9 +13,18 @@
     <span class="spacer"></span>
     @if (!creating)
     {
+        <label class="btn @(opening ? "disabled" : "")" title="Open a Roadmapper (.rmp) file as a new product">
+            @(opening ? "Opening…" : "Open .rmp file…")
+            <InputFile OnChange="OpenFileAsync" accept=".rmp,.json" disabled="@opening" style="display:none" />
+        </label>
         <button class="btn primary" @onclick="() => creating = true">+ New product</button>
     }
 </div>
+
+@if (openError is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@openError</div>
+}
 
 @if (creating)
 {
@@ -82,7 +92,30 @@ else
     private ScoringModel newModel = ScoringModel.Rice;
     private string? error;
 
+    private bool opening;
+    private string? openError;
+    private const long MaxFileBytes = 50 * 1024 * 1024;
+
     protected override async Task OnInitializedAsync() => products = await Svc.GetProductsAsync();
+
+    /// <summary>Opens a .rmp file as a new product (never changes an existing one), then shows its tree.</summary>
+    private async Task OpenFileAsync(InputFileChangeEventArgs e)
+    {
+        openError = null;
+        opening = true;
+        try
+        {
+            if (e.File.Size > MaxFileBytes) throw new InvalidOperationException("That file is larger than 50 MB.");
+            using var buffer = new MemoryStream();
+            await using (var upload = e.File.OpenReadStream(MaxFileBytes)) await upload.CopyToAsync(buffer);
+            buffer.Position = 0;
+            var product = await Svc.ImportFileAsync(RoadmapFile.Read(buffer));
+            Nav.NavigateTo($"/products/{product.Id}");
+        }
+        catch (InvalidOperationException ex) { openError = $"Couldn't open {e.File.Name}: {ex.Message}"; }
+        catch (IOException ex) { openError = $"Couldn't read {e.File.Name}: {ex.Message}"; }
+        finally { opening = false; }
+    }
 
     private async Task CreateAsync()
     {

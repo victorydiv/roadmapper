@@ -27,6 +27,12 @@ public static class ExportEndpoints
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName(r, "xlsx"))
                 : Results.NotFound());
 
+        // The whole product as a Roadmapper file, for backups and sharing; opened from the Products page.
+        export.MapGet("/roadmap.rmp", async (int productId, RoadmapService svc) =>
+            await svc.ExportFileAsync(productId) is { } file
+                ? Results.File(file.ToBytes(), RoadmapFile.ContentType, FileName(file.Product.Name, "rmp"))
+                : Results.NotFound());
+
         // Served inline so it opens in the browser's PDF viewer; save or print from there.
         // depth and baseline match the Timeline tab's pickers so its PDF button prints the Gantt as shown.
         export.MapGet("/roadmap.pdf", async (int productId, RoadmapService svc, HttpContext http, ItemType? depth, int? baseline) =>
@@ -54,9 +60,11 @@ public static class ExportEndpoints
     }
 
     /// <summary>e.g. "Customer Portal roadmap 2026-11-04.xlsx", with characters Windows rejects replaced.</summary>
-    public static string FileName(ProductRoadmap r, string extension, string kind = "roadmap")
+    public static string FileName(ProductRoadmap r, string extension, string kind = "roadmap") => FileName(r.Product.Name, extension, kind);
+
+    public static string FileName(string productName, string extension, string kind = "roadmap")
     {
-        var name = string.Concat(r.Product.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '-' : c)).Trim();
+        var name = string.Concat(productName.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '-' : c)).Trim();
         return $"{name} {kind} {DateTime.Today:yyyy-MM-dd}.{extension}";
     }
 

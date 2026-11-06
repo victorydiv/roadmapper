@@ -15,6 +15,13 @@ else
         <div class="card stack">
             <h2>Export</h2>
             <div class="export-grid">
+                <a class="export-option" href="/export/@ProductId/roadmap.rmp" download>
+                    <b>Roadmapper file (.rmp)</b>
+                    <span class="muted small">
+                        The complete product, including snapshots, templates and history. Use it as a backup or to share:
+                        anyone with Roadmapper can open it from the Products page.
+                    </span>
+                </a>
                 <a class="export-option" href="/export/@ProductId/roadmap.xlsx" download>
                     <b>Excel (.xlsx)</b>
                     <span class="muted small">Every item and field, plus Dependencies and Task templates sheets. Edit it and import it back.</span>
@@ -58,6 +65,9 @@ else
                         A .csv or .xlsx file with a header row (first sheet only). Items are always <b>added</b>; nothing existing is changed.
                         Parents can be in the file or already in this product. Use the full path (e.g. <i>Goal › Initiative</i>) or just the title if it's unique.
                         A blank Type is worked out from the parent. Missing themes and tags are created.
+                    </div>
+                    <div class="muted small">
+                        Have a Roadmapper (.rmp) file? Open it from the <a href="/">Products</a> page; it becomes a new product.
                     </div>
                     <div class="row">
                         <InputFile OnChange="LoadFileAsync" accept=".csv,.xlsx,.txt" disabled="@reading" />
