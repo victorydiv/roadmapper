@@ -29,13 +29,21 @@ This guide is for two audiences:
 
 ### Running the app
 
-From the repository root (the folder containing `Roadmapper.slnx`, not `src`):
+Roadmapper runs on your own PC and opens in your browser. It's a single-user app with no sign-in.
 
-```powershell
-dotnet run --project src/Roadmapper.Web --launch-profile http
-```
+1. Unzip `Roadmapper-<version>-win-x64.zip` to a folder of your own (don't run it from inside the zip).
+2. Double-click **Roadmapper.exe**. Your browser opens at **http://localhost:5210**.
+3. A console window stays open while the app runs. Close it to stop Roadmapper.
 
-Then open **http://localhost:5210**. Roadmapper is a single-user app with no sign-in.
+Nothing else needs to be installed. Notes:
+
+- **"Windows protected your PC":** the app isn't code-signed. Click **More info → Run anyway**.
+- **Already running?** Double-clicking `Roadmapper.exe` again just reopens it in your browser.
+- **Port in use:** if another program has port 5210, Roadmapper uses a free port and shows the address in its console window.
+- **Updating:** replace the app folder with the new version. Your data is kept separately (see below).
+- **Help:** click **User guide** at the top right of any page to read this guide in the app.
+
+**Developers** run it from the repository root (the folder containing `Roadmapper.slnx`, not `src`) with `dotnet run --project src/Roadmapper.Web --launch-profile http`, and package it with `./publish.ps1` (see [Working on the code](#working-on-the-code)).
 
 ### Where your data lives
 
@@ -451,7 +459,7 @@ Import is a three-step wizard:
 |---|---|
 | `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
 | `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
-| `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. |
+| `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. `Launcher.cs` handles start-up for the packaged exe (port choice, opening the browser). `UserGuide.cs` renders this guide (embedded from `docs/USER_GUIDE.md`) for `/guide`. The assembly, and so the packaged exe, is named `Roadmapper`. |
 | `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`). |
 
 ### Data model
@@ -513,7 +521,7 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 ### Page routes
 
-`/` (products), `/products/{id}` (Tree), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
+`/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
 
 ### Colors (shared by the UI and every export)
 
@@ -533,6 +541,11 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 
 - **Build and test:** run `dotnet test` from the repo root.
 - **Migrations:** `dotnet ef migrations add <Name> --project src/Roadmapper.Data --startup-project src/Roadmapper.Web` (`dotnet-ef` is a local tool; run `dotnet tool restore` first).
+- **Packaging:** `./publish.ps1` runs the tests and writes `artifacts/Roadmapper-<version>-win-x64.zip`: a self-contained, single-file `Roadmapper.exe` (no .NET install needed) plus `wwwroot` and `appsettings.json`. Raise `<Version>` in `Roadmapper.Web.csproj` for each release.
+  - The packaged app (any environment other than Development) uses its own folder as the content root, listens only on `http://localhost` (5210, or a free port if taken), and opens the browser once started (`--no-browser` turns that off). Passing `--urls` or setting `ASPNETCORE_URLS` skips the port logic.
+  - A second launch calls `GET /_roadmapper` on port 5210. If Roadmapper answers, the new copy opens the browser and exits.
+  - There is no HTTPS redirect or HSTS, since the app is only served on localhost.
+- **User guide in the app:** `docs/USER_GUIDE.md` is embedded at build time, so edits appear in the app after a rebuild. Links between sections use GitHub-style heading ids, which work on GitHub and in the app. Rendering uses Markdig (BSD-2-Clause).
 - **NuGet:** `nuget.config` adds nuget.org because the machine has no global source.
 - **Licensing:** **PDFsharp-MigraDoc is pinned to 6.2.4 (MIT).** Version 6.5 and later is AGPL-3.0, so don't upgrade it without a license review. Excel files are produced with ClosedXML.
 - **No JavaScript frameworks.** Drag-and-drop uses native HTML5 events; the PNG export is the only JS interop.
@@ -578,6 +591,9 @@ Spreadsheet import only ever adds items. Delete the extras, or open a .rmp backu
 
 **How do I share a roadmap with someone?**
 Export a Roadmapper file (.rmp) from Import / Export and send it. They open it with **Open .rmp file…** on their Products page.
+
+**Nothing happens when I double-click Roadmapper.exe, or the console closes straight away.**
+Make sure you unzipped the whole folder (the exe needs the `wwwroot` folder beside it). If the console window shows an error, send a screenshot of it to whoever gave you the app.
 
 **`dotnet run` says the project path doesn't exist.**
 Run it from the repository root, not from `src`.

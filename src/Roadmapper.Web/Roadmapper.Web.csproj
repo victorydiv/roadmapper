@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Markdig" Version="1.6.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -17,6 +18,27 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <Version>1.0.0</Version>
+    <!-- The packaged app is Roadmapper.exe. -->
+    <AssemblyName>Roadmapper</AssemblyName>
+    <RootNamespace>Roadmapper.Web</RootNamespace>
   </PropertyGroup>
+
+  <!--
+    Packaging for other users (publish.ps1 passes a runtime): one self-contained Roadmapper.exe that
+    needs no .NET install. Not trimmed, because EF Core and Blazor rely on reflection.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- The user guide, shown in the app at /guide. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\USER_GUIDE.md" LogicalName="USER_GUIDE.md" />
+  </ItemGroup>
 
 </Project>

@@ -316,3 +316,18 @@ svg.matrix .hit { fill: transparent; cursor: pointer; }
 .menu button:disabled { color: var(--muted); cursor: default; }
 tr.menu-open .row-actions { opacity: 1; }
 tr.selected td { background: var(--accent-soft); }
+
+/* ---------- User guide (rendered Markdown) ---------- */
+.guide { max-width: 900px; margin: 0 auto; padding: 1.5rem 2rem 2.5rem; line-height: 1.6; }
+.guide h1 { margin-top: 0; }
+.guide h2 { margin-top: 2.25rem; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
+.guide h3 { margin-top: 1.6rem; }
+.guide h2, .guide h3, .guide [id] { scroll-margin-top: 1rem; }
+.guide code { background: var(--surface-2); border-radius: 4px; padding: .1rem .3rem; font-size: .9em; }
+.guide pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: .75rem 1rem; overflow-x: auto; }
+.guide pre code { background: none; padding: 0; }
+.guide table { border-collapse: collapse; margin: .75rem 0; display: block; overflow-x: auto; }
+.guide th, .guide td { border: 1px solid var(--border); padding: .35rem .6rem; text-align: left; vertical-align: top; }
+.guide th { background: var(--surface-2); }
+.guide hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.guide blockquote { margin: 1rem 0; padding: .25rem 1rem; border-left: 3px solid var(--border); color: var(--muted); }
