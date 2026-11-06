@@ -92,6 +92,51 @@ else
             </div>
         </div>
 
+        <div class="card stack templates-card">
+            <div class="row">
+                <h2 style="margin:0">Task templates</h2>
+                <span class="spacer"></span>
+                <button class="btn primary" @onclick="NewTemplate">+ New template</button>
+            </div>
+            <div class="muted small">
+                Reusable sets of tasks. Use "Add from template" on a Feature to create them all at once.
+                Tasks are copied: editing or deleting a template never changes tasks already created from it.
+            </div>
+            @if (templates.Count == 0)
+            {
+                <span class="muted small">No templates yet.</span>
+            }
+            <ul class="template-list">
+                @foreach (var t in templates)
+                {
+                    <li @key="t.Id">
+                        <div class="stack" style="gap:.1rem;flex:1;min-width:0">
+                            <b>@t.Name</b>
+                            <span class="muted small">
+                                @t.Lines.Count task@(t.Lines.Count == 1 ? "" : "s"): @string.Join(" · ", t.Lines.Take(4).Select(l => l.Title))@(t.Lines.Count > 4 ? " …" : "")
+                            </span>
+                            @if (t.Description is { } d)
+                            {
+                                <span class="muted small">@d</span>
+                            }
+                        </div>
+                        @if (deletingTemplateId == t.Id)
+                        {
+                            <span class="small">Delete “@t.Name”? Tasks already created from it are kept.</span>
+                            <button class="btn danger sm" @onclick="() => DeleteTemplateAsync(t.Id)">Delete</button>
+                            <button class="btn sm" @onclick="() => deletingTemplateId = null">Keep</button>
+                        }
+                        else
+                        {
+                            <button class="btn sm" @onclick="() => editingTemplate = TemplateDraft.From(t)">Edit</button>
+                            <button class="btn sm" @onclick="() => TemplateActionAsync(() => Svc.DuplicateTemplateAsync(t.Id))">Duplicate</button>
+                            <button class="btn sm danger" @onclick="() => deletingTemplateId = t.Id">Delete…</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+
         <div class="card stack">
             <h2>Danger zone</h2>
             <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies.</div>
@@ -111,6 +156,11 @@ else
             }
         </div>
     </div>
+
+    @if (editingTemplate is not null)
+    {
+        <TemplateEditor Roadmap="Roadmap" Draft="editingTemplate" OnClose="OnTemplateEditorClosed" />
+    }
 }
 
 @code {
@@ -120,10 +170,14 @@ else
     private bool saved, confirmingDelete;
     private string? newTheme, newTag, confirmName;
     private string newThemeColor = "#4f7cff";
+    private List<TaskTemplate> templates = [];
+    private TemplateDraft? editingTemplate;
+    private int? deletingTemplateId;
 
     protected override async Task OnParametersSetAsync()
     {
         await base.OnParametersSetAsync();
+        templates = await Svc.GetTemplatesAsync(ProductId);
         if (Roadmap is { Product: var p })
         {
             name = p.Name;
@@ -149,6 +203,27 @@ else
     {
         await RunAsync(() => Svc.AddTagAsync(ProductId, newTag!));
         if (Error is null) newTag = null;
+    }
+
+    private void NewTemplate() =>
+        editingTemplate = new TemplateDraft { ProductId = ProductId, Lines = [new TemplateLineDraft()] };
+
+    private async Task OnTemplateEditorClosed(bool saved)
+    {
+        editingTemplate = null;
+        if (saved) templates = await Svc.GetTemplatesAsync(ProductId);
+    }
+
+    private async Task DeleteTemplateAsync(int id)
+    {
+        deletingTemplateId = null;
+        await TemplateActionAsync(() => Svc.DeleteTemplateAsync(id));
+    }
+
+    private async Task TemplateActionAsync(Func<Task> action)
+    {
+        await RunAsync(action);
+        templates = await Svc.GetTemplatesAsync(ProductId);
     }
 
     private async Task DeleteProductAsync()

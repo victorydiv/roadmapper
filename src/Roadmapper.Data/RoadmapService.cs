@@ -13,7 +13,7 @@ public record ProductSummary(int Id, string Name, string? Description, ScoringMo
 /// pattern for Blazor Server), and every item mutation re-runs rollups and scoring for the product.
 /// Business-rule violations surface as <see cref="InvalidOperationException"/> with a user-facing message.
 /// </summary>
-public class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactory)
+public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactory)
 {
     // ---- Products ----
 
@@ -37,6 +37,8 @@ public class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync();
         var product = new Product { Name = name.Trim(), Description = Clean(description), ScoringModel = model };
         db.Products.Add(product);
+        await db.SaveChangesAsync();
+        db.TaskTemplates.Add(StarterTemplates.EdiMigration(product.Id));
         await db.SaveChangesAsync();
         return product;
     }

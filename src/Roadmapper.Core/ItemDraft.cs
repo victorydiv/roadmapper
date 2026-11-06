@@ -20,6 +20,9 @@ public class ItemDraft
     public bool IsRollupOverridden { get; set; }
     public HashSet<int> TagIds { get; set; } = new();
     public ItemScore Score { get; set; } = new();
+    /// <summary>Carried through edits and import unchanged; the editor shows them read-only.</summary>
+    public string? SourceTemplateName { get; set; }
+    public DateTime? SourceTemplateAppliedAt { get; set; }
 
     public bool IsNew => Id == 0;
 
@@ -45,6 +48,8 @@ public class ItemDraft
         IsRollupOverridden = i.IsRollupOverridden,
         TagIds = i.Tags.Select(t => t.Id).ToHashSet(),
         Score = CopyScore(i.Score ?? new ItemScore()),
+        SourceTemplateName = i.SourceTemplateName,
+        SourceTemplateAppliedAt = i.SourceTemplateAppliedAt,
     };
 
     /// <summary>Returns a user-facing error, or null when valid.</summary>
@@ -72,6 +77,8 @@ public class ItemDraft
         item.ThemeId = ThemeId;
         item.ManualRank = ManualRank;
         item.IsRollupOverridden = IsRollupOverridden;
+        item.SourceTemplateName = SourceTemplateName;
+        item.SourceTemplateAppliedAt = SourceTemplateAppliedAt;
 
         item.Score ??= new ItemScore();
         var s = item.Score;

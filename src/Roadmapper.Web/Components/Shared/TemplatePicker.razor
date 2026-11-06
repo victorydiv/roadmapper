@@ -1,0 +1,195 @@
+@inject RoadmapService Svc
+
+@* "Add from template": choose a template, review the tasks per Feature (uncheck, adjust dates), then create them in one batch. *@
+<div class="modal-backdrop">
+    <div class="modal wide">
+        <div class="modal-head">
+            <h2>Add tasks from a template</h2>
+            <span class="muted small">to @(features.Count == 1 ? features[0].Title : $"{features.Count} features")</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(null)">✕</button>
+        </div>
+
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+
+            @if (templates is null)
+            {
+                <span class="muted">Loading templates…</span>
+            }
+            else if (templates.Count == 0)
+            {
+                <div class="empty">
+                    No task templates yet. Create one under <a href="/products/@Roadmap.Product.Id/settings">Settings → Task templates</a>,
+                    or use "Save tasks as template" on a Feature that already has tasks.
+                </div>
+            }
+            else
+            {
+                <div class="picker">
+                    <div class="picker-list">
+                        @foreach (var t in templates)
+                        {
+                            <button type="button" class="picker-item @(t.Id == selectedId ? "on" : "")" @onclick="() => Select(t)">
+                                <b>@t.Name</b>
+                                <span class="muted small">@t.Lines.Count task@(t.Lines.Count == 1 ? "" : "s")@(t.Description is { } d ? $" · {d}" : "")</span>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="picker-preview stack">
+                        @if (selectedId is null)
+                        {
+                            <span class="muted">Choose a template to preview its tasks.</span>
+                        }
+                        else
+                        {
+                            @foreach (var feature in features)
+                            {
+                                var planned = plans[feature.Id];
+                                var existing = Roadmap.ChildrenOf(feature.Id).ToList();
+                                <div class="picker-group">
+                                    <div class="row">
+                                        <TypeBadge Type="ItemType.Feature" />
+                                        <b>@feature.Title</b>
+                                        <span class="muted small">@(feature.StartDate is null ? "no start date, so tasks are undated" : $"starts {feature.StartDate:MMM d, yyyy}; tasks follow one after another")</span>
+                                        <span class="spacer"></span>
+                                        <button type="button" class="btn sm" @onclick="() => SetAll(feature, true)">All</button>
+                                        <button type="button" class="btn sm" @onclick="() => SetAll(feature, false)">None</button>
+                                    </div>
+                                    <table class="tree picker-table">
+                                        <thead><tr><th></th><th>Task</th><th>Start</th><th>End</th><th>Owner</th><th>Tags</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var task in planned)
+                                            {
+                                                <tr class="@(task.Include ? "" : "excluded")">
+                                                    <td><input type="checkbox" @bind="task.Include" @bind:after="() => Reschedule(feature)" title="Create this task" /></td>
+                                                    <td class="title-cell">
+                                                        @task.Title
+                                                        @if (task.IsDuplicate)
+                                                        {
+                                                            <span class="badge blocked" title="This Feature already has a task with this title, so it's unchecked">already exists</span>
+                                                        }
+                                                    </td>
+                                                    <td><input type="date" @bind="task.StartDate" @bind:after="() => DatesEdited(task, feature)" disabled="@(!task.Include)" /></td>
+                                                    <td>
+                                                        <span class="row" style="flex-wrap:nowrap;gap:.2rem">
+                                                            <input type="date" @bind="task.EndDate" @bind:after="() => DatesEdited(task, feature)" disabled="@(!task.Include)" />
+                                                            @if (task.DatesEdited)
+                                                            {
+                                                                <button type="button" class="btn icon" title="Back to the calculated dates" @onclick="() => ResetDates(task, feature)">↺</button>
+                                                            }
+                                                        </span>
+                                                    </td>
+                                                    <td class="small">@task.Owner</td>
+                                                    <td class="small">@string.Join(" ", Roadmap.Product.Tags.Where(t => task.TagIds.Contains(t.Id)).Select(t => "#" + t.Name))</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                    @if (TemplateRules.RollupAfter(feature, existing, planned) is { } after)
+                                    {
+                                        <div class="alert warn small">
+                                            The Feature's rolled-up values will change:
+                                            @string.Join("; ", RollupChanges(feature, after)).
+                                            Tick "Set dates and progress manually" on the Feature to keep its own.
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="modal-foot">
+            <span class="muted small">
+                @if (selectedId is not null)
+                {
+                    @($"{Chosen} task{(Chosen == 1 ? "" : "s")} will be created as Idea, 0% complete")
+                }
+            </span>
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(null)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@(Chosen == 0 || saving)" @onclick="ApplyAsync">
+                Add @Chosen task@(Chosen == 1 ? "" : "s")@(features.Count > 1 ? $" to {features.Count} features" : "")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProductRoadmap Roadmap { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<int> FeatureIds { get; set; } = [];
+    /// <summary>Invoked with the created batch, or null when cancelled.</summary>
+    [Parameter] public EventCallback<TemplateBatch?> OnClose { get; set; }
+
+    private List<TaskTemplate>? templates;
+    private List<RoadmapItem> features = [];
+    private Dictionary<int, List<PlannedTask>> plans = new();
+    private int? selectedId;
+    private string? error;
+    private bool saving;
+
+    private int Chosen => selectedId is null ? 0 : plans.Values.Sum(p => p.Count(t => t.Include));
+
+    protected override async Task OnInitializedAsync()
+    {
+        features = FeatureIds.Select(Roadmap.Find).OfType<RoadmapItem>().Where(f => f.ItemType == ItemType.Feature).ToList();
+        templates = await Svc.GetTemplatesAsync(Roadmap.Product.Id);
+        if (templates.Count == 1) Select(templates[0]);
+    }
+
+    private void Select(TaskTemplate template)
+    {
+        selectedId = template.Id;
+        plans = features.ToDictionary(f => f.Id, f => TemplateRules.Plan(template, f, Roadmap.ChildrenOf(f.Id)));
+    }
+
+    private void SetAll(RoadmapItem feature, bool include)
+    {
+        foreach (var t in plans[feature.Id]) t.Include = include;
+        Reschedule(feature);
+    }
+
+    /// <summary>Re-chains the Feature's tasks after a checkbox or date change; hand-edited dates are kept.</summary>
+    private void Reschedule(RoadmapItem feature) => TemplateRules.Schedule(plans[feature.Id], feature.StartDate);
+
+    private void DatesEdited(PlannedTask task, RoadmapItem feature)
+    {
+        task.DatesEdited = true;
+        Reschedule(feature);
+    }
+
+    private void ResetDates(PlannedTask task, RoadmapItem feature)
+    {
+        task.DatesEdited = false;
+        Reschedule(feature);
+    }
+
+    private static IEnumerable<string> RollupChanges(RoadmapItem f, (DateOnly? Start, DateOnly? End, int Progress) after)
+    {
+        if (after.Start != f.StartDate) yield return $"start {Date(f.StartDate)} → {Date(after.Start)}";
+        if (after.End != f.EndDate) yield return $"end {Date(f.EndDate)} → {Date(after.End)}";
+        if (after.Progress != f.ProgressPct) yield return $"progress {f.ProgressPct}% → {after.Progress}%";
+    }
+
+    private static string Date(DateOnly? d) => d?.ToString("MMM d, yyyy") ?? "none";
+
+    private async Task ApplyAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var batch = await Svc.ApplyTemplateAsync(selectedId!.Value, plans.Values.SelectMany(p => p).ToList());
+            await OnClose.InvokeAsync(batch);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+}

@@ -24,10 +24,24 @@ public static class TableReader
         return rows;
     }
 
+    /// <summary>A named sheet of an .xlsx as rows of text, or null when the file isn't .xlsx or has no such sheet.</summary>
+    public static List<string[]>? ReadSheet(Stream seekableStream, string fileName, string sheetName)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".xlsx", StringComparison.OrdinalIgnoreCase)) return null;
+        seekableStream.Position = 0;
+        using var wb = new XLWorkbook(seekableStream);
+        return wb.Worksheets.TryGetWorksheet(sheetName, out var ws) ? Rows(ws) : null;
+    }
+
     private static List<string[]> ReadXlsx(Stream stream)
     {
         using var wb = new XLWorkbook(stream);
-        var range = wb.Worksheets.First().RangeUsed();
+        return Rows(wb.Worksheets.First());
+    }
+
+    private static List<string[]> Rows(IXLWorksheet sheet)
+    {
+        var range = sheet.RangeUsed();
         if (range is null) return [];
 
         var width = range.ColumnCount();

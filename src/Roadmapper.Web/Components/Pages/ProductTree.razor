@@ -19,6 +19,19 @@ else
         </div>
         <button class="btn" @onclick="() => collapsed.Clear()">Expand all</button>
         <button class="btn" @onclick="CollapseAll">Collapse all</button>
+        <button class="btn @(selecting ? "on" : "")" @onclick="ToggleSelecting" title="Tick several Features, then apply a template to all of them">
+            @(selecting ? "Done selecting" : "Select features")
+        </button>
+        @if (selecting)
+        {
+            <button class="btn primary" disabled="@(selected.Count == 0)" @onclick="() => OpenPicker(selected.ToList())">
+                Apply template to selected (@selected.Count)
+            </button>
+            @if (selected.Count > 0)
+            {
+                <button class="btn icon" @onclick="() => selected.Clear()">Clear</button>
+            }
+        }
         <span class="spacer"></span>
         <span class="muted small">@Roadmap.Items.Count items</span>
     </div>
@@ -26,6 +39,27 @@ else
     @if (Error is not null)
     {
         <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    @if (templateSaved is { } savedName)
+    {
+        <div class="alert ok row" style="margin-bottom:.75rem">
+            <span>Saved template “@savedName”. Manage it under <a href="/products/@ProductId/settings">Settings → Task templates</a>.</span>
+            <span class="spacer"></span>
+            <button class="btn icon" title="Dismiss" @onclick="() => templateSaved = null">✕</button>
+        </div>
+    }
+
+    @if (lastBatch is { } batch)
+    {
+        <div class="alert ok row" style="margin-bottom:.75rem">
+            <span>
+                Added @batch.TaskCount task@(batch.TaskCount == 1 ? "" : "s") from “@batch.TemplateName”@(batch.FeatureCount > 1 ? $" to {batch.FeatureCount} features" : "").
+            </span>
+            <span class="spacer"></span>
+            <button class="btn sm" @onclick="UndoLastBatchAsync">Undo</button>
+            <button class="btn icon" title="Dismiss" @onclick="() => lastBatch = null">✕</button>
+        </div>
     }
 
     @if (Roadmap.Items.Count == 0)
@@ -58,9 +92,16 @@ else
                         var item = row.Item;
                         var rolled = row.HasChildren && !item.IsRollupOverridden;
                         var childType = HierarchyRules.ChildTypeOf(item.ItemType);
-                        <tr class="depth-@row.Depth" @key="item.Id">
+                        var isFeature = item.ItemType == ItemType.Feature;
+                        <tr class="depth-@row.Depth @(menuFor == item.Id ? "menu-open" : "") @(selected.Contains(item.Id) ? "selected" : "")" @key="item.Id"
+                            @oncontextmenu="e => { if (isFeature) OpenMenu(item.Id, e); }" @oncontextmenu:preventDefault="isFeature">
                             <td class="title-cell">
                                 <div class="inner" style="padding-left:@(row.Depth * 1.4)rem">
+                                    @if (selecting && isFeature)
+                                    {
+                                        <input type="checkbox" title="Select this Feature" checked="@selected.Contains(item.Id)"
+                                               @onchange="e => { if ((bool)e.Value!) selected.Add(item.Id); else selected.Remove(item.Id); }" />
+                                    }
                                     @if (row.HasChildren)
                                     {
                                         <button class="caret" @onclick="() => Toggle(item.Id)" title="Expand / collapse">@(collapsed.Contains(item.Id) ? "▶" : "▼")</button>
@@ -108,7 +149,23 @@ else
                             </td>
                             <td>
                                 <div class="row-actions">
-                                    @if (childType is { } ct)
+                                    @if (isFeature)
+                                    {
+                                        <span class="menu-anchor">
+                                            <button class="btn icon" title="Add tasks (or right-click the row)" @onclick="e => { if (menuFor == item.Id) menuFor = null; else OpenMenu(item.Id, e); }">+ Tasks ▾</button>
+                                            @if (menuFor == item.Id)
+                                            {
+                                                <div class="menu-overlay" @onclick="() => menuFor = null" @onwheel="() => menuFor = null" @oncontextmenu="() => menuFor = null" @oncontextmenu:preventDefault></div>
+                                                <div class="menu" style="@menuStyle">
+                                                    <button @onclick="() => { menuFor = null; AddChild(item, ItemType.Task); }">Add task</button>
+                                                    <button @onclick="() => { menuFor = null; OpenPicker([item.Id]); }">Add from template…</button>
+                                                    <button disabled="@(!Roadmap.HasChildren(item.Id))" @onclick="() => { menuFor = null; SaveAsTemplate(item); }"
+                                                            title="@(Roadmap.HasChildren(item.Id) ? "" : "This Feature has no tasks yet")">Save tasks as template…</button>
+                                                </div>
+                                            }
+                                        </span>
+                                    }
+                                    else if (childType is { } ct)
                                     {
                                         <button class="btn icon" title="Add @ct" @onclick="() => AddChild(item, ct)">+ @ct</button>
                                     }
@@ -131,11 +188,77 @@ else
     {
         <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
     }
+
+    @if (pickerFeatures is not null)
+    {
+        <TemplatePicker Roadmap="Roadmap" FeatureIds="pickerFeatures" OnClose="OnPickerClosed" />
+    }
+
+    @if (savingTemplate is not null)
+    {
+        <TemplateEditor Roadmap="Roadmap" Draft="savingTemplate" Title="Save tasks as template" OnClose="OnSaveTemplateClosed" />
+    }
 }
 
 @code {
     private readonly HashSet<int> collapsed = new();
-    private bool byPriority;
+    private readonly HashSet<int> selected = new();
+    private bool byPriority, selecting;
+    private int? menuFor;
+    private string menuStyle = "";
+
+    /// <summary>
+    /// Opens the Feature's task menu at the pointer. It's positioned against the window rather than the
+    /// row, so the table's scroll container can't clip it; min() keeps it on-screen near the bottom and right edges.
+    /// </summary>
+    private void OpenMenu(int featureId, MouseEventArgs e)
+    {
+        menuFor = featureId;
+        var x = e.ClientX.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        var y = e.ClientY.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        menuStyle = $"left:min({x}px, calc(100vw - 14rem)); top:min({y}px, calc(100vh - 9rem))";
+    }
+    private List<int>? pickerFeatures;
+    private TemplateDraft? savingTemplate;
+    private TemplateBatch? lastBatch;
+    private string? templateSaved;
+
+    private void ToggleSelecting()
+    {
+        selecting = !selecting;
+        if (!selecting) selected.Clear();
+    }
+
+    private void OpenPicker(List<int> featureIds) => pickerFeatures = featureIds;
+
+    private async Task OnPickerClosed(TemplateBatch? batch)
+    {
+        pickerFeatures = null;
+        if (batch is null) return;
+        lastBatch = batch;
+        selected.Clear();
+        selecting = false;
+        await ReloadAsync();
+        // Show the new tasks.
+        foreach (var f in Roadmap!.Items.Where(i => i.TemplateBatchId == batch.BatchId).Select(i => i.ParentId))
+            if (f is { } id) collapsed.Remove(id);
+    }
+
+    private async Task UndoLastBatchAsync()
+    {
+        var batch = lastBatch!;
+        lastBatch = null;
+        await RunAsync(() => Svc.UndoTemplateBatchAsync(batch.BatchId));
+    }
+
+    private void SaveAsTemplate(RoadmapItem feature) =>
+        savingTemplate = TemplateRules.FromFeature(feature, Roadmap!.ChildrenOf(feature.Id));
+
+    private void OnSaveTemplateClosed(bool saved)
+    {
+        if (saved) templateSaved = savingTemplate!.Name.Trim();
+        savingTemplate = null;
+    }
 
     private void Toggle(int id)
     {

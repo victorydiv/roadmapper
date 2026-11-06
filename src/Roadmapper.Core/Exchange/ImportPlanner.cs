@@ -153,6 +153,11 @@ public static class ImportPlanner
         d.EndDate = ParseDate(row, RoadmapColumns.End, Error);
         if (d.StartDate is { } sd && d.EndDate is { } ed && ed < sd) plan.Errors.Add("End is before Start.");
 
+        // Reference only: which template a task came from, carried through an export/import round trip.
+        d.SourceTemplateName = NullIfEmpty(row.Get(RoadmapColumns.FromTemplate));
+        if (d.SourceTemplateName is not null)
+            d.SourceTemplateAppliedAt = ParseDate(row, RoadmapColumns.TemplateApplied, Error)?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
         if (row.Get(RoadmapColumns.ManualRank) is { Length: > 0 } rank)
         {
             if (int.TryParse(rank, out var r) && r >= 1) d.ManualRank = r;

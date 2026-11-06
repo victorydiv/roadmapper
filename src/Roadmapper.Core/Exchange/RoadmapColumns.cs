@@ -11,7 +11,8 @@ public static class RoadmapColumns
         Owner = "Owner", Theme = "Theme", Tags = "Tags",
         Reach = "Reach", Impact = "Impact", Confidence = "Confidence", Effort = "Effort",
         BusinessValue = "Business value", TimeCriticality = "Time criticality", RiskReduction = "Risk reduction",
-        JobSize = "Job size", Moscow = "MoSCoW", ManualRank = "Manual rank", Score = "Score", Id = "Id";
+        JobSize = "Job size", Moscow = "MoSCoW", ManualRank = "Manual rank",
+        FromTemplate = "From template", TemplateApplied = "Template applied", Score = "Score", Id = "Id";
 
     public const string PathSeparator = " › ";
 
@@ -20,7 +21,7 @@ public static class RoadmapColumns
     [
         Type, Title, Parent, Description, Status, Progress, Start, End, Horizon, Owner, Theme, Tags,
         Reach, Impact, Confidence, Effort, BusinessValue, TimeCriticality, RiskReduction, JobSize, Moscow,
-        ManualRank, Score, Id,
+        ManualRank, FromTemplate, TemplateApplied, Score, Id,
     ];
 
     public static readonly string[] Importable = Export.Where(c => c is not (Score or Id)).ToArray();

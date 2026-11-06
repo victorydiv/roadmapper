@@ -219,12 +219,23 @@ namespace Roadmapper.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("SourceTemplateAppliedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceTemplateName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TemplateBatchId")
+                        .HasMaxLength(40)
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("ThemeId")
@@ -241,6 +252,8 @@ namespace Roadmapper.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("TemplateBatchId");
 
                     b.HasIndex("ThemeId");
 
@@ -306,6 +319,76 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("Tags");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.TaskTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("TaskTemplates");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.TaskTemplateLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("StartOffsetDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TemplateId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId", "SortOrder");
+
+                    b.ToTable("TaskTemplateLines");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Theme", b =>
                 {
                     b.Property<int>("Id")
@@ -330,6 +413,21 @@ namespace Roadmapper.Data.Migrations
                     b.HasIndex("ProductId");
 
                     b.ToTable("Themes");
+                });
+
+            modelBuilder.Entity("TaskTemplateLineTags", b =>
+                {
+                    b.Property<int>("TagsId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TaskTemplateLineId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TagsId", "TaskTemplateLineId");
+
+                    b.HasIndex("TaskTemplateLineId");
+
+                    b.ToTable("TaskTemplateLineTags");
                 });
 
             modelBuilder.Entity("ItemTags", b =>
@@ -427,11 +525,44 @@ namespace Roadmapper.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.TaskTemplate", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.TaskTemplateLine", b =>
+                {
+                    b.HasOne("Roadmapper.Core.TaskTemplate", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Theme", b =>
                 {
                     b.HasOne("Roadmapper.Core.Product", null)
                         .WithMany("Themes")
                         .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TaskTemplateLineTags", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.TaskTemplateLine", null)
+                        .WithMany()
+                        .HasForeignKey("TaskTemplateLineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -454,6 +585,11 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Score");
 
                     b.Navigation("Successors");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.TaskTemplate", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

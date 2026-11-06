@@ -17,7 +17,7 @@ else
             <div class="export-grid">
                 <a class="export-option" href="/export/@ProductId/roadmap.xlsx" download>
                     <b>Excel (.xlsx)</b>
-                    <span class="muted small">Every item and field, plus a Dependencies sheet. Edit it and import it back.</span>
+                    <span class="muted small">Every item and field, plus Dependencies and Task templates sheets. Edit it and import it back.</span>
                 </a>
                 <a class="export-option" href="/export/@ProductId/roadmap.csv" download>
                     <b>CSV</b>
@@ -99,6 +99,13 @@ else
                     {
                         <div class="alert warn small">@problem</div>
                     }
+                    @if (importedTemplates.Count > 0)
+                    {
+                        <div class="muted small">
+                            This file also has a <b>Templates</b> sheet with @importedTemplates.Count task template@(importedTemplates.Count == 1 ? "" : "s").
+                            They'll be added too; any with a name that already exists in this product are skipped.
+                        </div>
+                    }
                     <div class="row">
                         <button class="btn primary" disabled="@(MappingProblem is not null)" @onclick="PreviewImport">Preview</button>
                     </div>
@@ -152,7 +159,15 @@ else
                 case Step.Done:
                     <div class="alert ok">
                         Imported @importedCount item@(importedCount == 1 ? "" : "s") into @Roadmap.Product.Name.
+                        @if (templatesCreated > 0)
+                        {
+                            <span> Added @templatesCreated task template@(templatesCreated == 1 ? "" : "s").</span>
+                        }
                     </div>
+                    @if (templatesSkipped.Count > 0)
+                    {
+                        <div class="muted small">Skipped templates that already exist: @string.Join(", ", templatesSkipped).</div>
+                    }
                     <div class="row">
                         <a class="btn primary" href="/products/@ProductId">Open the tree</a>
                         <button class="btn" @onclick="Reset">Import another file</button>
@@ -174,7 +189,9 @@ else
     private List<string[]> dataRows = [];
     private string?[] mapping = [];
     private List<PlannedItem> plans = [];
-    private int importedCount;
+    private int importedCount, templatesCreated;
+    private List<ImportedTemplate> importedTemplates = [];
+    private List<string> templatesSkipped = [];
 
     private string? MappingProblem
     {
@@ -200,6 +217,7 @@ else
             buffer.Position = 0;
 
             var rows = TableReader.Read(buffer, file.Name);
+            importedTemplates = TemplateSheet.Parse(TableReader.ReadSheet(buffer, file.Name, TemplateSheet.SheetName) ?? []);
             fileName = file.Name;
             headers = rows[0].Select((h, i) => string.IsNullOrWhiteSpace(h) ? $"Column {i + 1}" : h.Trim()).ToArray();
             dataRows = rows.Skip(1).ToList();
@@ -233,6 +251,9 @@ else
         Error = null;
         try
         {
+            (templatesCreated, templatesSkipped) = importedTemplates.Count > 0
+                ? await Svc.ImportTemplatesAsync(ProductId, importedTemplates)
+                : (0, []);
             importedCount = await Svc.ImportAsync(ProductId, plans);
             plans = [];
             step = Step.Done;
@@ -250,5 +271,8 @@ else
         dataRows = [];
         mapping = [];
         plans = [];
+        importedTemplates = [];
+        templatesSkipped = [];
+        templatesCreated = 0;
     }
 }

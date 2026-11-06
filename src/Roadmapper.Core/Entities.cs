@@ -47,6 +47,12 @@ public class RoadmapItem
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>For reference only: the template this task was copied from, by name, as it was when applied.</summary>
+    public string? SourceTemplateName { get; set; }
+    public DateTime? SourceTemplateAppliedAt { get; set; }
+    /// <summary>Shared by every task created in one "apply template" action, so the batch can be undone together.</summary>
+    public string? TemplateBatchId { get; set; }
+
     public ItemScore? Score { get; set; }
     public List<Tag> Tags { get; set; } = new();
     /// <summary>Dependencies where this item is the successor (i.e. it is blocked by them).</summary>

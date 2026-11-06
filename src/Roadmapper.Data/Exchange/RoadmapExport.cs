@@ -44,6 +44,8 @@ public static class RoadmapExport
                     MoscowPriority.CouldHave => "Could", MoscowPriority.WontHave => "Won't", _ => null,
                 },
                 [RoadmapColumns.ManualRank] = i.ManualRank,
+                [RoadmapColumns.FromTemplate] = i.SourceTemplateName,
+                [RoadmapColumns.TemplateApplied] = i.SourceTemplateAppliedAt is { } at ? DateOnly.FromDateTime(at.ToLocalTime()) : null,
                 [RoadmapColumns.Score] = s.ComputedScore is { } cs ? Math.Round(cs, 2) : null,
                 [RoadmapColumns.Id] = i.Id,
             };
@@ -56,7 +58,8 @@ public static class RoadmapExport
         "﻿" + Csv.Write(Rows(roadmap).Select(r => r.Select(c => Csv.ProtectFormula(Text(c))).ToArray())
             .Prepend(RoadmapColumns.Export));
 
-    public static byte[] ToXlsx(ProductRoadmap roadmap)
+    /// <summary>The Roadmap sheet, a Dependencies sheet, and (when given) a Templates sheet that import reads back.</summary>
+    public static byte[] ToXlsx(ProductRoadmap roadmap, IReadOnlyList<TaskTemplate>? templates = null)
     {
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Roadmap");
@@ -97,6 +100,27 @@ public static class RoadmapExport
             line++;
         }
         deps.Columns().AdjustToContents(8, 80);
+
+        if (templates is { Count: > 0 })
+        {
+            var tpl = wb.AddWorksheet(TemplateSheet.SheetName);
+            for (var c = 0; c < TemplateSheet.Columns.Length; c++) tpl.Cell(1, c + 1).Value = TemplateSheet.Columns[c];
+            var tplRows = TemplateSheet.Rows(templates);
+            for (var r = 0; r < tplRows.Count; r++)
+                for (var c = 0; c < tplRows[r].Length; c++)
+                {
+                    var cell = tpl.Cell(r + 2, c + 1);
+                    switch (tplRows[r][c])
+                    {
+                        case int n: cell.Value = n; break;
+                        case string s: cell.Value = s; break;
+                    }
+                }
+            tpl.Row(1).Style.Font.Bold = true;
+            tpl.Row(1).Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f6");
+            tpl.SheetView.FreezeRows(1);
+            tpl.Columns().AdjustToContents(8, 60);
+        }
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);

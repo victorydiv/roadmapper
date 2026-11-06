@@ -13,6 +13,8 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<Dependency> Dependencies => Set<Dependency>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<Snapshot> Snapshots => Set<Snapshot>();
+    public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
+    public DbSet<TaskTemplateLine> TaskTemplateLines => Set<TaskTemplateLine>();
 
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>
     public bool AuditEnabled { get; set; } = true;
@@ -50,6 +52,9 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
             e.Property(i => i.ItemType).HasConversion<string>().HasMaxLength(20);
             e.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(i => i.Horizon).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.SourceTemplateName).HasMaxLength(TemplateRules.MaxNameLength);
+            e.Property(i => i.TemplateBatchId).HasMaxLength(40);
+            e.HasIndex(i => i.TemplateBatchId);
 
             e.HasOne(i => i.Product).WithMany(p => p.Items).HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(i => i.Parent).WithMany(p => p.Children).HasForeignKey(i => i.ParentId).OnDelete(DeleteBehavior.Cascade);
@@ -103,6 +108,25 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
             e.Property(s => s.Note).HasMaxLength(1000);
             e.HasOne<Product>().WithMany().HasForeignKey(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(s => new { s.ProductId, s.TakenAt });
+        });
+
+        b.Entity<TaskTemplate>(e =>
+        {
+            // NOCASE so "EDI standard" and "EDI Standard" count as the same name.
+            e.Property(t => t.Name).IsRequired().HasMaxLength(TemplateRules.MaxNameLength).UseCollation("NOCASE");
+            e.Property(t => t.Description).HasMaxLength(2000);
+            e.HasOne<Product>().WithMany().HasForeignKey(t => t.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(t => t.Lines).WithOne().HasForeignKey(l => l.TemplateId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(t => new { t.ProductId, t.Name }).IsUnique();
+        });
+
+        b.Entity<TaskTemplateLine>(e =>
+        {
+            e.Property(l => l.Title).IsRequired().HasMaxLength(TemplateRules.MaxTitleLength);
+            e.Property(l => l.Owner).HasMaxLength(100);
+            // Deleting a tag just drops it from template lines.
+            e.HasMany(l => l.Tags).WithMany().UsingEntity("TaskTemplateLineTags");
+            e.HasIndex(l => new { l.TemplateId, l.SortOrder });
         });
     }
 }

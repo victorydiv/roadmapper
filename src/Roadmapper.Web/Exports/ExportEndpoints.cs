@@ -23,7 +23,8 @@ public static class ExportEndpoints
 
         export.MapGet("/roadmap.xlsx", async (int productId, RoadmapService svc) =>
             await svc.GetRoadmapAsync(productId) is { } r
-                ? Results.File(RoadmapExport.ToXlsx(r), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName(r, "xlsx"))
+                ? Results.File(RoadmapExport.ToXlsx(r, await svc.GetTemplatesAsync(productId)),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName(r, "xlsx"))
                 : Results.NotFound());
 
         // Served inline so it opens in the browser's PDF viewer; save or print from there.

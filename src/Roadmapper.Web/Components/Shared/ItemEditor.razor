@@ -2,10 +2,10 @@
 
 <div class="modal-backdrop">
     <div class="modal">
-        <EditForm Model="Draft" OnValidSubmit="SaveAsync">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
             <div class="modal-head">
-                <TypeBadge Type="Draft.ItemType" />
-                <h2>@(Draft.IsNew ? $"New {Draft.ItemType}" : "Edit item")</h2>
+                <TypeBadge Type="draft.ItemType" />
+                <h2>@(draft.IsNew ? $"New {draft.ItemType}" : "Edit item")</h2>
                 <span class="spacer"></span>
                 <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync()">✕</button>
             </div>
@@ -17,14 +17,20 @@
                 }
 
                 <label class="field">Title
-                    <InputText @bind-Value="Draft.Title" autofocus />
+                    <InputText @bind-Value="draft.Title" autofocus />
                 </label>
+                @if (draft.SourceTemplateName is { } source)
+                {
+                    <div class="muted small" title="For reference only; editing the template doesn't change this task">
+                        Created from template <b>@source</b>@(draft.SourceTemplateAppliedAt is { } at ? $" on {at.ToLocalTime():MMM d, yyyy}" : "")
+                    </div>
+                }
 
                 <div class="grid-2">
-                    @if (Draft.IsNew)
+                    @if (draft.IsNew)
                     {
                         <label class="field">Type
-                            <InputSelect @bind-Value="Draft.ItemType" @bind-Value:after="OnTypeChanged">
+                            <InputSelect @bind-Value="draft.ItemType" @bind-Value:after="OnTypeChanged">
                                 @foreach (var t in Enum.GetValues<ItemType>())
                                 {
                                     <option value="@t">@t</option>
@@ -35,7 +41,7 @@
                     @if (parentType is { } pt)
                     {
                         <label class="field">Parent @pt
-                            <InputSelect @bind-Value="Draft.ParentId">
+                            <InputSelect @bind-Value="draft.ParentId">
                                 <option value="">— choose a @pt.ToString().ToLower() —</option>
                                 @foreach (var p in roadmap.Items.Where(i => i.ItemType == pt).OrderBy(i => roadmap.PathOf(i)).ThenBy(i => i.Title))
                                 {
@@ -47,14 +53,14 @@
                 </div>
 
                 <label class="field">Description
-                    <InputTextArea @bind-Value="Draft.Description" />
+                    <InputTextArea @bind-Value="draft.Description" />
                 </label>
 
                 <fieldset>
                     <legend>Status &amp; schedule</legend>
                     <div class="grid-3">
                         <label class="field">Status
-                            <InputSelect @bind-Value="Draft.Status">
+                            <InputSelect @bind-Value="draft.Status">
                                 @foreach (var s in Enum.GetValues<ItemStatus>())
                                 {
                                     <option value="@s">@Ui.Label(s)</option>
@@ -62,7 +68,7 @@
                             </InputSelect>
                         </label>
                         <label class="field">Horizon
-                            <InputSelect @bind-Value="Draft.Horizon">
+                            <InputSelect @bind-Value="draft.Horizon">
                                 <option value="">Unassigned</option>
                                 @foreach (var h in Enum.GetValues<Horizon>())
                                 {
@@ -71,22 +77,22 @@
                             </InputSelect>
                         </label>
                         <label class="field">Progress % @(RolledUp ? "(rolled up)" : "")
-                            <InputNumber @bind-Value="Draft.ProgressPct" min="0" max="100" disabled="@(RolledUp || Draft.Status == ItemStatus.Done)" />
+                            <InputNumber @bind-Value="draft.ProgressPct" min="0" max="100" disabled="@(RolledUp || draft.Status == ItemStatus.Done)" />
                         </label>
                         <label class="field">Start @(RolledUp ? "(rolled up)" : "")
-                            <InputDate @bind-Value="Draft.StartDate" disabled="@RolledUp" />
+                            <InputDate @bind-Value="draft.StartDate" disabled="@RolledUp" />
                         </label>
                         <label class="field">End @(RolledUp ? "(rolled up)" : "")
-                            <InputDate @bind-Value="Draft.EndDate" disabled="@RolledUp" />
+                            <InputDate @bind-Value="draft.EndDate" disabled="@RolledUp" />
                         </label>
                         <label class="field">Owner
-                            <InputText @bind-Value="Draft.Owner" />
+                            <InputText @bind-Value="draft.Owner" />
                         </label>
                     </div>
                     @if (HasChildren)
                     {
                         <label class="check">
-                            <InputCheckbox @bind-Value="Draft.IsRollupOverridden" />
+                            <InputCheckbox @bind-Value="draft.IsRollupOverridden" />
                             Set dates and progress manually instead of rolling them up from children
                         </label>
                     }
@@ -99,39 +105,39 @@
                         case ScoringModel.Rice:
                             <div class="grid-4">
                                 <label class="field" title="People or events affected per period">Reach
-                                    <InputNumber @bind-Value="Draft.Score.Reach" min="0" />
+                                    <InputNumber @bind-Value="draft.Score.Reach" min="0" />
                                 </label>
                                 <label class="field" title="3 = massive, 2 = high, 1 = medium, 0.5 = low, 0.25 = minimal">Impact (0.25–3)
-                                    <InputNumber @bind-Value="Draft.Score.Impact" min="0" step="0.25" />
+                                    <InputNumber @bind-Value="draft.Score.Impact" min="0" step="0.25" />
                                 </label>
                                 <label class="field" title="100 = high, 80 = medium, 50 = low">Confidence %
-                                    <InputNumber @bind-Value="Draft.Score.Confidence" min="0" max="100" />
+                                    <InputNumber @bind-Value="draft.Score.Confidence" min="0" max="100" />
                                 </label>
                                 <label class="field" title="Person-months">Effort
-                                    <InputNumber @bind-Value="Draft.Score.Effort" min="0" step="0.5" />
+                                    <InputNumber @bind-Value="draft.Score.Effort" min="0" step="0.5" />
                                 </label>
                             </div>
                             break;
                         case ScoringModel.Wsjf:
                             <div class="grid-4">
                                 <label class="field">Business value
-                                    <InputNumber @bind-Value="Draft.Score.BusinessValue" min="0" />
+                                    <InputNumber @bind-Value="draft.Score.BusinessValue" min="0" />
                                 </label>
                                 <label class="field">Time criticality
-                                    <InputNumber @bind-Value="Draft.Score.TimeCriticality" min="0" />
+                                    <InputNumber @bind-Value="draft.Score.TimeCriticality" min="0" />
                                 </label>
                                 <label class="field">Risk reduction
-                                    <InputNumber @bind-Value="Draft.Score.RiskReduction" min="0" />
+                                    <InputNumber @bind-Value="draft.Score.RiskReduction" min="0" />
                                 </label>
                                 <label class="field">Job size
-                                    <InputNumber @bind-Value="Draft.Score.JobSize" min="0" />
+                                    <InputNumber @bind-Value="draft.Score.JobSize" min="0" />
                                 </label>
                             </div>
                             break;
                         case ScoringModel.Moscow:
                             <div class="grid-2">
                                 <label class="field">Priority
-                                    <InputSelect @bind-Value="Draft.Score.Moscow">
+                                    <InputSelect @bind-Value="draft.Score.Moscow">
                                         <option value="">Not set</option>
                                         @foreach (var m in Enum.GetValues<MoscowPriority>().Reverse())
                                         {
@@ -140,7 +146,7 @@
                                     </InputSelect>
                                 </label>
                                 <label class="field" title="Only used to place the item on the prioritization matrix">Effort (for the matrix)
-                                    <InputNumber @bind-Value="Draft.Score.Effort" min="0" step="0.5" />
+                                    <InputNumber @bind-Value="draft.Score.Effort" min="0" step="0.5" />
                                 </label>
                             </div>
                             break;
@@ -150,7 +156,7 @@
                         <span class="spacer"></span>
                         <label class="field" style="flex-direction:row;align-items:center;gap:.5rem" title="Pins this item ahead of computed scores (1 = top)">
                             Manual rank
-                            <InputNumber @bind-Value="Draft.ManualRank" min="1" style="width:6rem" />
+                            <InputNumber @bind-Value="draft.ManualRank" min="1" style="width:6rem" />
                         </label>
                     </div>
                 </fieldset>
@@ -158,7 +164,7 @@
                 <fieldset>
                     <legend>Classification</legend>
                     <label class="field">Theme
-                        <InputSelect @bind-Value="Draft.ThemeId">
+                        <InputSelect @bind-Value="draft.ThemeId">
                             <option value="">None</option>
                             @foreach (var t in roadmap.Product.Themes)
                             {
@@ -172,7 +178,7 @@
                             @foreach (var tag in roadmap.Product.Tags)
                             {
                                 <label class="check">
-                                    <input type="checkbox" checked="@Draft.TagIds.Contains(tag.Id)" @onchange="e => ToggleTag(tag.Id, (bool)e.Value!)" />
+                                    <input type="checkbox" checked="@draft.TagIds.Contains(tag.Id)" @onchange="e => ToggleTag(tag.Id, (bool)e.Value!)" />
                                     @tag.Name
                                 </label>
                             }
@@ -184,11 +190,63 @@
                     }
                 </fieldset>
 
-                @if (!Draft.IsNew)
+                @if (!draft.IsNew)
                 {
+                    @if (draft.ItemType == ItemType.Feature)
+                    {
+                        var tasks = roadmap.ChildrenOf(draft.Id).ToList();
+                        var batches = tasks.Where(t => t.TemplateBatchId is not null).GroupBy(t => t.TemplateBatchId!)
+                            .OrderByDescending(g => g.Max(t => t.SourceTemplateAppliedAt)).ToList();
+                        <fieldset>
+                            <legend>Tasks</legend>
+                            <div class="row">
+                                <span class="muted small">@tasks.Count task@(tasks.Count == 1 ? "" : "s")</span>
+                                <span class="spacer"></span>
+                                <button type="button" class="btn sm" @onclick="AddTask">+ Add task</button>
+                                <button type="button" class="btn sm" @onclick="() => picking = true">Add from template…</button>
+                                <button type="button" class="btn sm" disabled="@(tasks.Count == 0)" @onclick="() => savingTemplate = TemplateRules.FromFeature(roadmap.Find(draft.Id)!, tasks)">
+                                    Save tasks as template…
+                                </button>
+                            </div>
+                            @if (notice is not null)
+                            {
+                                <div class="alert ok small">@notice</div>
+                            }
+                            @if (batches.Count > 0)
+                            {
+                                <div class="muted small">Added from templates:</div>
+                                <ul class="dep-list">
+                                    @foreach (var b in batches)
+                                    {
+                                        var first = b.First();
+                                        var edited = b.Count(t => t.UpdatedAt > t.CreatedAt);
+                                        <li>
+                                            <span class="small">
+                                                @b.Count() task@(b.Count() == 1 ? "" : "s") from “@first.SourceTemplateName”
+                                                on @first.SourceTemplateAppliedAt?.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                            </span>
+                                            <span class="spacer"></span>
+                                            @if (confirmingUndo == b.Key)
+                                            {
+                                                <span class="small overdue">@edited of these @(edited == 1 ? "was" : "were") edited since. Remove anyway?</span>
+                                                <button type="button" class="btn danger sm" @onclick="() => UndoBatchAsync(b.Key)">Remove @b.Count()</button>
+                                                <button type="button" class="btn sm" @onclick="() => confirmingUndo = null">Keep</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn sm" title="Remove every task from this application"
+                                                        @onclick="async () => { if (edited > 0) confirmingUndo = b.Key; else await UndoBatchAsync(b.Key); }">Undo</button>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </fieldset>
+                    }
+
                     <fieldset>
                         <legend>Dependencies</legend>
-                        @{ var blockedBy = roadmap.BlockedBy(Draft.Id).ToList(); var blocks = roadmap.Blocks(Draft.Id).ToList(); }
+                        @{ var blockedBy = roadmap.BlockedBy(draft.Id).ToList(); var blocks = roadmap.Blocks(draft.Id).ToList(); }
                         @if (blockedBy.Count + blocks.Count == 0)
                         {
                             <span class="muted small">No dependencies.</span>
@@ -228,7 +286,7 @@
                             </select>
                             <select @bind="newDepItemId" style="flex:1;width:auto">
                                 <option value="0">— choose an item —</option>
-                                @foreach (var i in roadmap.Items.Where(i => i.Id != Draft.Id).OrderBy(i => i.ItemType).ThenBy(i => i.Title))
+                                @foreach (var i in roadmap.Items.Where(i => i.Id != draft.Id).OrderBy(i => i.ItemType).ThenBy(i => i.Title))
                                 {
                                     <option value="@i.Id">@i.ItemType: @Display(i)</option>
                                 }
@@ -252,7 +310,7 @@
             </div>
 
             <div class="modal-foot">
-                @if (!Draft.IsNew)
+                @if (!draft.IsNew)
                 {
                     @if (confirmingDelete)
                     {
@@ -268,11 +326,21 @@
                 }
                 <span class="spacer"></span>
                 <button type="button" class="btn" @onclick="() => CloseAsync()">Cancel</button>
-                <button type="submit" class="btn primary" disabled="@saving">@(Draft.IsNew ? "Create" : "Save")</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
             </div>
         </EditForm>
     </div>
 </div>
+
+@if (picking)
+{
+    <TemplatePicker Roadmap="roadmap" FeatureIds="[draft.Id]" OnClose="OnPickerClosed" />
+}
+
+@if (savingTemplate is not null)
+{
+    <TemplateEditor Roadmap="roadmap" Draft="savingTemplate" Title="Save tasks as template" OnClose="OnSaveTemplateClosed" />
+}
 
 @code {
     [Parameter, EditorRequired] public ProductRoadmap Roadmap { get; set; } = default!;
@@ -287,17 +355,57 @@
     private string newDepDirection = "blockedBy";
     private int newDepItemId;
     private List<AuditEntry>? history;
+    // The item being edited. Starts as the host's Draft; "Add task" on a Feature switches it to a new task.
+    private ItemDraft draft = default!;
+    private bool picking;
+    private TemplateDraft? savingTemplate;
+    private string? notice, confirmingUndo;
 
     private IScoringStrategy strategy => roadmap.Strategy;
-    private ItemType? parentType => HierarchyRules.ParentTypeOf(Draft.ItemType);
-    private bool HasChildren => !Draft.IsNew && roadmap.HasChildren(Draft.Id);
-    private bool RolledUp => HasChildren && !Draft.IsRollupOverridden;
-    private string PreviewScore => strategy.Compute(Draft.Score) is { } s
+    private ItemType? parentType => HierarchyRules.ParentTypeOf(draft.ItemType);
+    private bool HasChildren => !draft.IsNew && roadmap.HasChildren(draft.Id);
+    private bool RolledUp => HasChildren && !draft.IsRollupOverridden;
+    private string PreviewScore => strategy.Compute(draft.Score) is { } s
         ? roadmap.Product.ScoringModel == ScoringModel.Moscow ? Ui.Label((MoscowPriority)(int)s) : s.ToString("0.##")
         : "not enough inputs";
-    private int DescendantCount => Descendants(Draft.Id);
+    private int DescendantCount => Descendants(draft.Id);
 
-    protected override void OnInitialized() => roadmap = Roadmap;
+    protected override void OnInitialized()
+    {
+        roadmap = Roadmap;
+        draft = Draft;
+    }
+
+    /// <summary>Switches this editor to a new task under the Feature being edited (unsaved Feature edits are dropped).</summary>
+    private void AddTask()
+    {
+        draft = ItemDraft.New(draft.ProductId, ItemType.Task, draft.Id);
+        history = null;
+        error = notice = null;
+        confirmingDelete = false;
+    }
+
+    private async Task OnPickerClosed(TemplateBatch? batch)
+    {
+        picking = false;
+        if (batch is null) return;
+        notice = $"Added {batch.TaskCount} task{(batch.TaskCount == 1 ? "" : "s")} from “{batch.TemplateName}”. Undo is below.";
+        await RefreshAsync();
+    }
+
+    private void OnSaveTemplateClosed(bool saved)
+    {
+        savingTemplate = null;
+        if (saved) notice = "Template saved. Manage it under Settings → Task templates.";
+    }
+
+    private async Task UndoBatchAsync(string batchId)
+    {
+        confirmingUndo = null;
+        var removed = await Svc.UndoTemplateBatchAsync(batchId);
+        notice = $"Removed {removed} task{(removed == 1 ? "" : "s")}.";
+        await RefreshAsync();
+    }
 
     private int Descendants(int id) => roadmap.ChildrenOf(id).Sum(c => 1 + Descendants(c.Id));
 
@@ -311,12 +419,12 @@
     private void OnTypeChanged()
     {
         // The previous parent can't be valid for a different type.
-        if (Draft.ParentId is { } pid && roadmap.Find(pid)?.ItemType != parentType) Draft.ParentId = null;
+        if (draft.ParentId is { } pid && roadmap.Find(pid)?.ItemType != parentType) draft.ParentId = null;
     }
 
     private void ToggleTag(int id, bool on)
     {
-        if (on) Draft.TagIds.Add(id); else Draft.TagIds.Remove(id);
+        if (on) draft.TagIds.Add(id); else draft.TagIds.Remove(id);
     }
 
     private async Task SaveAsync()
@@ -325,7 +433,7 @@
         error = null;
         try
         {
-            await Svc.SaveItemAsync(Draft);
+            await Svc.SaveItemAsync(draft);
             changed = true;
             await CloseAsync();
         }
@@ -335,7 +443,7 @@
 
     private async Task DeleteAsync()
     {
-        await Svc.DeleteItemAsync(Draft.Id);
+        await Svc.DeleteItemAsync(draft.Id);
         changed = true;
         await CloseAsync();
     }
@@ -345,8 +453,8 @@
         error = null;
         try
         {
-            if (newDepDirection == "blocks") await Svc.AddDependencyAsync(Draft.Id, newDepItemId);
-            else await Svc.AddDependencyAsync(newDepItemId, Draft.Id);
+            if (newDepDirection == "blocks") await Svc.AddDependencyAsync(draft.Id, newDepItemId);
+            else await Svc.AddDependencyAsync(newDepItemId, draft.Id);
             newDepItemId = 0;
             await RefreshAsync();
         }
@@ -360,7 +468,7 @@
     }
 
     private async Task LoadHistoryAsync() =>
-        history = await Svc.GetActivityAsync(roadmap.Product.Id, Draft.Id, take: 100);
+        history = await Svc.GetActivityAsync(roadmap.Product.Id, draft.Id, take: 100);
 
     private async Task RefreshAsync()
     {
