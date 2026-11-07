@@ -283,7 +283,8 @@ svg.matrix .hit { fill: transparent; cursor: pointer; }
 .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .template-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .5rem; }
 .template-list li { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
-.templates-card { grid-column: 1 / -1; }
+.templates-card, .rubric-card { grid-column: 1 / -1; }
+.rubric-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .75rem 1.25rem; align-items: start; }
 
 .tpl-lines { display: flex; flex-direction: column; gap: .3rem; margin: .5rem 0; }
 .tpl-line { display: grid; grid-template-columns: 1.2rem 1.6rem minmax(12rem, 3fr) minmax(7rem, 1.3fr) 5.2rem 5.2rem auto; gap: .4rem; align-items: center; padding: .2rem; border-radius: 6px; border: 1px solid transparent; }
@@ -331,3 +332,23 @@ tr.selected td { background: var(--accent-soft); }
 .guide th { background: var(--surface-2); }
 .guide hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 .guide blockquote { margin: 1rem 0; padding: .25rem 1rem; border-left: 3px solid var(--border); color: var(--muted); }
+
+/* ---------- WSJF scoring rubric ---------- */
+.rubric-group { display: flex; flex-direction: column; gap: .3rem; }
+.rubric-options { border-collapse: collapse; }
+.rubric-options th { text-align: left; font-size: .75rem; color: var(--muted); font-weight: 600; padding: 0 .4rem .3rem 0; }
+.rubric-options td { padding: .15rem .4rem .15rem 0; }
+.rubric-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+@media (max-width: 700px) { .rubric-factors { grid-template-columns: 1fr; } }
+.rubric-factor { border: 1px solid var(--border); border-radius: 6px; padding: .55rem .65rem; display: flex; flex-direction: column; gap: .45rem; }
+.rubric-factor .factor-value { font-size: 1.1rem; min-width: 2rem; text-align: right; }
+.rubric-criteria { display: flex; flex-direction: column; gap: .4rem; }
+.rubric-factor input.factor-input, table.scoring input.factor-input { width: 6rem; flex: none; }
+.faded { opacity: .5; }
+table.scoring td { vertical-align: middle; }
+table.scoring th.factor-head, table.scoring td.factor-cell { border-left: 1px solid var(--border); }
+table.scoring th.factor-head { text-align: center; }
+table.scoring th.num.factor-head { text-align: right; }
+table.scoring select.compact { width: auto; max-width: 11rem; padding: .2rem .3rem; }
+table.scoring input.compact { width: 6rem; padding: .2rem .3rem; }
+table.scoring td.title-cell { min-width: 220px; }

@@ -118,6 +118,64 @@
                                 </label>
                             </div>
                             break;
+                        case ScoringModel.Wsjf when !roadmap.Rubric.IsEmpty:
+                            var results = RubricResults;
+                            <div class="rubric-factors">
+                                @foreach (var r in results)
+                                {
+                                    var factor = r.Factor;
+                                    var calculates = roadmap.Rubric.Calculates(factor);
+                                    var manual = !calculates || draft.Score.ManualFactors.HasFlag(RubricCalculator.Flag(factor));
+                                    <div class="rubric-factor">
+                                        <div class="row">
+                                            <b>@RubricText.Factor(factor)</b>
+                                            <span class="spacer"></span>
+                                            @if (manual)
+                                            {
+                                                <input type="number" min="0" step="any" class="factor-input" value="@FactorText(factor)"
+                                                       @onchange="e => SetFactor(factor, e.Value as string)" />
+                                                @if (calculates)
+                                                {
+                                                    <button type="button" class="btn sm" title="Work this factor out from the answers below" @onclick="() => SetManual(factor, false, r)">Use rubric</button>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <b class="factor-value" title="Calculated from the rubric">@((r.Value ?? RubricCalculator.Get(draft.Score, factor)) is { } v ? RubricText.Number(v) : "–")</b>
+                                                <button type="button" class="btn sm" title="Type this factor instead of calculating it" @onclick="() => SetManual(factor, true, r)">Enter by hand</button>
+                                            }
+                                        </div>
+                                        @if (calculates)
+                                        {
+                                            <div class="rubric-criteria @(manual ? "faded" : "")">
+                                                @foreach (var c in roadmap.Rubric.ForFactor(factor))
+                                                {
+                                                    <label class="field" title="@c.Help">@c.Name@(c.Role == CriterionRole.Adjuster ? " (adjuster)" : "")
+                                                        <RubricAnswerInput Criterion="c" Answer="draft.Answers.GetValueOrDefault(c.Id)" StartDate="draft.StartDate"
+                                                                           AnswerChanged="a => SetAnswer(c.Id, a)" />
+                                                    </label>
+                                                }
+                                            </div>
+                                            @if (manual)
+                                            {
+                                                <div class="muted small">Entered by hand@(r.Value is { } rv ? $"; the rubric would give {RubricText.Number(rv)}" : "").</div>
+                                            }
+                                            else if (!r.Calculated)
+                                            {
+                                                <div class="muted small">@(RubricCalculator.Get(draft.Score, factor) is null
+                                                    ? "Answer the criteria above to calculate this."
+                                                    : "Not answered yet, so it keeps its current value.")</div>
+                                            }
+                                            else if (r.Criteria.Count(x => x.Answered) > 1)
+                                            {
+                                                @* A single answer explains itself next to its input; show the working only when several combine. *@
+                                                <div class="muted small">@r.Explanation</div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            break;
                         case ScoringModel.Wsjf:
                             <div class="grid-4">
                                 <label class="field">Business value
@@ -365,10 +423,51 @@
     private ItemType? parentType => HierarchyRules.ParentTypeOf(draft.ItemType);
     private bool HasChildren => !draft.IsNew && roadmap.HasChildren(draft.Id);
     private bool RolledUp => HasChildren && !draft.IsRollupOverridden;
-    private string PreviewScore => strategy.Compute(draft.Score) is { } s
+    private string PreviewScore => strategy.Compute(PreviewInputs) is { } s
         ? roadmap.Product.ScoringModel == ScoringModel.Moscow ? Ui.Label((MoscowPriority)(int)s) : s.ToString("0.##")
         : "not enough inputs";
     private int DescendantCount => Descendants(draft.Id);
+
+    private bool UsesRubric => roadmap.Product.ScoringModel == ScoringModel.Wsjf && !roadmap.Rubric.IsEmpty;
+    private IReadOnlyList<FactorResult> RubricResults =>
+        RubricCalculator.Evaluate(roadmap.Rubric, draft.Answers, draft.StartDate, DateOnly.FromDateTime(DateTime.Today));
+
+    /// <summary>The scoring inputs as they'll be after saving, with the rubric's calculated factors filled in.</summary>
+    private ItemScore PreviewInputs
+    {
+        get
+        {
+            if (!UsesRubric) return draft.Score;
+            var preview = ItemDraft.CopyScore(draft.Score);
+            RubricCalculator.Apply(preview, RubricResults);
+            return preview;
+        }
+    }
+
+    private string FactorText(WsjfFactor f) =>
+        RubricCalculator.Get(draft.Score, f) is { } v ? v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+
+    private void SetFactor(WsjfFactor f, string? text) =>
+        RubricCalculator.Set(draft.Score, f,
+            double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null);
+
+    private void SetAnswer(int criterionId, RubricAnswer? answer)
+    {
+        if (answer is null) draft.Answers.Remove(criterionId);
+        else draft.Answers[criterionId] = answer;
+    }
+
+    /// <summary>Switching to "by hand" starts from the calculated value, so nothing jumps.</summary>
+    private void SetManual(WsjfFactor f, bool manual, FactorResult result)
+    {
+        var flag = RubricCalculator.Flag(f);
+        if (manual)
+        {
+            if (result.Value is { } v) RubricCalculator.Set(draft.Score, f, v);
+            draft.Score.ManualFactors |= flag;
+        }
+        else draft.Score.ManualFactors &= ~flag;
+    }
 
     protected override void OnInitialized()
     {

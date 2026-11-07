@@ -1,0 +1,219 @@
+@page "/products/{ProductId:int}/scoring"
+@using System.Globalization
+@inherits ProductPageBase
+
+@* Score many items at once with the product's WSJF rubric: one row per item, one column per criterion. *@
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    var rubric = Roadmap.Rubric;
+    <ProductHeader Roadmap="Roadmap" Section="Scoring" />
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    @if (Roadmap.Product.ScoringModel != ScoringModel.Wsjf)
+    {
+        <div class="card empty">
+            The scoring rubric works with WSJF. This product is scored with @Ui.Label(Roadmap.Product.ScoringModel).
+            Change the prioritization model in <a href="/products/@ProductId/settings">Settings</a> to use it.
+        </div>
+    }
+    else if (rubric.IsEmpty)
+    {
+        <div class="card empty stack" style="align-items:center">
+            <div>
+                This product has no scoring rubric yet. A rubric works out Business value, Time criticality, Risk reduction
+                and Job size from a few answers per item, instead of typing the numbers.
+            </div>
+            <div class="row">
+                <button class="btn primary" @onclick="() => RunAsync(() => Svc.AddStarterRubricAsync(ProductId))">Start from example</button>
+                <a class="btn" href="/products/@ProductId/settings">Build one in Settings</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var levelItems = Roadmap.Items.Where(i => i.ItemType == level).ToList();
+        var ranks = levelItems.InRankOrder().Select((item, i) => (item.Id, Rank: i + 1)).ToDictionary(x => x.Id, x => x.Rank);
+        var shown = levelItems.Where(i => showDone || ProductRoadmap.IsOpen(i));
+        var rows = byRank
+            ? shown.InRankOrder().ToList()
+            : Roadmap.Flatten().Select(r => r.Item).Where(i => i.ItemType == level && (showDone || ProductRoadmap.IsOpen(i))).ToList();
+        var groups = RubricCalculator.Factors.Select(f => (Factor: f, Criteria: rubric.ForFactor(f).ToList())).ToList();
+
+        <div class="toolbar">
+            <TypeFilter Value="level" ValueChanged="t => level = t ?? ItemType.Initiative" AllowAll="false" />
+            <label class="check"><input type="checkbox" @bind="showDone" /> Include done / cancelled</label>
+            <div class="segmented">
+                <button class="@(byRank ? "on" : "")" @onclick="() => byRank = true">By rank</button>
+                <button class="@(byRank ? "" : "on")" @onclick="() => byRank = false">Tree order</button>
+            </div>
+            <span class="spacer"></span>
+            @if (status is not null)
+            {
+                <span class="muted small">@status</span>
+            }
+            <button class="btn" title="Re-score with today's date (start-date criteria change as time passes)" @onclick="RecalculateAsync">Recalculate</button>
+            <a class="btn" href="/products/@ProductId/settings">Edit rubric</a>
+        </div>
+
+        <div class="muted small" style="margin-bottom:.5rem">
+            Answers save as soon as you change them. ✎ marks a factor typed by hand; click it to switch back to the rubric.
+            WSJF = (Business value + Time criticality + Risk reduction) ÷ Job size.
+        </div>
+
+        @if (rows.Count == 0)
+        {
+            <div class="card empty">No @(level.ToString().ToLower())s to score.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree scoring">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">@level</th>
+                            @foreach (var g in groups)
+                            {
+                                <th colspan="@(g.Criteria.Count + 1)" class="factor-head">@RubricText.Factor(g.Factor)</th>
+                            }
+                            <th rowspan="2" class="num">WSJF</th>
+                            <th rowspan="2" class="num" title="Rank among all @(level.ToString().ToLower())s (manual rank first, then WSJF)">Rank</th>
+                        </tr>
+                        <tr>
+                            @foreach (var g in groups)
+                            {
+                                @foreach (var c in g.Criteria)
+                                {
+                                    <th title="@c.Help">@c.Name@(c.Role == CriterionRole.Adjuster ? " ±" : "")</th>
+                                }
+                                <th class="num factor-head">Score</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in rows)
+                        {
+                            var answers = RubricCalculator.AnswersOf(item);
+                            var results = RubricCalculator.Evaluate(rubric, answers, item.StartDate, today).ToDictionary(r => r.Factor);
+                            var score = item.Score ?? new ItemScore();
+                            <tr @key="item.Id" class="@(savingId == item.Id ? "hl" : "")">
+                                <td class="title-cell">
+                                    @if (Roadmap.PathOf(item) is { Length: > 0 } path)
+                                    {
+                                        <div class="muted small">@path</div>
+                                    }
+                                    <span class="title-link" @onclick="() => OpenEdit(item)">@item.Title</span>
+                                </td>
+                                @foreach (var g in groups)
+                                {
+                                    var manual = !rubric.Calculates(g.Factor) || score.ManualFactors.HasFlag(RubricCalculator.Flag(g.Factor));
+                                    var value = RubricCalculator.Get(score, g.Factor);
+                                    @foreach (var c in g.Criteria)
+                                    {
+                                        <td class="@(manual ? "faded" : "")">
+                                            <RubricAnswerInput Criterion="c" Answer="answers.GetValueOrDefault(c.Id)" StartDate="item.StartDate" Today="today" Compact="true"
+                                                               AnswerChanged="a => SaveAnswerAsync(item, c.Id, a)" />
+                                        </td>
+                                    }
+                                    <td class="num factor-cell" title="@FactorTitle(results[g.Factor], manual)">
+                                        @if (manual)
+                                        {
+                                            <span class="row" style="gap:.2rem;flex-wrap:nowrap;justify-content:flex-end">
+                                                @if (rubric.Calculates(g.Factor))
+                                                {
+                                                    <button class="btn icon" title="Typed by hand. Click to calculate it from the rubric." @onclick="() => SetManualAsync(item, g.Factor, false)">✎</button>
+                                                }
+                                                <input type="number" min="0" step="any" class="compact factor-input" value="@(value?.ToString(CultureInfo.InvariantCulture))"
+                                                       @onchange="e => SetValueAsync(item, g.Factor, e.Value as string)" />
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="row" style="gap:.2rem;flex-wrap:nowrap;justify-content:flex-end">
+                                                <button class="btn icon" title="Type this factor by hand instead" @onclick="() => SetManualAsync(item, g.Factor, true)">✎</button>
+                                                <b class="@(results[g.Factor].Calculated ? "" : "muted")">@(value is { } v ? RubricText.Number(v) : "–")</b>
+                                            </span>
+                                        }
+                                    </td>
+                                }
+                                <td class="num"><b>@(score.ComputedScore is { } s ? s.ToString("0.##") : "–")</b></td>
+                                <td class="num">@(item.ManualRank is not null ? $"#{ranks[item.Id]} 📌" : $"#{ranks[item.Id]}")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+
+    @if (Editing is not null)
+    {
+        <ItemEditor Roadmap="Roadmap" Draft="Editing" OnClose="OnEditorClosed" />
+    }
+}
+
+@code {
+    private ItemType level = ItemType.Initiative;
+    private bool levelChosen, showDone, byRank = true;
+    private int? savingId;
+    private string? status;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        // Start on whichever of Initiatives or Features has more items; that's usually the level being prioritized.
+        if (!levelChosen && Roadmap is not null)
+        {
+            levelChosen = true;
+            level = Roadmap.Items.Count(i => i.ItemType == ItemType.Feature) > Roadmap.Items.Count(i => i.ItemType == ItemType.Initiative)
+                ? ItemType.Feature : ItemType.Initiative;
+        }
+    }
+
+    private static string FactorTitle(FactorResult r, bool manual) =>
+        manual ? "Typed by hand" + (r.Value is { } v ? $"; the rubric would give {RubricText.Number(v)}" : "")
+        : r.Calculated ? r.Explanation : "Not answered yet; keeps its current value";
+
+    private Task SaveAnswerAsync(RoadmapItem item, int criterionId, RubricAnswer? answer) => SaveAsync(item, d =>
+    {
+        if (answer is null) d.Answers.Remove(criterionId);
+        else d.Answers[criterionId] = answer;
+    });
+
+    /// <summary>Switching to "by hand" keeps the current value as the starting point.</summary>
+    private Task SetManualAsync(RoadmapItem item, WsjfFactor factor, bool manual) => SaveAsync(item, d =>
+    {
+        var flag = RubricCalculator.Flag(factor);
+        d.Score.ManualFactors = manual ? d.Score.ManualFactors | flag : d.Score.ManualFactors & ~flag;
+    });
+
+    private Task SetValueAsync(RoadmapItem item, WsjfFactor factor, string? text) => SaveAsync(item, d =>
+        RubricCalculator.Set(d.Score, factor,
+            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null));
+
+    /// <summary>Saves one row through the normal item save, so roll-ups, scores and history all update.</summary>
+    private async Task SaveAsync(RoadmapItem item, Action<ItemDraft> change)
+    {
+        var draft = ItemDraft.From(item);
+        change(draft);
+        savingId = item.Id;
+        status = null;
+        await RunAsync(() => Svc.SaveItemAsync(draft));
+        savingId = null;
+        status = Error is null ? $"Saved “{item.Title}” ✓" : null;
+    }
+
+    private async Task RecalculateAsync()
+    {
+        await RunAsync(() => Svc.RecalculateProductAsync(ProductId));
+        status = Error is null ? "Recalculated ✓" : null;
+    }
+}

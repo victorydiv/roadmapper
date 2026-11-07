@@ -6,6 +6,8 @@ public class Product
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public ScoringModel ScoringModel { get; set; } = ScoringModel.Rice;
+    /// <summary>The WSJF scoring rubric's scale, e.g. "1,2,3,5,8,13,20"; null means <see cref="RubricScale.Default"/>.</summary>
+    public string? WsjfScale { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ArchivedAt { get; set; }
 
@@ -54,6 +56,8 @@ public class RoadmapItem
     public string? TemplateBatchId { get; set; }
 
     public ItemScore? Score { get; set; }
+    /// <summary>This item's answers to the product's WSJF scoring rubric.</summary>
+    public List<ItemRubricAnswer> RubricAnswers { get; set; } = new();
     public List<Tag> Tags { get; set; } = new();
     /// <summary>Dependencies where this item is the successor (i.e. it is blocked by them).</summary>
     public List<Dependency> Predecessors { get; set; } = new();
@@ -78,6 +82,9 @@ public class ItemScore
     public double? TimeCriticality { get; set; }
     public double? RiskReduction { get; set; }
     public double? JobSize { get; set; }
+
+    /// <summary>WSJF factors typed by hand. The scoring rubric never overwrites these.</summary>
+    public WsjfFactors ManualFactors { get; set; }
 
     // MoSCoW
     public MoscowPriority? Moscow { get; set; }
@@ -127,4 +134,44 @@ public class Dependency
     public int SuccessorId { get; set; }
     public RoadmapItem? Successor { get; set; }
     public DependencyType Type { get; set; } = DependencyType.Blocks;
+}
+
+/// <summary>
+/// One question in a product's WSJF scoring rubric. It feeds one factor, either as a base score or as an
+/// adjuster that moves the factor up or down the scale. See <see cref="RubricCalculator"/>.
+/// </summary>
+public class ScoringCriterion
+{
+    public int Id { get; set; }
+    public int ProductId { get; set; }
+    public WsjfFactor Factor { get; set; }
+    public CriterionRole Role { get; set; }
+    public CriterionKind Kind { get; set; }
+    public string Name { get; set; } = "";
+    public string? Help { get; set; }
+    public int SortOrder { get; set; }
+    public List<ScoringCriterionOption> Options { get; set; } = new();
+}
+
+/// <summary>
+/// A band (number bands and start date: applies from <see cref="From"/> upwards) or a choice (pick-list: <see cref="Label"/>).
+/// <see cref="Value"/> is a score on the scale for a base criterion, or a number of steps for an adjuster.
+/// </summary>
+public class ScoringCriterionOption
+{
+    public int Id { get; set; }
+    public int CriterionId { get; set; }
+    public int SortOrder { get; set; }
+    public string? Label { get; set; }
+    public double? From { get; set; }
+    public double Value { get; set; }
+}
+
+/// <summary>An item's answer to one criterion: <see cref="Number"/> for number bands, <see cref="OptionId"/> for a pick-list.</summary>
+public class ItemRubricAnswer
+{
+    public int ItemId { get; set; }
+    public int CriterionId { get; set; }
+    public double? Number { get; set; }
+    public int? OptionId { get; set; }
 }

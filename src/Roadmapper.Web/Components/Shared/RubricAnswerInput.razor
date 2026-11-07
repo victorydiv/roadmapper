@@ -1,0 +1,52 @@
+@using System.Globalization
+@* One rubric criterion's answer: a pick-list, a number, or (for start-date criteria) the worked-out value, read-only. *@
+
+@switch (Criterion.Kind)
+{
+    case CriterionKind.Choice:
+        <select value="@(Answer?.OptionId?.ToString() ?? "")" @onchange="OnChoice" title="@Criterion.Help" class="@(Compact ? "compact" : "")">
+            <option value="">—</option>
+            @foreach (var o in Criterion.Options)
+            {
+                <option value="@o.Id">@o.Label@(Compact ? "" : $" ({ValueText(o.Value)})")</option>
+            }
+        </select>
+        break;
+
+    case CriterionKind.NumberBands:
+        <input type="number" step="any" value="@NumberText" @onchange="OnNumber" title="@BandsHint" placeholder="—"
+               class="@(Compact ? "compact" : "")" />
+        break;
+
+    default:
+        var match = RubricCalculator.Match(Criterion, null, StartDate, Today);
+        <span class="small @(match.Answered ? "" : "muted")" title="Worked out from the start date">
+            @(match.Answered ? $"{match.Input} → {ValueText(match.Option!.Value)}" : "no start date")
+        </span>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public ScoringCriterion Criterion { get; set; } = default!;
+    [Parameter] public RubricAnswer? Answer { get; set; }
+    [Parameter] public DateOnly? StartDate { get; set; }
+    [Parameter] public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>The new answer, or null when it was cleared.</summary>
+    [Parameter] public EventCallback<RubricAnswer?> AnswerChanged { get; set; }
+
+    private string NumberText => Answer?.Number is { } n ? n.ToString(CultureInfo.InvariantCulture) : "";
+
+    private string BandsHint => string.Join("\n", Criterion.Options.Where(o => o.From is not null).OrderBy(o => o.From)
+        .Select(o => $"from {RubricText.Number(o.From!.Value)}{(o.Label is { } l ? $" ({l})" : "")} → {ValueText(o.Value)}"))
+        + (Criterion.Help is { } h ? $"\n\n{h}" : "");
+
+    private string ValueText(double v) => Criterion.Role == CriterionRole.Base ? RubricText.Number(v) : RubricText.Steps(v);
+
+    private Task OnChoice(ChangeEventArgs e) =>
+        AnswerChanged.InvokeAsync(int.TryParse(e.Value as string, out var id) ? new RubricAnswer(null, id) : null);
+
+    private Task OnNumber(ChangeEventArgs e) =>
+        AnswerChanged.InvokeAsync(double.TryParse(e.Value as string, NumberStyles.Float, CultureInfo.InvariantCulture, out var n)
+            ? new RubricAnswer(n, null) : null);
+}

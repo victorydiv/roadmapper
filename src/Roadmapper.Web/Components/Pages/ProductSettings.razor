@@ -137,6 +137,78 @@ else
             </ul>
         </div>
 
+        <div class="card stack rubric-card">
+            <div class="row">
+                <h2 style="margin:0">WSJF scoring rubric</h2>
+                <span class="spacer"></span>
+                @if (rubric.IsEmpty)
+                {
+                    <button class="btn" @onclick="() => RubricActionAsync(() => Svc.AddStarterRubricAsync(ProductId))">Start from example</button>
+                }
+                <button class="btn primary" @onclick="NewCriterion">+ New criterion</button>
+            </div>
+            <div class="muted small">
+                Work out Business value, Time criticality, Risk reduction and Job size from answers instead of typing them.
+                Answer the criteria in the item editor or on the <a href="/products/@ProductId/scoring">Scoring</a> tab.
+                Values already typed by hand are kept; switch a factor to the rubric on the item when you're ready.
+            </div>
+            @if (product.ScoringModel != ScoringModel.Wsjf)
+            {
+                <div class="alert warn small">This product uses @Ui.Label(product.ScoringModel). The rubric only calculates scores when the model is WSJF.</div>
+            }
+            <div class="row">
+                <label class="field" style="flex:1">Scale (scores move along it; adjusters move one value per step)
+                    <input @bind="scaleText" placeholder="@RubricScale.Format(RubricScale.Default)" />
+                </label>
+                <button class="btn" style="align-self:flex-end" @onclick="() => RubricActionAsync(() => Svc.SetScaleAsync(ProductId, scaleText))">Save scale</button>
+            </div>
+            @if (rubric.IsEmpty)
+            {
+                <span class="muted small">No criteria yet. “Start from example” adds a simple rubric you can edit.</span>
+            }
+            <div class="rubric-groups">
+            @foreach (var factor in RubricCalculator.Factors)
+            {
+                var criteria = rubric.ForFactor(factor).ToList();
+                if (criteria.Count == 0) continue;
+                <div class="rubric-group">
+                    <b>@RubricText.Factor(factor)</b>
+                    <ul class="template-list">
+                        @for (var i = 0; i < criteria.Count; i++)
+                        {
+                            var c = criteria[i];
+                            var first = i == 0;
+                            var last = i == criteria.Count - 1;
+                            <li @key="c.Id">
+                                <div class="stack" style="gap:.1rem;flex:1;min-width:0">
+                                    <span>
+                                        <b>@c.Name</b>
+                                        <span class="badge tag">@(c.Role == CriterionRole.Base ? "sets score" : "adjuster")</span>
+                                        <span class="muted small">@RubricText.Kind(c.Kind)</span>
+                                    </span>
+                                    <span class="muted small">@OptionSummary(c)</span>
+                                </div>
+                                @if (deletingCriterionId == c.Id)
+                                {
+                                    <span class="small">Delete “@c.Name” and every answer to it?</span>
+                                    <button class="btn danger sm" @onclick="() => DeleteCriterionAsync(c.Id)">Delete</button>
+                                    <button class="btn sm" @onclick="() => deletingCriterionId = null">Keep</button>
+                                }
+                                else
+                                {
+                                    <button class="btn icon" title="Move up" disabled="@first" @onclick="() => RubricActionAsync(() => Svc.MoveCriterionAsync(c.Id, -1))">↑</button>
+                                    <button class="btn icon" title="Move down" disabled="@last" @onclick="() => RubricActionAsync(() => Svc.MoveCriterionAsync(c.Id, 1))">↓</button>
+                                    <button class="btn sm" @onclick="() => editingCriterion = RubricRules.Copy(c)">Edit</button>
+                                    <button class="btn sm danger" @onclick="() => deletingCriterionId = c.Id">Delete…</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+            </div>
+        </div>
+
         <div class="card stack">
             <h2>Danger zone</h2>
             <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies.</div>
@@ -157,6 +229,11 @@ else
         </div>
     </div>
 
+    @if (editingCriterion is not null)
+    {
+        <RubricEditor Draft="editingCriterion" Scale="rubric.Scale" OnClose="OnCriterionEditorClosed" />
+    }
+
     @if (editingTemplate is not null)
     {
         <TemplateEditor Roadmap="Roadmap" Draft="editingTemplate" OnClose="OnTemplateEditorClosed" />
@@ -173,11 +250,16 @@ else
     private List<TaskTemplate> templates = [];
     private TemplateDraft? editingTemplate;
     private int? deletingTemplateId;
+    private ScoringRubric rubric = ScoringRubric.Empty;
+    private ScoringCriterion? editingCriterion;
+    private int? deletingCriterionId;
+    private string? scaleText;
 
     protected override async Task OnParametersSetAsync()
     {
         await base.OnParametersSetAsync();
         templates = await Svc.GetTemplatesAsync(ProductId);
+        LoadRubric();
         if (Roadmap is { Product: var p })
         {
             name = p.Name;
@@ -224,6 +306,46 @@ else
     {
         await RunAsync(action);
         templates = await Svc.GetTemplatesAsync(ProductId);
+    }
+
+    private void LoadRubric()
+    {
+        rubric = Roadmap?.Rubric ?? ScoringRubric.Empty;
+        scaleText = RubricScale.Format(rubric.Scale);
+    }
+
+    private void NewCriterion() => editingCriterion = new ScoringCriterion
+    {
+        ProductId = ProductId,
+        Kind = CriterionKind.Choice,
+        Options = [new ScoringCriterionOption { Value = rubric.Scale[0] }],
+    };
+
+    private async Task OnCriterionEditorClosed(bool saved)
+    {
+        editingCriterion = null;
+        if (saved) await RubricActionAsync(() => Task.CompletedTask);
+    }
+
+    private async Task DeleteCriterionAsync(int id)
+    {
+        deletingCriterionId = null;
+        await RubricActionAsync(() => Svc.DeleteCriterionAsync(id));
+    }
+
+    private async Task RubricActionAsync(Func<Task> action)
+    {
+        await RunAsync(action);
+        if (Error is null) LoadRubric();
+    }
+
+    private static string OptionSummary(ScoringCriterion c)
+    {
+        string Value(double v) => c.Role == CriterionRole.Base ? RubricText.Number(v) : RubricText.Steps(v);
+        var options = c.Kind == CriterionKind.Choice
+            ? c.Options.Select(o => $"{o.Label} {Value(o.Value)}")
+            : c.Options.OrderBy(o => o.From).Select(o => $"from {RubricText.Number(o.From ?? 0)}{(c.Kind == CriterionKind.StartDate ? " mo" : "")} → {Value(o.Value)}");
+        return string.Join(" · ", options);
     }
 
     private async Task DeleteProductAsync()

@@ -15,6 +15,9 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<Snapshot> Snapshots => Set<Snapshot>();
     public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
     public DbSet<TaskTemplateLine> TaskTemplateLines => Set<TaskTemplateLine>();
+    public DbSet<ScoringCriterion> ScoringCriteria => Set<ScoringCriterion>();
+    public DbSet<ScoringCriterionOption> ScoringCriterionOptions => Set<ScoringCriterionOption>();
+    public DbSet<ItemRubricAnswer> ItemRubricAnswers => Set<ItemRubricAnswer>();
 
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>
     public bool AuditEnabled { get; set; } = true;
@@ -42,6 +45,7 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
         {
             e.Property(p => p.Name).IsRequired().HasMaxLength(200);
             e.Property(p => p.ScoringModel).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.WsjfScale).HasMaxLength(200);
         });
 
         b.Entity<RoadmapItem>(e =>
@@ -68,6 +72,8 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
         {
             e.HasKey(s => s.ItemId);
             e.Property(s => s.Moscow).HasConversion<string>().HasMaxLength(20);
+            // A set of flags, so stored as a number (BusinessValue = 1, TimeCriticality = 2, RiskReduction = 4, JobSize = 8).
+            e.Property(s => s.ManualFactors).HasConversion<int>();
         });
 
         b.Entity<Theme>(e =>
@@ -127,6 +133,35 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
             // Deleting a tag just drops it from template lines.
             e.HasMany(l => l.Tags).WithMany().UsingEntity("TaskTemplateLineTags");
             e.HasIndex(l => new { l.TemplateId, l.SortOrder });
+        });
+
+        b.Entity<ScoringCriterion>(e =>
+        {
+            e.ToTable("ScoringCriteria");
+            e.Property(c => c.Name).IsRequired().HasMaxLength(RubricRules.MaxNameLength);
+            e.Property(c => c.Help).HasMaxLength(RubricRules.MaxHelpLength);
+            e.Property(c => c.Factor).HasConversion<string>().HasMaxLength(20);
+            e.Property(c => c.Role).HasConversion<string>().HasMaxLength(20);
+            e.Property(c => c.Kind).HasConversion<string>().HasMaxLength(20);
+            e.HasOne<Product>().WithMany().HasForeignKey(c => c.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(c => c.Options).WithOne().HasForeignKey(o => o.CriterionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(c => new { c.ProductId, c.SortOrder });
+        });
+
+        b.Entity<ScoringCriterionOption>(e =>
+        {
+            e.ToTable("ScoringCriterionOptions");
+            e.Property(o => o.Label).HasMaxLength(RubricRules.MaxNameLength);
+        });
+
+        b.Entity<ItemRubricAnswer>(e =>
+        {
+            e.ToTable("ItemRubricAnswers");
+            e.HasKey(a => new { a.ItemId, a.CriterionId });
+            e.HasOne<RoadmapItem>().WithMany(i => i.RubricAnswers).HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<ScoringCriterion>().WithMany().HasForeignKey(a => a.CriterionId).OnDelete(DeleteBehavior.Cascade);
+            // Removing a choice from a pick-list removes the answers that picked it.
+            e.HasOne<ScoringCriterionOption>().WithMany().HasForeignKey(a => a.OptionId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

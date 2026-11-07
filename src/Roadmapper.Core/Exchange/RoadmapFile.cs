@@ -25,6 +25,8 @@ public sealed class RoadmapFile
     public List<FileItem> Items { get; set; } = [];
     public List<FileDependency> Dependencies { get; set; } = [];
     public List<FileTemplate> Templates { get; set; } = [];
+    /// <summary>The WSJF scoring rubric's criteria. Items answer them in <see cref="FileItem.RubricAnswers"/>.</summary>
+    public List<FileCriterion> Rubric { get; set; } = [];
     public List<FileSnapshot> Snapshots { get; set; } = [];
     public List<FileHistoryEntry> History { get; set; } = [];
 
@@ -68,7 +70,7 @@ public sealed class RoadmapFile
 
         // Null lists can come from hand-edited files; treat them as empty.
         Product ??= new FileProduct();
-        Themes ??= []; Tags ??= []; Items ??= []; Dependencies ??= []; Templates ??= []; Snapshots ??= []; History ??= [];
+        Themes ??= []; Tags ??= []; Items ??= []; Dependencies ??= []; Templates ??= []; Rubric ??= []; Snapshots ??= []; History ??= [];
 
         if (string.IsNullOrWhiteSpace(Product.Name)) errors.Add("The product has no name.");
 
@@ -134,7 +136,39 @@ public sealed class RoadmapFile
         }
         if (Snapshots.Any(s => string.IsNullOrWhiteSpace(s.Name))) errors.Add("A snapshot has no name.");
 
+        ValidateRubric(items.Values, errors);
+
         return errors.Distinct().ToList();
+    }
+
+    private void ValidateRubric(IEnumerable<FileItem> items, List<string> errors)
+    {
+        if (!RubricScale.TryParse(Product.WsjfScale, out var scale, out var scaleError))
+            errors.Add($"The WSJF scale isn't valid: {scaleError}");
+        Unique(Rubric.Select(c => c.Id), "scoring criterion", errors);
+        Unique(Rubric.SelectMany(c => c.Options ?? []).Select(o => o.Id), "scoring choice or band", errors);
+        foreach (var c in Rubric)
+            if (RubricRules.Validate(c.ToCriterion(0), scale) is { } error) errors.Add($"Scoring rubric: {error}");
+
+        var criteria = Rubric.GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.First());
+        foreach (var item in items)
+        {
+            var label = $"\"{item.Title}\"";
+            var answers = item.RubricAnswers ?? [];
+            if (answers.GroupBy(a => a.CriterionId).FirstOrDefault(g => g.Count() > 1) is { } dup)
+                errors.Add($"{label} answers scoring criterion {dup.Key} more than once.");
+            foreach (var a in answers)
+            {
+                if (!criteria.TryGetValue(a.CriterionId, out var c))
+                    errors.Add($"{label} answers scoring criterion {a.CriterionId}, which isn't in the file.");
+                else if (c.Kind == CriterionKind.StartDate)
+                    errors.Add($"{label} has an answer for \"{c.Name}\", which is worked out from the start date.");
+                else if (c.Kind == CriterionKind.Choice && !(c.Options ?? []).Any(o => o.Id == a.OptionId))
+                    errors.Add($"{label}'s answer for \"{c.Name}\" isn't one of its choices.");
+                else if (c.Kind == CriterionKind.NumberBands && a.Number is null)
+                    errors.Add($"{label}'s answer for \"{c.Name}\" has no number.");
+            }
+        }
     }
 
     private static void Unique(IEnumerable<int> ids, string what, List<string> errors)
@@ -149,6 +183,8 @@ public sealed class FileProduct
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public ScoringModel ScoringModel { get; set; } = ScoringModel.Rice;
+    /// <summary>The WSJF scoring rubric's scale, e.g. "1, 2, 3, 5, 8"; absent means the default.</summary>
+    public string? WsjfScale { get; set; }
 }
 
 public sealed record FileTheme(int Id, string Name, string Color);
@@ -175,6 +211,9 @@ public sealed class FileItem
     public int? ManualRank { get; set; }
     public bool IsRollupOverridden { get; set; }
     public FileScore? Score { get; set; }
+    /// <summary>WSJF factors typed by hand, which the rubric leaves alone. Absent in older files: every WSJF value present counts as typed.</summary>
+    public WsjfFactors? ManualFactors { get; set; }
+    public List<FileRubricAnswer>? RubricAnswers { get; set; }
     public string? SourceTemplateName { get; set; }
     public DateTime? SourceTemplateAppliedAt { get; set; }
     public string? TemplateBatchId { get; set; }
@@ -212,3 +251,32 @@ public sealed class FileSnapshot
 /// <summary>One change-history row. ItemId is null when the item no longer exists.</summary>
 public sealed record FileHistoryEntry(
     DateTime ChangedAt, AuditAction Action, int? ItemId, string? ItemTitle, string? Field, string? OldValue, string? NewValue);
+
+/// <summary>A WSJF scoring rubric criterion. Option ids are local to the file, like item ids.</summary>
+public sealed class FileCriterion
+{
+    public int Id { get; set; }
+    public WsjfFactor Factor { get; set; }
+    public CriterionRole Role { get; set; }
+    public CriterionKind Kind { get; set; }
+    public string Name { get; set; } = "";
+    public string? Help { get; set; }
+    public List<FileCriterionOption> Options { get; set; } = [];
+
+    public ScoringCriterion ToCriterion(int productId) => new()
+    {
+        ProductId = productId, Factor = Factor, Role = Role, Kind = Kind, Name = Name?.Trim() ?? "",
+        Help = string.IsNullOrWhiteSpace(Help) ? null : Help.Trim(),
+        Options = (Options ?? []).Select((o, i) => new ScoringCriterionOption
+        {
+            SortOrder = i, Label = string.IsNullOrWhiteSpace(o.Label) ? null : o.Label.Trim(),
+            From = Kind == CriterionKind.Choice ? null : o.From, Value = o.Value,
+        }).ToList(),
+    };
+}
+
+/// <summary>A band (<see cref="From"/>) or choice (<see cref="Label"/>); <see cref="Value"/> is a score, or steps for an adjuster.</summary>
+public sealed record FileCriterionOption(int Id, string? Label, double? From, double Value);
+
+/// <summary>An item's answer: <see cref="Number"/> for number bands, <see cref="OptionId"/> for a pick-list.</summary>
+public sealed record FileRubricAnswer(int CriterionId, double? Number, int? OptionId);

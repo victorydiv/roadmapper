@@ -18,7 +18,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <!-- The packaged app is Roadmapper.exe. -->
     <AssemblyName>Roadmapper</AssemblyName>
     <RootNamespace>Roadmapper.Web</RootNamespace>

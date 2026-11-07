@@ -102,6 +102,29 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("Dependencies");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.ItemRubricAnswer", b =>
+                {
+                    b.Property<int>("ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CriterionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("Number")
+                        .HasColumnType("REAL");
+
+                    b.Property<int?>("OptionId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ItemId", "CriterionId");
+
+                    b.HasIndex("CriterionId");
+
+                    b.HasIndex("OptionId");
+
+                    b.ToTable("ItemRubricAnswers", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.ItemScore", b =>
                 {
                     b.Property<int>("ItemId")
@@ -124,6 +147,9 @@ namespace Roadmapper.Data.Migrations
 
                     b.Property<double?>("JobSize")
                         .HasColumnType("REAL");
+
+                    b.Property<int>("ManualFactors")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Moscow")
                         .HasMaxLength(20)
@@ -166,6 +192,10 @@ namespace Roadmapper.Data.Migrations
                     b.Property<string>("ScoringModel")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WsjfScale")
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -260,6 +290,78 @@ namespace Roadmapper.Data.Migrations
                     b.HasIndex("ProductId", "ParentId", "SortOrder");
 
                     b.ToTable("Items", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.ScoringCriterion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Factor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Help")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "SortOrder");
+
+                    b.ToTable("ScoringCriteria", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.ScoringCriterionOption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CriterionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("From")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Value")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CriterionId");
+
+                    b.ToTable("ScoringCriterionOptions", (string)null);
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Snapshot", b =>
@@ -473,6 +575,26 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Successor");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.ItemRubricAnswer", b =>
+                {
+                    b.HasOne("Roadmapper.Core.ScoringCriterion", null)
+                        .WithMany()
+                        .HasForeignKey("CriterionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", null)
+                        .WithMany("RubricAnswers")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.ScoringCriterionOption", null)
+                        .WithMany()
+                        .HasForeignKey("OptionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.ItemScore", b =>
                 {
                     b.HasOne("Roadmapper.Core.RoadmapItem", null)
@@ -505,6 +627,24 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Theme");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.ScoringCriterion", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.ScoringCriterionOption", b =>
+                {
+                    b.HasOne("Roadmapper.Core.ScoringCriterion", null)
+                        .WithMany("Options")
+                        .HasForeignKey("CriterionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Snapshot", b =>
@@ -582,9 +722,16 @@ namespace Roadmapper.Data.Migrations
 
                     b.Navigation("Predecessors");
 
+                    b.Navigation("RubricAnswers");
+
                     b.Navigation("Score");
 
                     b.Navigation("Successors");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.ScoringCriterion", b =>
+                {
+                    b.Navigation("Options");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.TaskTemplate", b =>

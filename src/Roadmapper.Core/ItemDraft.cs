@@ -20,6 +20,8 @@ public class ItemDraft
     public bool IsRollupOverridden { get; set; }
     public HashSet<int> TagIds { get; set; } = new();
     public ItemScore Score { get; set; } = new();
+    /// <summary>Answers to the product's WSJF scoring rubric, by criterion id. The service saves them with the item.</summary>
+    public Dictionary<int, RubricAnswer> Answers { get; set; } = new();
     /// <summary>Carried through edits and import unchanged; the editor shows them read-only.</summary>
     public string? SourceTemplateName { get; set; }
     public DateTime? SourceTemplateAppliedAt { get; set; }
@@ -48,6 +50,7 @@ public class ItemDraft
         IsRollupOverridden = i.IsRollupOverridden,
         TagIds = i.Tags.Select(t => t.Id).ToHashSet(),
         Score = CopyScore(i.Score ?? new ItemScore()),
+        Answers = RubricCalculator.AnswersOf(i),
         SourceTemplateName = i.SourceTemplateName,
         SourceTemplateAppliedAt = i.SourceTemplateAppliedAt,
     };
@@ -91,9 +94,11 @@ public class ItemDraft
         s.RiskReduction = Score.RiskReduction;
         s.JobSize = Score.JobSize;
         s.Moscow = Score.Moscow;
+        s.ManualFactors = Score.ManualFactors;
     }
 
-    private static ItemScore CopyScore(ItemScore s) => new()
+    /// <summary>A detached copy of a score.</summary>
+    public static ItemScore CopyScore(ItemScore s) => new()
     {
         ItemId = s.ItemId,
         Reach = s.Reach,
@@ -105,6 +110,7 @@ public class ItemDraft
         RiskReduction = s.RiskReduction,
         JobSize = s.JobSize,
         Moscow = s.Moscow,
+        ManualFactors = s.ManualFactors,
         ComputedScore = s.ComputedScore,
     };
 }

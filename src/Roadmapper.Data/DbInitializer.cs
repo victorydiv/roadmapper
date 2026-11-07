@@ -6,17 +6,23 @@ namespace Roadmapper.Data;
 
 public static class DbInitializer
 {
-    /// <summary>Applies pending migrations and, on a brand-new database, adds a sample product to explore.</summary>
+    /// <summary>
+    /// Applies pending migrations and, on a brand-new database, adds a sample product to explore. Otherwise
+    /// re-scores products with a WSJF rubric, so start-date criteria keep up with the calendar.
+    /// </summary>
     public static async Task InitializeAsync(IServiceProvider services)
     {
         var factory = services.GetRequiredService<IDbContextFactory<RoadmapDbContext>>();
+        var svc = new RoadmapService(factory);
+        bool hasProducts;
         await using (var db = await factory.CreateDbContextAsync())
         {
             await db.Database.MigrateAsync();
-            if (await db.Products.AnyAsync()) return;
+            hasProducts = await db.Products.AnyAsync();
         }
 
-        await SeedSampleAsync(new RoadmapService(factory));
+        if (hasProducts) await svc.RecalculateAllAsync();
+        else await SeedSampleAsync(svc);
     }
 
     public static async Task SeedSampleAsync(RoadmapService svc)

@@ -1,0 +1,171 @@
+@using System.Globalization
+@inject RoadmapService Svc
+
+@* Add or edit one WSJF scoring rubric criterion and its bands or choices. *@
+<div class="modal-backdrop">
+    <div class="modal wide">
+        <div class="modal-head">
+            <h2>@(Draft.Id == 0 ? "New scoring criterion" : "Edit scoring criterion")</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+        </div>
+
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+
+            <div class="grid-2">
+                <label class="field">Name
+                    <input @bind="Draft.Name" @bind:event="oninput" maxlength="@RubricRules.MaxNameLength" placeholder="e.g. Order lines" autofocus />
+                </label>
+                <label class="field">Factor
+                    <select @bind="Draft.Factor">
+                        @foreach (var f in RubricCalculator.Factors)
+                        {
+                            <option value="@f">@RubricText.Factor(f)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">Role
+                    <select @bind="Draft.Role">
+                        <option value="@CriterionRole.Base">Sets the score</option>
+                        <option value="@CriterionRole.Adjuster">Adjusts the score (moves it up or down the scale)</option>
+                    </select>
+                </label>
+                <label class="field">Answered by
+                    <select value="@Draft.Kind" @onchange="OnKindChanged">
+                        @foreach (var k in Enum.GetValues<CriterionKind>())
+                        {
+                            <option value="@k">@RubricText.Kind(k)</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <label class="field">Help (optional, shown as a tooltip)
+                <input @bind="Draft.Help" maxlength="@RubricRules.MaxHelpLength" placeholder="What to consider when answering" />
+            </label>
+
+            <fieldset>
+                <legend>@(Draft.Kind == CriterionKind.Choice ? "Choices" : "Bands")</legend>
+                <div class="muted small">@KindHelp</div>
+                <table class="rubric-options">
+                    <thead>
+                        <tr>
+                            @if (Draft.Kind != CriterionKind.Choice)
+                            {
+                                <th>@(Draft.Kind == CriterionKind.StartDate ? "From (months away)" : "From")</th>
+                            }
+                            <th>@(Draft.Kind == CriterionKind.Choice ? "Label" : "Label (optional)")</th>
+                            <th>@(Draft.Role == CriterionRole.Base ? "Score" : "Steps")</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Draft.Options.Count; i++)
+                        {
+                            var index = i;
+                            var o = Draft.Options[i];
+                            <tr>
+                                @if (Draft.Kind != CriterionKind.Choice)
+                                {
+                                    <td><input type="number" step="any" @bind="o.From" @bind:culture="CultureInfo.InvariantCulture" style="width:7rem" /></td>
+                                }
+                                <td><input @bind="o.Label" maxlength="@RubricRules.MaxNameLength" /></td>
+                                <td>
+                                    @if (Draft.Role == CriterionRole.Base)
+                                    {
+                                        <select @bind="o.Value" @bind:culture="CultureInfo.InvariantCulture" style="width:6rem">
+                                            @if (!RubricScale.Contains(Scale, o.Value))
+                                            {
+                                                <option value="@o.Value.ToString(CultureInfo.InvariantCulture)">@RubricText.Number(o.Value) (not on scale)</option>
+                                            }
+                                            @foreach (var v in Scale)
+                                            {
+                                                <option value="@v.ToString(CultureInfo.InvariantCulture)">@RubricText.Number(v)</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input type="number" step="1" min="-@RubricRules.MaxSteps" max="@RubricRules.MaxSteps" @bind="o.Value"
+                                               @bind:culture="CultureInfo.InvariantCulture" style="width:6rem" title="+1 moves the score one step up the scale; −1 one step down" />
+                                    }
+                                </td>
+                                <td class="row" style="gap:.1rem;flex-wrap:nowrap">
+                                    <button type="button" class="btn icon" title="Move up" disabled="@(index == 0)" @onclick="() => Move(index, -1)">↑</button>
+                                    <button type="button" class="btn icon" title="Move down" disabled="@(index == Draft.Options.Count - 1)" @onclick="() => Move(index, 1)">↓</button>
+                                    <button type="button" class="btn icon" title="Remove" @onclick="() => Draft.Options.RemoveAt(index)">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div><button type="button" class="btn" @onclick="AddOption">+ Add @(Draft.Kind == CriterionKind.Choice ? "choice" : "band")</button></div>
+            </fieldset>
+        </div>
+
+        <div class="modal-foot">
+            <span class="muted small">Scale: @RubricScale.Format(Scale)</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save criterion</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ScoringCriterion Draft { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<double> Scale { get; set; } = default!;
+    /// <summary>Invoked with true when the criterion was saved.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private string? error;
+    private bool saving;
+
+    private string KindHelp => Draft.Kind switch
+    {
+        CriterionKind.Choice => "People pick one of these labels for each item.",
+        CriterionKind.NumberBands => "People enter a number for each item. A band applies from its “from” value up to the next band; numbers below the first band use the first band.",
+        _ => "No answer needed: the number of months from this month to the item's start month picks the band (0 or less = already started or starting this month). Items without a start date aren't scored by it. Updates itself as time passes.",
+    };
+
+    private void OnKindChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<CriterionKind>(e.Value as string, out var kind)) return;
+        Draft.Kind = kind;
+        if (kind != CriterionKind.Choice)
+            for (var i = 0; i < Draft.Options.Count; i++) Draft.Options[i].From ??= i == 0 ? 0 : null;
+    }
+
+    private void AddOption()
+    {
+        var last = Draft.Options.LastOrDefault();
+        Draft.Options.Add(new ScoringCriterionOption
+        {
+            From = Draft.Kind == CriterionKind.Choice ? null : last?.From is { } f ? f + 1 : 0,
+            Value = Draft.Role == CriterionRole.Base ? Scale[0] : 1,
+        });
+    }
+
+    private void Move(int index, int direction)
+    {
+        var target = index + direction;
+        if (target < 0 || target >= Draft.Options.Count) return;
+        (Draft.Options[index], Draft.Options[target]) = (Draft.Options[target], Draft.Options[index]);
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveCriterionAsync(Draft);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+}

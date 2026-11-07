@@ -23,7 +23,7 @@ public partial class RoadmapService
         var itemIds = roadmap.Items.Select(i => i.Id).ToHashSet();
         return new RoadmapFile
         {
-            Product = new FileProduct { Name = product.Name, Description = product.Description, ScoringModel = product.ScoringModel },
+            Product = new FileProduct { Name = product.Name, Description = product.Description, ScoringModel = product.ScoringModel, WsjfScale = product.WsjfScale },
             Themes = product.Themes.Select(t => new FileTheme(t.Id, t.Name, t.Color)).ToList(),
             Tags = product.Tags.Select(t => new FileTag(t.Id, t.Name)).ToList(),
             Items = roadmap.Flatten().Select(r => r.Item).Select(i => new FileItem
@@ -36,6 +36,9 @@ public partial class RoadmapService
                 Score = i.Score is { } s && HasInputs(s)
                     ? new FileScore(s.Reach, s.Impact, s.Confidence, s.Effort, s.BusinessValue, s.TimeCriticality, s.RiskReduction, s.JobSize, s.Moscow)
                     : null,
+                ManualFactors = i.Score is { ManualFactors: not WsjfFactors.None and var manual } ? manual : null,
+                RubricAnswers = i.RubricAnswers.Count == 0 ? null
+                    : i.RubricAnswers.OrderBy(a => a.CriterionId).Select(a => new FileRubricAnswer(a.CriterionId, a.Number, a.OptionId)).ToList(),
                 SourceTemplateName = i.SourceTemplateName, SourceTemplateAppliedAt = i.SourceTemplateAppliedAt,
                 TemplateBatchId = i.TemplateBatchId, CreatedAt = i.CreatedAt, UpdatedAt = i.UpdatedAt,
             }).ToList(),
@@ -46,6 +49,11 @@ public partial class RoadmapService
                 Description = t.Description,
                 Lines = t.Lines.Select(l => new FileTemplateLine(l.Title, l.Description, l.Owner, l.StartOffsetDays, l.DurationDays,
                     l.Tags.Count == 0 ? null : l.Tags.Select(x => x.Id).Order().ToList())).ToList(),
+            }).ToList(),
+            Rubric = roadmap.Rubric.Criteria.Select(c => new FileCriterion
+            {
+                Id = c.Id, Factor = c.Factor, Role = c.Role, Kind = c.Kind, Name = c.Name, Help = c.Help,
+                Options = c.Options.Select(o => new FileCriterionOption(o.Id, o.Label, o.From, o.Value)).ToList(),
             }).ToList(),
             Snapshots = snapshots.Select(s => new FileSnapshot
             {
@@ -77,6 +85,8 @@ public partial class RoadmapService
             Name = UniqueProductName(file.Product.Name.Trim(), taken),
             Description = Clean(file.Product.Description),
             ScoringModel = file.Product.ScoringModel,
+            WsjfScale = RubricScale.TryParse(file.Product.WsjfScale, out var scale, out _) && !scale.SequenceEqual(RubricScale.Default)
+                ? RubricScale.Format(scale) : null,
         };
         db.Products.Add(product);
         await db.SaveChangesAsync();
@@ -85,7 +95,15 @@ public partial class RoadmapService
         var tags = file.Tags.ToDictionary(t => t.Id, t => new Tag { ProductId = product.Id, Name = t.Name.Trim() });
         db.Themes.AddRange(themes.Values);
         db.Tags.AddRange(tags.Values);
+        var criteria = file.Rubric.Select(c => (File: c, Entity: c.ToCriterion(product.Id))).ToList();
+        for (var i = 0; i < criteria.Count; i++) criteria[i].Entity.SortOrder = i;
+        db.ScoringCriteria.AddRange(criteria.Select(c => c.Entity));
         await db.SaveChangesAsync();
+        // File ids to new ids. Options were created in the file's order, so they pair up by position.
+        var criterionIds = criteria.ToDictionary(c => c.File.Id, c => c.Entity.Id);
+        var optionIds = criteria
+            .SelectMany(c => (c.File.Options ?? []).Zip(c.Entity.Options, (f, e) => (FileId: f.Id, NewId: e.Id)))
+            .ToDictionary(x => x.FileId, x => x.NewId);
 
         // Parents before children, so each level can point at the ids just created for the level above.
         var created = new Dictionary<int, RoadmapItem>();
@@ -122,6 +140,14 @@ public partial class RoadmapService
                             : null,
                     };
                     item.Tags.AddRange((f.TagIds ?? []).Distinct().Select(t => tags[t]));
+                    item.Score ??= new ItemScore();
+                    item.Score.ManualFactors = f.ManualFactors ?? RubricCalculator.WithValues(item.Score);
+                    item.RubricAnswers.AddRange((f.RubricAnswers ?? []).Select(a => new ItemRubricAnswer
+                    {
+                        CriterionId = criterionIds[a.CriterionId],
+                        Number = a.Number,
+                        OptionId = a.OptionId is { } o ? optionIds[o] : null,
+                    }));
                     db.Items.Add(item);
                     created[f.Id] = item;
                 }

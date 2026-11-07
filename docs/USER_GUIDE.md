@@ -4,7 +4,7 @@ Roadmapper is a product roadmap app. You use it to plan your work as a hierarchy
 
 This guide is for two audiences:
 
-- **People using the app.** Sections 1–9 explain each screen and how to get common jobs done.
+- **People using the app.** Sections 1–9 explain each screen and how to get common jobs done. Section 12 introduces the three scoring models for anyone who hasn't used them before.
 - **AI assistants and developers.** Section 10 gives exact rules, the data model, and where each behavior lives in the code. The rules there are written so they can be relied on when answering questions or changing the app.
 
 ---
@@ -15,13 +15,14 @@ This guide is for two audiences:
 2. [Core concepts](#2-core-concepts)
 3. [The Tree tab: building the roadmap](#3-the-tree-tab-building-the-roadmap)
 4. [Editing an item](#4-editing-an-item)
-5. [Views: Dashboard, Timeline, Now/Next/Later, Kanban, Priorities](#5-views)
+5. [Views: Dashboard, Timeline, Now/Next/Later, Kanban, Priorities, Scoring](#5-views)
 6. [Task templates](#6-task-templates)
 7. [Snapshots and baselines](#7-snapshots-and-baselines)
 8. [Import and export](#8-import-and-export)
 9. [Settings](#9-settings)
 10. [Reference for AI assistants and developers](#10-reference-for-ai-assistants-and-developers)
 11. [FAQ and troubleshooting](#11-faq-and-troubleshooting)
+12. [Scoring models explained: RICE, WSJF, MoSCoW](#12-scoring-models-explained)
 
 ---
 
@@ -64,7 +65,7 @@ On a brand-new database, Roadmapper creates a demo product, **Sample: Customer P
 - The **Products** page (home) lists every product. Each card shows its scoring model, how many goals and items it has, and how many are done.
 - **+ New product** asks for a name, an optional description, and a prioritization model (RICE, WSJF or MoSCoW; you can change it later).
 - **Open .rmp file…** opens a [Roadmapper file](#roadmapper-files-rmp) as a new product.
-- Opening a product shows its tabs: **Dashboard · Tree · Timeline · Now / Next / Later · Kanban · Priorities · Snapshots · Import / Export · Settings**.
+- Opening a product shows its tabs: **Dashboard · Tree · Timeline · Now / Next / Later · Kanban · Priorities · Scoring · Snapshots · Import / Export · Settings**.
 - Clicking any item title, bar or card anywhere in the app opens the [item editor](#4-editing-an-item).
 
 ---
@@ -121,13 +122,16 @@ Each product uses one scoring model, chosen in Settings:
 
 | Model | Inputs | Score |
 |---|---|---|
-| **RICE** | Reach, Impact (0.25–3), Confidence % (0–100), Effort (person-months) | (Reach × Impact × Confidence/100) ÷ Effort |
-| **WSJF** | Business value, Time criticality, Risk reduction, Job size | (BV + TC + RR) ÷ Job size |
-| **MoSCoW** | Must / Should / Could / Won't; optional Effort (only used to place it on the matrix) | Must = 4, Should = 3, Could = 2, Won't = 1 |
+| **RICE** ([what it is](#rice-explained)) | Reach, Impact (0.25–3), Confidence % (0–100), Effort (person-months) | (Reach × Impact × Confidence/100) ÷ Effort |
+| **WSJF** ([what it is](#wsjf-explained)) | Business value, Time criticality, Risk reduction, Job size | (BV + TC + RR) ÷ Job size |
+| **MoSCoW** ([what it is](#moscow-explained)) | Must / Should / Could / Won't; optional Effort (only used to place it on the matrix) | Must = 4, Should = 3, Could = 2, Won't = 1 |
+
+New to these models? [Section 12](#12-scoring-models-explained) explains each one and [how to choose](#choosing-a-model).
 
 - An item with missing inputs (or an Effort/Job size of 0) has no score and shows **–**.
 - **Ranking order:** items with a manual rank come first (by rank), then by score from highest to lowest, then unscored items.
 - **Switching models** recalculates every score. Inputs for the other models are kept, so you can switch back without losing them.
+- **WSJF scoring rubric:** under WSJF, the four inputs can be worked out from a few answers per item instead of typed. See [Scoring](#scoring-wsjf-rubric).
 
 ### Dependencies and "blocked"
 
@@ -188,7 +192,7 @@ The editor opens as a pop-up. Its sections are:
 - **Title** and **Description**.
 - **Type** (new items only) and **Parent**. The parent list only offers items of the level directly above.
 - **Status & schedule:** status, horizon, progress, start, end and owner. For a parent, this section also has the manual roll-up checkbox (see [Roll-up](#roll-up-how-parents-get-their-dates-and-progress)). Progress is locked at 100% while the status is Done.
-- **Priority:** the inputs for the product's scoring model, a live score preview, and **Manual rank**.
+- **Priority:** the inputs for the product's scoring model, a live score preview, and **Manual rank**. Under WSJF with a [scoring rubric](#scoring-wsjf-rubric), each factor shows its criteria to answer, the calculated value and how it was worked out, plus **Enter by hand** / **Use rubric** to switch between typing the value and calculating it.
 - **Classification:** theme and tags.
 - **Tasks** (Features only): **+ Add task**, **Add from template…** and **Save tasks as template…**. It also lists each template batch added to this feature with an **Undo** button. If any task in a batch was edited since it was added, Undo asks you to confirm first.
 - **Created from template X on date** (Tasks made from a template). This is a reference only; editing or deleting the template never changes the task.
@@ -258,6 +262,44 @@ An **impact-vs-effort matrix** for one level at a time, with a ranked table besi
   - MoSCoW: priority against Effort.
 - Items with incomplete inputs aren't plotted; the table marks them "needs inputs".
 - The top three items are labeled on the chart. Hover a dot for details, or click it to edit.
+
+### Scoring (WSJF rubric)
+
+A **scoring rubric** works out the four WSJF inputs (Business value, Time criticality, Risk reduction and Job size) from a few answers about each item, instead of you typing the numbers. Each product has its own rubric, set up under **Settings → WSJF scoring rubric**. It only calculates while the product's model is WSJF.
+
+**Criteria.** A rubric is a list of criteria. Each one belongs to one factor and is answered in one of three ways:
+
+| Answered by | You enter | Example |
+|---|---|---|
+| **Number with bands** | A number. Each band applies from its "from" value up to the next band; numbers below the first band use the first band. | Order lines: from 0 → 1, from 1,000 → 3, from 5,000 → 5, from 15,000 → 8, from 30,000 → 13 |
+| **Pick-list** | One of the labelled choices. | Version: 4.2 → 8, 6.0.8 → 5 |
+| **From the start date** | Nothing. The number of whole months from this month to the item's start month picks the band (0 or less means it has started or starts this month). Items without a start date aren't scored by it. | Start: from 0 → 13, from 4 → 8, from 10 → 5, from 16 → 3 |
+
+Each criterion either **sets the score** (its values are scores on the scale) or is an **adjuster** (its values are steps, such as +1 to move the score one value up the scale).
+
+**The scale** is the list of allowed scores, by default **1, 2, 3, 5, 8, 13, 20**. Change it in Settings; it can't change while a criterion uses a score that isn't on the new scale.
+
+**How a factor is worked out:**
+
+1. Take the answered criteria that set the score. With one, use its score. With several, average them and round to the nearest value on the scale (halfway rounds up).
+2. Add up the answered adjusters' steps and move that many places along the scale, stopping at either end.
+3. If no criterion that sets the score is answered, the factor isn't calculated and keeps whatever value it already has.
+
+**Worked example** (Chervon NA, from a site-upgrade plan): 25,065 order lines → **8**; started Aug 2026 → **13**; on version 4.2 → **8**; 3 integrations → 5, then 116 named users (an adjuster: from 61 → +1 step) moves it up one step → **8**. WSJF = (8 + 13 + 8) ÷ 8 = **3.6**.
+
+**Typed values win.** Each factor on each item is either calculated or **entered by hand**:
+
+- Values typed before a rubric existed, values typed for a factor the rubric doesn't cover, and WSJF values from a spreadsheet import all count as entered by hand. The rubric never overwrites them, so adding a rubric changes no existing scores.
+- Switch a factor with **Use rubric** / **Enter by hand** in the item editor, or with ✎ on the Scoring tab. Switching to "by hand" starts from the calculated value.
+
+**The Scoring tab** lists every item at one level (Initiatives or Features by default), with one column per criterion, each factor's score, the WSJF score and the rank.
+
+- Answers save as soon as you change them; each one is an ordinary item edit, so roll-ups, scores and history update.
+- Hover a factor's score to see how it was worked out. **By rank** sorts by ranking order; **Tree order** follows the Tree.
+- **Recalculate** re-scores with today's date. Start-date criteria change as months pass; the app also re-scores every rubric product when it starts.
+- With no rubric yet, **Start from example** adds a simple one (a pick-list each for Business value, Risk reduction and Job size, and the start-date bands above for Time criticality) to edit.
+
+**History:** answer changes appear in the item's history as "Rubric: *criterion name*", next to the factor changes they caused. Re-scoring because time passed isn't recorded.
 
 ---
 
@@ -443,6 +485,7 @@ Import is a three-step wizard:
 - **Themes:** add one with a name and color, or remove one with ✕. Removing a theme clears it from its items without deleting them.
 - **Tags:** add or remove. Tag names must be unique in the product; removing a tag takes it off every item.
 - **Task templates:** see [section 6](#managing-templates).
+- **WSJF scoring rubric:** the scale, and the criteria grouped by factor, with **+ New criterion**, **Edit**, ↑/↓ and **Delete…** (deleting a criterion deletes every answer to it). **Start from example** appears while the rubric is empty. See [Scoring](#scoring-wsjf-rubric).
 - **Danger zone:** **Delete product…** asks you to type the product's name, then permanently deletes the product and its whole roadmap, along with its themes, tags, templates, snapshots and history.
 
 ---
@@ -457,8 +500,8 @@ Import is a three-step wizard:
 
 | Project | Responsibility |
 |---|---|
-| `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
-| `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
+| `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `ScoringRubric` (`RubricCalculator`, `RubricScale`, `RubricRules`, `StarterRubric`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
+| `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations and `RoadmapService.Rubric.cs` the scoring rubric. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
 | `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. `Launcher.cs` handles start-up for the packaged exe (port choice, opening the browser). `UserGuide.cs` renders this guide (embedded from `docs/USER_GUIDE.md`) for `/guide`. The assembly, and so the packaged exe, is named `Roadmapper`. |
 | `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`). |
 
@@ -470,7 +513,10 @@ Import is a three-step wizard:
   - Fields: `Title, Description, Status, ProgressPct, StartDate, EndDate (DateOnly), Horizon, Owner, ThemeId, SortOrder, ManualRank, IsRollupOverridden, CreatedAt, UpdatedAt`.
   - Template reference fields: `SourceTemplateName, SourceTemplateAppliedAt, TemplateBatchId`.
   - Deleting an item cascades to its children, score, tag links and dependencies.
-- `ItemScore`: 1:1 with an item. Holds the inputs for all three models plus `ComputedScore`.
+- `ItemScore`: 1:1 with an item. Holds the inputs for all three models plus `ComputedScore`, and `ManualFactors` (a `[Flags] WsjfFactors` stored as an int: BusinessValue 1, TimeCriticality 2, RiskReduction 4, JobSize 8) marking WSJF factors typed by hand.
+- `Product.WsjfScale`: the rubric's scale as text (`"1, 2, 3, 5"`); null means the default 1, 2, 3, 5, 8, 13, 20.
+- `ScoringCriterion` (table `ScoringCriteria`): `ProductId, Factor (WsjfFactor), Role (Base | Adjuster), Kind (NumberBands | Choice | StartDate), Name, Help, SortOrder`, with ordered `ScoringCriterionOption`s: `Label, From (bands), Value` (a score for Base, steps for Adjuster).
+- `ItemRubricAnswer` (key `ItemId, CriterionId`): `Number` (number bands) or `OptionId` (pick-list). Start-date criteria have no stored answer. Deleting the item, the criterion or the chosen option deletes the answer.
 - `Dependency`: `PredecessorId` blocks `SuccessorId`. The only type is `Blocks`.
 - `Theme` (with a color) and `Tag`: belong to a product. Items link to tags through a many-to-many join table.
 - `AuditEntry`: change history. It deliberately has no foreign key to the item, so history survives deletion.
@@ -490,6 +536,10 @@ Import is a three-step wizard:
 9. **Template scheduling** (`TemplateRules.Schedule`) works through the ticked tasks in order. The anchor starts as the Feature start. For each task, start = anchor + gap; end = start + duration − 1 when there is a duration; the next anchor is `end + 1`, or `start` when there is no end. Tasks with `DatesEdited` keep their dates and still move the anchor on. With no Feature start, every task is undated.
 10. **Ranking order** (`Scoring.InRankOrder`): manual rank first (ascending), then computed score (descending), then unscored, then `SortOrder`.
 11. **Priority matrix** quadrants split at the medians; points exactly on a split line count as high value and low effort.
+12. **WSJF rubric** (`Core/ScoringRubric.cs`, `RubricCalculator`): a factor = the average of its answered Base criteria, snapped to the nearest scale value (halfway goes up), then moved by the sum of answered Adjuster steps, clamped to the scale. No answered Base criterion means the factor isn't calculated. Number bands and start-date bands pick the highest `From` ≤ the value, or the lowest band below that. Start-date value = `(start.Year − today.Year) × 12 + start.Month − today.Month`.
+13. **The rubric writes into the ordinary WSJF fields**, so ranking, the matrix, snapshots and every export are unchanged. It runs only when the model is WSJF, never on a factor flagged in `ManualFactors`, inside `RecalculateAsync` (after roll-up, so parents use their rolled-up start) and inside `SaveItemAsync` before the save (so factor changes are audited). On save, a factor with a value that the rubric can't calculate (no Base criterion) is flagged as manual. Spreadsheet import flags every WSJF value it sets; the migration flagged every existing value.
+14. **Rubric validation** (`RubricRules.Validate`): a name; at least one option (max 20); choices need unique labels; bands need unique `From` values; Base values must be on the scale; Adjuster values are whole steps from −6 to +6. The scale (`RubricScale.TryParse`) is 2–15 increasing positive numbers.
+15. **Changing a criterion's kind** deletes its answers; removing an option deletes the answers that picked it. `RecalculateAllAsync` runs at startup and doesn't touch `UpdatedAt` or the history.
 
 ### HTTP endpoints (file downloads)
 
@@ -507,13 +557,14 @@ Import is a three-step wizard:
 A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and import live in `Data/RoadmapService.Files.cs` (`ExportFileAsync` / `ImportFileAsync`).
 
 - **Formatting:** property names are camelCase, enums are strings (for example `"InProgress"`), dates are `yyyy-MM-dd`, and empty values are left out.
-- **Top level:** `format` (always `"roadmapper"`), `version` (currently `1`), `exportedAt`, `product` {name, description, scoringModel}, `themes`, `tags`, `items`, `dependencies`, `templates`, `snapshots`, `history`.
+- **Top level:** `format` (always `"roadmapper"`), `version` (currently `1`), `exportedAt`, `product` {name, description, scoringModel, wsjfScale}, `themes`, `tags`, `items`, `dependencies`, `templates`, `rubric`, `snapshots`, `history`.
 - **References:**
   - `items`, `themes` and `tags` have an `id` that only applies inside the file.
   - Items refer to each other by `parentId`; dependencies use `predecessorId`/`successorId`; items and template lines use `themeId` and `tagIds`.
   - Snapshot rows and history entries also use item ids. History entries for items that no longer exist have no `itemId`.
 - **Items:** `type`, `title`, `status`, `progressPct`, `startDate`, `endDate`, `horizon`, `owner`, `sortOrder`, `manualRank`, `isRollupOverridden`, `score` (scoring inputs only; the score itself is recalculated), the template reference fields, and `createdAt`/`updatedAt`.
 - **Template lines:** `title`, `description`, `owner`, `gapDays`, `durationDays`, `tagIds`.
+- **Rubric:** `rubric` lists criteria {`id`, `factor`, `role`, `kind`, `name`, `help`, `options` [{`id`, `label`, `from`, `value`}]}. Items carry `rubricAnswers` [{`criterionId`, `number` or `optionId`}] and `manualFactors` (e.g. `"BusinessValue, JobSize"`). These fields are optional: in files without `manualFactors`, every WSJF value present counts as typed by hand. Import checks the scale, the criteria rules, and that every answer matches a criterion and one of its options.
 - **Import:**
   - Validates the whole file first and creates nothing if any check fails. It checks the format and version, hierarchy rules, missing references, dependency loops, duplicate ids, tag names or template names, empty templates, and dates where End is before Start.
   - Then creates a new product in one transaction with change history recording turned off, assigning new ids and new template-batch ids, then recalculates roll-ups and scores.
@@ -521,7 +572,7 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 ### Page routes
 
-`/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
+`/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
 
 ### Colors (shared by the UI and every export)
 
@@ -554,6 +605,7 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 
 | Term | Meaning |
 |---|---|
+| Adjuster | A rubric criterion that moves a WSJF factor up or down the scale instead of setting it. |
 | Baseline | A snapshot used for comparison. |
 | Batch | All tasks created by one "apply template" action. |
 | Blocked | Has an unfinished predecessor. |
@@ -562,6 +614,7 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 | Open | Status not Done or Cancelled. |
 | Overdue | Open, with an End date in the past. |
 | Roll-up | A parent's dates and progress calculated from its children. |
+| Rubric | A product's criteria for working out WSJF factors from answers. |
 | Slip | Change in end date versus the baseline (+ = later). |
 
 ---
@@ -586,6 +639,12 @@ The Feature had no start date. Set one, then undo and re-apply. Or set the task 
 **All my template tasks start on the same day.**
 The template's lines have no durations. Add durations under Settings → Task templates → Edit.
 
+**Time criticality changed by itself.**
+It comes from a start-date criterion in the WSJF scoring rubric, which counts months from today, so it moves as time passes (the app re-scores when it starts, or use **Recalculate** on the Scoring tab). To fix the value, click **Enter by hand** on that factor in the item editor.
+
+**I set up a rubric but my scores didn't change.**
+Values typed before the rubric existed are kept as "entered by hand". Switch a factor to **Use rubric** in the item editor (or click ✎ on the Scoring tab) once it's answered.
+
 **Importing created duplicates.**
 Spreadsheet import only ever adds items. Delete the extras, or open a .rmp backup you made before the import.
 
@@ -600,3 +659,83 @@ Run it from the repository root, not from `src`.
 
 **The app won't build because a file is locked.**
 A copy of the app is still running. Stop it (Ctrl+C in its terminal) and try again.
+
+---
+
+## 12. Scoring models explained
+
+All three models answer the same question: **with more good ideas than time, what should we do first?** They make the reasoning behind an order visible, so a team can argue about the inputs ("is this really high impact?") instead of about gut feelings. A score is a conversation starter, not a verdict. If the top of the list looks wrong, that usually means an input is wrong or something important isn't being measured, so fix that, or use **Manual rank** for the exceptions.
+
+Some habits apply to every model:
+
+- **Score relatively.** Compare items with each other, not against an absolute ideal. Scoring a batch side by side (the [Priorities](#priorities) and [Scoring](#scoring-wsjf-rubric) tabs help) gives more consistent numbers than scoring one item at a time.
+- **Score at one level.** Compare Initiatives with Initiatives, or Features with Features. A Task and a Goal can't be sensibly compared.
+- **Revisit.** Scores go stale as you learn more and as deadlines approach. Re-score when something changes.
+
+### RICE explained
+
+**Origin:** created by the product team at Intercom to compare product ideas consistently.
+
+**The thinking:** an idea is worth more the more people it helps, the more it helps each of them, and the surer you are of both, and worth less the more it costs to build. RICE multiplies the benefits and divides by the cost, so the result is roughly *value delivered per unit of effort*.
+
+| Input | Question it answers | How to estimate |
+|---|---|---|
+| **Reach** | How many people or events will this affect in a set period? | A real count over a fixed period, e.g. customers per quarter or orders per month. Use the same period for every item. |
+| **Impact** | How much will it move the needle for each one? | A fixed scale: 3 = massive, 2 = high, 1 = medium, 0.5 = low, 0.25 = minimal. |
+| **Confidence** | How sure are we about Reach and Impact? | A percentage: 100% = backed by data, 80% = some evidence, 50% = a hunch. Below 50% usually means "go research first". |
+| **Effort** | What will it cost? | Person-months across everyone involved (product, design, engineering, testing). |
+
+**Example:** a feature reaching 500 customers a quarter, with high impact (2), 80% confidence and 2 person-months of effort scores (500 × 2 × 0.8) ÷ 2 = **400**.
+
+**Good for:** product and feature ideas where you can count users or transactions. Confidence explicitly penalises wishful thinking.
+**Watch out for:** Reach dominates the score because it's a raw count, so mixing items measured over different periods or units makes the comparison meaningless. Scores have no fixed range; only the order matters.
+
+### WSJF explained
+
+**Origin:** Weighted Shortest Job First comes from Don Reinertsen's work on product development flow and is the prioritization method used in SAFe (the Scaled Agile Framework).
+
+**The thinking:** every week a valuable item waits, you lose something: revenue not earned, a deadline approaching, a risk left open. This loss is the **cost of delay**. If two jobs have the same cost of delay, do the shorter one first, because it starts paying back sooner and the longer one waits less in total. WSJF divides cost of delay by job size, so items that are *both* urgent-and-valuable *and* small rise to the top.
+
+**Cost of delay** is the sum of three factors:
+
+| Factor | Question it answers |
+|---|---|
+| **Business value** | How much do customers or the business gain? Revenue, savings, user satisfaction. |
+| **Time criticality** | How quickly does that value fade? Is there a fixed date, a contract, a season, a competitor? Something with a hard deadline next month scores high; something that would be just as valuable if delivered next year scores low. |
+| **Risk reduction / opportunity enablement** | Does it lower a risk (security, compliance, an unsupported version) or unlock other work (a platform others build on)? |
+
+**Job size** is the relative effort or duration, used as a stand-in for how long the work blocks the team.
+
+**Scoring:** all four are relative numbers on a scale with growing gaps, usually 1, 2, 3, 5, 8, 13, 20. The gaps are deliberate: it's easy to say one thing is "about twice as big" as another, and hard to tell a 6 from a 7. A common technique is to score one factor at a time across every item: find the smallest item in that column and give it a 1, then score the rest relative to it.
+
+**Example:** an upgrade with Business value 8, Time criticality 13, Risk reduction 8 and Job size 8 scores (8 + 13 + 8) ÷ 8 = **3.6**. An equally urgent job half the size would score twice as high.
+
+**Good for:** larger pieces of work (Initiatives, Features) competing for the same team, especially when deadlines and risk matter, not just customer value. In Roadmapper, a [scoring rubric](#scoring-wsjf-rubric) can work out the factors from facts about each item, so different people score the same way.
+**Watch out for:** large, important items can sink because Job size divides the score. If one keeps losing, consider splitting it into smaller pieces that each deliver value.
+
+### MoSCoW explained
+
+**Origin:** created by Dai Clegg at Oracle and popularised by the DSDM agile method for deciding what goes into a fixed-date release. The letters stand for **Must, Should, Could, Won't**; the o's are only there to make it pronounceable.
+
+**The thinking:** when time or budget is fixed, the real question isn't "how valuable is this?" but "what can we leave out and still succeed?" MoSCoW sorts items into four buckets for a specific release or time frame:
+
+| Category | Meaning | A useful test |
+|---|---|---|
+| **Must have** | Without it the release fails or isn't worth delivering: legal, safety or a core need. | "What happens if this isn't there?" If the answer is "we can't go live", it's a Must. If there's a workaround, it isn't. |
+| **Should have** | Important and painful to leave out, but there's a workaround. | Would we delay the release for it? If not, it's a Should. |
+| **Could have** | Nice to have; small impact if missing. | The first things dropped when time runs short. |
+| **Won't have (this time)** | Agreed to be out of scope for now. | Recording these is valuable: it sets expectations and stops them coming back every week. |
+
+**Good for:** agreeing scope with stakeholders for a deadline-driven release, and for quick, plain-language prioritization that everyone understands.
+**Watch out for:** everything drifting into Must. A common rule of thumb is to keep Musts to no more than about 60% of the effort, so the Shoulds and Coulds leave room for surprises. MoSCoW doesn't order items within a bucket: every Must gets the same score, so use **Manual rank** to order them. The optional Effort only places items on the [priority matrix](#priorities).
+
+### Choosing a model
+
+| If your situation is… | Try |
+|---|---|
+| Many product ideas, and you can count the users or transactions each one affects | **RICE** |
+| Larger pieces of work competing for one team, where deadlines, risk and dependencies matter as much as value | **WSJF** |
+| A fixed date or budget, and the question is what's in and what's out | **MoSCoW** |
+| A short list that a group needs to agree on quickly | **MoSCoW**, then rank within each bucket |
+
+You can switch a product's model at any time in [Settings](#9-settings); the inputs for the other models are kept, so it's cheap to try one and switch back.

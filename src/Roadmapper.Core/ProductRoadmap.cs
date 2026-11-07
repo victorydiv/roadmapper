@@ -21,6 +21,8 @@ public class ProductRoadmap
     public IReadOnlyList<RoadmapItem> Items { get; }
     public IReadOnlyList<Dependency> Dependencies { get; }
     public IScoringStrategy Strategy => Scoring.For(Product.ScoringModel);
+    /// <summary>The product's WSJF scoring rubric (empty when it has none).</summary>
+    public ScoringRubric Rubric { get; init; } = ScoringRubric.Empty;
 
     public RoadmapItem? Find(int id) => _byId.GetValueOrDefault(id);
 

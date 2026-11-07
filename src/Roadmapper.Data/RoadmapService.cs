@@ -13,8 +13,11 @@ public record ProductSummary(int Id, string Name, string? Description, ScoringMo
 /// pattern for Blazor Server), and every item mutation re-runs rollups and scoring for the product.
 /// Business-rule violations surface as <see cref="InvalidOperationException"/> with a user-facing message.
 /// </summary>
-public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactory)
+public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactory, TimeProvider? clock = null)
 {
+    /// <summary>Today's date; the start-date criteria in a scoring rubric count months from it.</summary>
+    private DateOnly Today => DateOnly.FromDateTime((clock ?? TimeProvider.System).GetLocalNow().DateTime);
+
     // ---- Products ----
 
     public async Task<List<ProductSummary>> GetProductsAsync()
@@ -79,12 +82,13 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
             .Include(i => i.Score)
             .Include(i => i.Tags)
             .Include(i => i.Theme)
+            .Include(i => i.RubricAnswers)
             .ToListAsync();
         var dependencies = await db.Dependencies.AsNoTracking()
             .Where(d => d.Predecessor!.ProductId == productId)
             .ToListAsync();
 
-        return new ProductRoadmap(product, items, dependencies);
+        return new ProductRoadmap(product, items, dependencies) { Rubric = await LoadRubricAsync(db, productId, product.WsjfScale) };
     }
 
     // ---- Items ----
@@ -94,7 +98,7 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
         if (draft.Validate() is { } error) throw new InvalidOperationException(error);
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        if (!await db.Products.AnyAsync(p => p.Id == draft.ProductId)) throw NotFound("Product");
+        var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == draft.ProductId) ?? throw NotFound("Product");
 
         ItemType? parentType = null;
         if (draft.ParentId is { } parentId)
@@ -118,7 +122,7 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
         }
         else
         {
-            item = await db.Items.Include(i => i.Score).Include(i => i.Tags)
+            item = await db.Items.Include(i => i.Score).Include(i => i.Tags).Include(i => i.RubricAnswers)
                 .FirstOrDefaultAsync(i => i.Id == draft.Id) ?? throw NotFound("Item");
             // Type is fixed after creation; changing it would orphan the item's children.
             HierarchyRules.Validate(item.ItemType, parentType);
@@ -128,6 +132,7 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
 
         draft.ApplyTo(item);
         item.UpdatedAt = DateTime.UtcNow;
+        await ApplyRubricAsync(db, product, item, draft);
 
         var oldTags = TagList(item.Tags);
         item.Tags.Clear();
@@ -381,6 +386,8 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
                 nextSort[parentKey] = sort + 1;
 
                 var item = new RoadmapItem { ProductId = productId, ItemType = draft.ItemType, SortOrder = sort };
+                // WSJF values in a spreadsheet were typed by hand, so the scoring rubric leaves them alone.
+                draft.Score.ManualFactors |= RubricCalculator.WithValues(draft.Score);
                 draft.ApplyTo(item);
                 item.Tags.AddRange(plan.TagNames.Select(n => tags[n]));
                 db.Items.Add(item);
@@ -398,17 +405,24 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
     // ---- Helpers ----
 
     /// <summary>Re-derives parent rollups and every item's computed score for one product.</summary>
-    private static async Task RecalculateAsync(RoadmapDbContext db, int productId)
+    private async Task RecalculateAsync(RoadmapDbContext db, int productId)
     {
         db.ChangeTracker.Clear();
-        var model = await db.Products.Where(p => p.Id == productId).Select(p => p.ScoringModel).FirstAsync();
-        var items = await db.Items.Include(i => i.Score).Where(i => i.ProductId == productId).ToListAsync();
+        var product = await db.Products.Where(p => p.Id == productId).Select(p => new { p.ScoringModel, p.WsjfScale }).FirstAsync();
+        var items = await db.Items.Include(i => i.Score).Include(i => i.RubricAnswers).Where(i => i.ProductId == productId).ToListAsync();
 
         RollupService.Apply(items);
-        var strategy = Scoring.For(model);
+        // The rubric runs after roll-up, so a parent's start-date criterion uses its rolled-up start.
+        var rubric = product.ScoringModel == ScoringModel.Wsjf
+            ? await LoadRubricAsync(db, productId, product.WsjfScale)
+            : ScoringRubric.Empty;
+        var today = Today;
+        var strategy = Scoring.For(product.ScoringModel);
         foreach (var item in items)
         {
             item.Score ??= new ItemScore();
+            if (!rubric.IsEmpty)
+                RubricCalculator.Apply(item.Score, RubricCalculator.Evaluate(rubric, RubricCalculator.AnswersOf(item), item.StartDate, today));
             item.Score.ComputedScore = strategy.Compute(item.Score);
         }
 
