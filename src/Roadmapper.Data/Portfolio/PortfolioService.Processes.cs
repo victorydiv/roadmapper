@@ -282,6 +282,7 @@ public partial class PortfolioService
                     l.RoadmapItem.ItemType, l.RoadmapItem.Title, l.RoadmapItem.Status, l.RoadmapItem.ProgressPct,
                     l.RoadmapItem.StartDate, l.RoadmapItem.EndDate, l.RoadmapItem.Owner, l.ImpactType))
                 .ToListAsync(),
+            Decisions = await db.Decisions.AsNoTracking().Include(d => d.Links).AsSplitQuery().ToListAsync(),
         };
         return ImpactAnalyzer.Analyze(input, subject, depth, Today);
     }

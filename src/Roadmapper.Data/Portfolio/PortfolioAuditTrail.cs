@@ -154,6 +154,17 @@ internal static class PortfolioAuditTrail
             [nameof(BenefitMeasurement.Source)] = "Source",
             [nameof(BenefitMeasurement.Note)] = "Note",
         },
+        [typeof(Decision)] = new()
+        {
+            [nameof(Decision.Title)] = "Title",
+            [nameof(Decision.DecidedOn)] = "Decided on",
+            [nameof(Decision.Status)] = "Status",
+            [nameof(Decision.Context)] = "Context",
+            [nameof(Decision.DecisionText)] = "Decision",
+            [nameof(Decision.Outcome)] = "Outcome",
+            [nameof(Decision.DecidedBy)] = "Decided by",
+            [nameof(Decision.SupersededById)] = "Superseded by",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -174,7 +185,7 @@ internal static class PortfolioAuditTrail
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
-                or Benefit or BenefitMeasurement)) continue;
+                or Benefit or BenefitMeasurement or Decision or DecisionLink)) continue;
 
             switch (entry.State)
             {
@@ -312,6 +323,18 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Deleted) entry.OldValue = $"{when}: {PortfolioText.Format(m.Value)}";
                     break;
                 }
+                case Decision d:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Decision, d.Id, d.Title, field);
+                    break;
+                case DecisionLink l:
+                {
+                    // Links are filed under their decision.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Decision, l.DecisionId, await DecisionTitleAsync(db, l.DecisionId, ct));
+                    entry.Field = "Linked to";
+                    var what = $"{PortfolioText.Label(l.Target.Kind)}: {await TargetNameAsync(db, l, ct)}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = what; else entry.OldValue = what;
+                    break;
+                }
                 default:
                     continue;
             }
@@ -340,6 +363,7 @@ internal static class PortfolioAuditTrail
                 or nameof(Integration.OwnerId) or nameof(TradingPartner.RelationshipOwnerId)
                 or nameof(BusinessProcess.ProcessOwnerId) => await ContactNameAsync(db, (int)value, ct),
             nameof(BusinessProcess.ParentProcessId) => await ProcessNameAsync(db, (int)value, ct),
+            nameof(Decision.SupersededById) => await DecisionTitleAsync(db, (int)value, ct),
             nameof(ProcessPainPoint.AddressedByItemId) or nameof(Benefit.RoadmapItemId) => await ItemTitleAsync(db, (int)value, ct),
             nameof(Benefit.KpiId) => await db.ProcessKpis.AsNoTracking().Where(k => k.Id == (int)value).Select(k => k.Name).FirstOrDefaultAsync(ct),
             nameof(Integration.SourcePartnerId) or nameof(Integration.TargetPartnerId)
@@ -377,6 +401,26 @@ internal static class PortfolioAuditTrail
         db.Integrations.Local.FirstOrDefault(i => i.Id == id)?.Name
         ?? await db.Integrations.AsNoTracking().Where(i => i.Id == id).Select(i => i.Name).FirstOrDefaultAsync(ct)
         ?? $"#{id}";
+
+    private static async Task<string> DecisionTitleAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.Decisions.Local.FirstOrDefault(d => d.Id == id)?.Title
+        ?? await db.Decisions.AsNoTracking().Where(d => d.Id == id).Select(d => d.Title).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> TargetNameAsync(RoadmapDbContext db, DecisionLink l, CancellationToken ct)
+    {
+        var t = l.Target;
+        return t.Kind switch
+        {
+            DecisionTargetKind.Application => await AppNameAsync(db, t.Id, ct),
+            DecisionTargetKind.Integration => await IntegrationNameAsync(db, t.Id, ct),
+            DecisionTargetKind.Vendor => await VendorNameAsync(db, t.Id, ct),
+            DecisionTargetKind.Contract => await db.Contracts.AsNoTracking().Where(c => c.Id == t.Id).Select(c => c.Name).FirstOrDefaultAsync(ct) ?? $"#{t.Id}",
+            DecisionTargetKind.Process => await ProcessNameAsync(db, t.Id, ct),
+            DecisionTargetKind.RoadmapItem => await ItemTitleAsync(db, t.Id, ct),
+            _ => await PartnerNameAsync(db, t.Id, ct),
+        };
+    }
 
     private static string Short(string text) => text.Length > 80 ? text[..77] + "…" : text;
 

@@ -13,7 +13,7 @@ public partial class PortfolioService
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
-            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync();
+            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync() && !await db.Decisions.AnyAsync();
     }
 
     /// <summary>
@@ -113,6 +113,7 @@ public partial class PortfolioService
         await SeedSampleIntegrationsAsync();
         await SeedSampleProcessesAsync();
         if (await CanSeedSampleBenefitsAsync()) await SeedSampleBenefitsAsync();
+        if (await CanSeedSampleDecisionsAsync()) await SeedSampleDecisionsAsync();
     }
 
     // The sample applications the sample integrations connect; they must all exist.
@@ -376,5 +377,82 @@ public partial class PortfolioService
         if (sameDayKpi is { } k)
             await Benefit(onboarding, portal, BenefitCategory.Other, "More orders released to the warehouse the day they arrive.",
                 BenefitUnit.Percent, 98, 3, kpi: k);
+    }
+
+    /// <summary>True when there are no decisions yet and the sample EDI, yard log and WMS applications are there to link them to.</summary>
+    public async Task<bool> CanSeedSampleDecisionsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.Decisions.AnyAsync()) return false;
+        return await db.Applications.CountAsync(a => a.Name == "Contoso EDI" || a.Name == "Yard Log Spreadsheet" || a.Name == "Northwind WMS") == 3;
+    }
+
+    /// <summary>Adds three made-up decisions to the sample portfolio, with alternatives and links. Only while there are no decisions.</summary>
+    public async Task SeedSampleDecisionsAsync()
+    {
+        if (!await CanSeedSampleDecisionsAsync())
+            throw new InvalidOperationException("Sample decisions need the sample applications and no decisions yet.");
+        var today = Today;
+
+        Dictionary<string, int> apps, vendors, processes, flows;
+        int? ediContract;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            apps = await db.Applications.ToDictionaryAsync(a => a.Name, a => a.Id, StringComparer.OrdinalIgnoreCase);
+            vendors = await db.Vendors.ToDictionaryAsync(v => v.Name, v => v.Id, StringComparer.OrdinalIgnoreCase);
+            processes = await db.BusinessProcesses.ToDictionaryAsync(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
+            flows = (await db.Integrations.Select(i => new { i.Name, i.Id }).ToListAsync())
+                .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Min(i => i.Id), StringComparer.OrdinalIgnoreCase);
+            ediContract = await db.Contracts.Where(c => c.Name == "Managed EDI / VAN services").Select(c => (int?)c.Id).FirstOrDefaultAsync();
+        }
+
+        async Task<int> Decide(string title, int monthsAgo, DecisionStatus status, string context, string decision, string? decidedBy,
+            string? outcome, AlternativeDraft[] alternatives, params DecisionTarget?[] links)
+        {
+            var id = await SaveDecisionAsync(new DecisionDraft
+            {
+                Title = title, DecidedOn = today.AddMonths(-monthsAgo), Status = status, Context = context, DecisionText = decision,
+                DecidedBy = decidedBy, Outcome = outcome, Alternatives = alternatives.ToList(),
+            });
+            foreach (var link in links.OfType<DecisionTarget>()) await LinkDecisionAsync(id, link);
+            return id;
+        }
+        DecisionTarget? App(string n) => apps.TryGetValue(n, out var id) ? new DecisionTarget(DecisionTargetKind.Application, id) : null;
+        DecisionTarget? Vendor(string n) => vendors.TryGetValue(n, out var id) ? new DecisionTarget(DecisionTargetKind.Vendor, id) : null;
+        DecisionTarget? Process(string n) => processes.TryGetValue(n, out var id) ? new DecisionTarget(DecisionTargetKind.Process, id) : null;
+        DecisionTarget? Flow(string n) => flows.TryGetValue(n, out var id) ? new DecisionTarget(DecisionTargetKind.Integration, id) : null;
+
+        var tenderByEdi = await Decide("Tender loads to carriers over EDI 204", 30, DecisionStatus.Decided,
+            "Carriers asked for electronic tenders; phone and email tendering was slow and error-prone.",
+            "Send load tenders from the TMS to carriers as X12 204 through the EDI provider.",
+            "Transportation steering group", "Tender acceptance rose from 70% to 85% within six months.",
+            [new() { Option = "Carrier portal tendering", Pros = "No EDI setup per carrier", Cons = "Dispatchers key every load twice", WhyRejected = "Doesn't scale past a handful of carriers" }],
+            Flow("Load tenders (204)"), App("Fabrikam TMS"), Process("Transportation"));
+
+        await Decide("Keep Contoso as the EDI provider through the next renewal", 2, DecisionStatus.Decided,
+            "The managed EDI contract renews soon. Two other providers were quoted.",
+            "Renew with Contoso for two years and negotiate a 10% volume discount; revisit API-based exchange with the WMS upgrade.",
+            "Priya Shah (IT Applications Lead)", null,
+            [
+                new() { Option = "Move to another managed EDI provider", Pros = "About 15% cheaper", Cons = "Re-mapping and re-testing every trading partner", WhyRejected = "Migration risk for Tier 1 order and ship-confirm flows during peak" },
+                new() { Option = "Bring EDI in-house on the integration platform", Pros = "No per-document fees", Cons = "Needs EDI skills the team doesn't have", WhyRejected = "Not until the platform team is staffed" },
+            ],
+            App("Contoso EDI"), Vendor("Contoso EDI Services"),
+            ediContract is { } c ? new DecisionTarget(DecisionTargetKind.Contract, c) : null);
+
+        await Decide("Replace the yard log spreadsheet with the WMS yard module", 0, DecisionStatus.Proposed,
+            "Gate staff log trailers in a spreadsheet and re-key arrivals into the WMS; typos delay door scheduling.",
+            "License the WMS yard management module and retire the spreadsheet after one peak season in parallel.",
+            null, null,
+            [new() { Option = "Standalone yard management system", Pros = "Richer features", Cons = "Another integration and vendor", WhyRejected = "More than a single site needs" }],
+            App("Yard Log Spreadsheet"), App("Northwind WMS"), Process("Receiving"));
+
+        // An earlier decision the EDI one replaced, to show the chain.
+        var phone = await Decide("Tender loads by phone and email", 48, DecisionStatus.Superseded,
+            "Too few carriers to justify EDI.", "Dispatchers tender loads by phone and email from the TMS load board.",
+            "Transportation steering group", "Worked until volume doubled.", [], App("Fabrikam TMS"));
+        var draft = DecisionDraft.From((await GetDecisionAsync(phone))!);
+        draft.SupersededById = tenderByEdi;
+        await SaveDecisionAsync(draft);
     }
 }

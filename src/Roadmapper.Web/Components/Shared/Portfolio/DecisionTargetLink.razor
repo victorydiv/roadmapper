@@ -1,0 +1,16 @@
+<a href="@Href" title="@PortfolioText.Label(Link.Target.Kind)">@Link.TargetName</a>
+
+@code {
+    [Parameter, EditorRequired] public DecisionLink Link { get; set; } = default!;
+
+    private string Href => Link.Target.Kind switch
+    {
+        DecisionTargetKind.Application => $"/portfolio/applications/{Link.Target.Id}",
+        DecisionTargetKind.Integration => $"/portfolio/integrations/{Link.Target.Id}",
+        DecisionTargetKind.Vendor => $"/portfolio/vendors/{Link.Target.Id}",
+        DecisionTargetKind.Contract => $"/portfolio/vendors/{Link.Contract?.VendorId}",
+        DecisionTargetKind.Process => $"/portfolio/processes/{Link.Target.Id}",
+        DecisionTargetKind.RoadmapItem => $"/products/{Link.RoadmapItem?.ProductId}",
+        _ => $"/portfolio/partners/{Link.Target.Id}",
+    };
+}

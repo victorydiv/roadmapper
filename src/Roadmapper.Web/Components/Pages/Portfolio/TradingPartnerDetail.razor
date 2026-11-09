@@ -119,6 +119,8 @@ else
         </div>
     }
 
+    <DecisionList Target="new DecisionTarget(DecisionTargetKind.TradingPartner, partner.Id)" Name="@partner.Name" />
+
     <div class="card stack" style="margin-top:1rem">
         <h2>History</h2>
         <PortfolioActivityList Entries="history" />

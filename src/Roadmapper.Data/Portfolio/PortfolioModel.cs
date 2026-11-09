@@ -248,6 +248,55 @@ internal static class PortfolioModel
             e.HasIndex(x => new { x.BenefitId, x.MeasuredOn }).IsUnique();
         });
 
+        b.Entity<Decision>(e =>
+        {
+            e.ToTable("Decisions");
+            e.Property(d => d.Title).IsRequired().HasMaxLength(300);
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(d => d.Context).HasMaxLength(Notes);
+            e.Property(d => d.DecisionText).HasColumnName("Decision").IsRequired().HasMaxLength(Notes);
+            e.Property(d => d.Outcome).HasMaxLength(Notes);
+            e.Property(d => d.DecidedBy).HasMaxLength(Name);
+            e.HasOne(d => d.SupersededBy).WithMany().HasForeignKey(d => d.SupersededById).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(d => d.DecidedOn);
+        });
+
+        b.Entity<DecisionAlternative>(e =>
+        {
+            e.ToTable("DecisionAlternatives");
+            e.Property(a => a.Option).IsRequired().HasMaxLength(500);
+            e.Property(a => a.Pros).HasMaxLength(2000);
+            e.Property(a => a.Cons).HasMaxLength(2000);
+            e.Property(a => a.WhyRejected).HasMaxLength(2000);
+            e.HasOne<Decision>().WithMany(d => d.Alternatives).HasForeignKey(a => a.DecisionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(a => a.DecisionId);
+        });
+
+        b.Entity<DecisionLink>(e =>
+        {
+            // Exactly one target per link.
+            e.ToTable("DecisionLinks", t => t.HasCheckConstraint("CK_DecisionLinks_OneTarget",
+                "(\"ApplicationId\" IS NOT NULL) + (\"IntegrationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL)"
+                + " + (\"ProcessId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) + (\"TradingPartnerId\" IS NOT NULL) = 1"));
+            e.HasOne(l => l.Decision).WithMany(d => d.Links).HasForeignKey(l => l.DecisionId).OnDelete(DeleteBehavior.Cascade);
+            // A link goes when what it points at does; the decision itself stays.
+            e.HasOne(l => l.Application).WithMany().HasForeignKey(l => l.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Integration).WithMany().HasForeignKey(l => l.IntegrationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Vendor).WithMany().HasForeignKey(l => l.VendorId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Contract).WithMany().HasForeignKey(l => l.ContractId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.Process).WithMany().HasForeignKey(l => l.ProcessId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.RoadmapItem).WithMany().HasForeignKey(l => l.RoadmapItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.TradingPartner).WithMany().HasForeignKey(l => l.TradingPartnerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(l => l.DecisionId);
+            e.HasIndex(l => l.ApplicationId);
+            e.HasIndex(l => l.IntegrationId);
+            e.HasIndex(l => l.VendorId);
+            e.HasIndex(l => l.ContractId);
+            e.HasIndex(l => l.ProcessId);
+            e.HasIndex(l => l.RoadmapItemId);
+            e.HasIndex(l => l.TradingPartnerId);
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

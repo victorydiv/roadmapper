@@ -113,6 +113,21 @@ public static class PortfolioApi
             return new BenefitsDto(rate, BenefitMath.Totals(rows, rate, today), rows.Select(b => BenefitDto.From(b, rate, today)).ToList());
         });
 
+        // The executive dashboard: health, run cost, renewals, risky integrations, strategic work, value, recent decisions.
+        api.MapGet("/dashboard", async (PortfolioService svc) => DashboardDto.From(await svc.GetDashboardAsync()));
+
+        // The decision log, newest first. ?entityType=Application&entityId=3 (any DecisionTargetKind) &status=Decided
+        api.MapGet("/decisions", async (PortfolioService svc, string? entityType, int? entityId, string? status) =>
+        {
+            DecisionTarget? target = Parse<DecisionTargetKind>(entityType) is { } k && entityId is { } id ? new DecisionTarget(k, id) : null;
+            IEnumerable<Decision> list = await svc.GetDecisionsAsync(target);
+            if (Parse<DecisionStatus>(status) is { } s) list = list.Where(d => d.Status == s);
+            return list.Select(DecisionDto.From).ToList();
+        });
+
+        api.MapGet("/decisions/{id:int}", async (int id, PortfolioService svc) =>
+            await svc.GetDecisionAsync(id) is { } d ? Results.Ok(DecisionDto.From(d)) : Results.NotFound());
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -316,7 +331,7 @@ public record ImpactVendorDto(Ref Vendor, bool SuppliesSubject, IReadOnlyList<Re
 public record ImpactDto(EndpointDto Subject, int Depth, DateOnly AsOf, ImpactSeverity Severity, IReadOnlyList<string> SeverityReasons, string Summary,
     IReadOnlyList<ImpactIntegrationDto> Integrations, IReadOnlyList<ImpactNodeDto> Applications, IReadOnlyList<ImpactNodeDto> Partners,
     IReadOnlyList<ImpactProcessDto> Processes, IReadOnlyList<ImpactInitiativeDto> Initiatives, IReadOnlyList<ImpactVendorDto> Vendors,
-    IReadOnlyList<RiskDto> OpenRisks, IReadOnlyList<PainPointDto> OpenPainPoints)
+    IReadOnlyList<RiskDto> OpenRisks, IReadOnlyList<PainPointDto> OpenPainPoints, IReadOnlyList<Ref> Decisions)
 {
     public static ImpactDto From(ImpactReport r) => new(EndpointDto.Of(r.Subject, r.SubjectName), r.Depth, r.AsOf, r.Severity, r.SeverityReasons, r.Summary,
         r.Integrations.Select(ii => new ImpactIntegrationDto(new Ref(ii.Integration.Id, ii.Integration.Name), ii.Direct, ii.Distance,
@@ -333,7 +348,8 @@ public record ImpactDto(EndpointDto Subject, int Depth, DateOnly AsOf, ImpactSev
                 .Select(e => new EscalationDto(e.Level, new Ref(e.ContactId, e.Contact!.Name), e.Contact.Title, e.Contact.Email, e.Contact.Phone, e.Note)).ToList(),
             v.NextRenewal is { } c ? new Ref(c.Id, c.Name) : null, v.NextRenewal?.NoticeDeadline)).ToList(),
         r.OpenRisks.Select(x => RiskDto.From(x.Risk)).ToList(),
-        r.OpenPainPoints.Select(x => PainPointDto.From(x.PainPoint)).ToList());
+        r.OpenPainPoints.Select(x => PainPointDto.From(x.PainPoint)).ToList(),
+        r.Decisions.Select(d => new Ref(d.Id, d.Title)).ToList());
 
     private static ImpactNodeDto Node(ImpactedNode n) => new(EndpointDto.Of(n.Node, n.Name), n.Distance, n.Application?.Criticality, n.Partner?.Importance);
 }
@@ -353,3 +369,42 @@ public record BenefitDto(int Id, string Description, BenefitCategory Category, B
 }
 
 public record BenefitsDto(decimal? LaborRate, BenefitTotals Totals, IReadOnlyList<BenefitDto> Benefits);
+
+public record DecisionLinkDto(DecisionTargetKind Kind, int Id, string Name);
+
+public record AlternativeDto(string Option, string? Pros, string? Cons, string? WhyRejected);
+
+public record DecisionDto(int Id, string Title, DateOnly DecidedOn, DecisionStatus Status, string? DecidedBy, string? Context, string Decision,
+    string? Outcome, Ref? SupersededBy, IReadOnlyList<AlternativeDto> Alternatives, IReadOnlyList<DecisionLinkDto> LinkedTo)
+{
+    public static DecisionDto From(Decision d) => new(d.Id, d.Title, d.DecidedOn, d.Status, d.DecidedBy, d.Context, d.DecisionText, d.Outcome,
+        d.SupersededBy is { } s ? new Ref(s.Id, s.Title) : null,
+        d.Alternatives.OrderBy(a => a.SortOrder).Select(a => new AlternativeDto(a.Option, a.Pros, a.Cons, a.WhyRejected)).ToList(),
+        d.Links.Select(l => new DecisionLinkDto(l.Target.Kind, l.Target.Id, l.TargetName)).ToList());
+}
+
+public record HealthDto(Ref Application, Criticality Criticality, int Score, HealthRating Rating, IReadOnlyList<HealthFactor> Factors);
+
+public record StrategicItemDto(int ItemId, Ref Product, ItemType ItemType, string Title, ItemStatus Status, int ProgressPct, DateOnly? EndDate,
+    bool Overdue, IReadOnlyList<string> Applications, int Benefits);
+
+public record DashboardDto(DateOnly AsOf, IReadOnlyDictionary<HealthRating, int> Health, IReadOnlyList<HealthDto> Applications,
+    decimal AnnualRunCost, IReadOnlyDictionary<TimeQuadrant, int> Time, IReadOnlyList<RenewalDto> Renewals, int LiveIntegrations,
+    IReadOnlyList<Ref> HighRiskIntegrations, IReadOnlyList<Ref> MediumRiskIntegrations, BenefitTotals Benefits,
+    IReadOnlyList<CategoryValue> ValueByCategory, IReadOnlyList<StrategicItemDto> StrategicItems, int OpenPainPoints, IReadOnlyList<Ref> RecentDecisions)
+{
+    public static DashboardDto From(PortfolioDashboard d) => new(d.AsOf,
+        Enum.GetValues<HealthRating>().ToDictionary(r => r, d.Count),
+        d.Applications.Where(a => a.Health is not null)
+            .Select(a => new HealthDto(new Ref(a.Application.Id, a.Application.Name), a.Application.Criticality, a.Health!.Score, a.Health.Rating, a.Health.Factors)).ToList(),
+        d.AnnualRunCost, d.Time,
+        d.Renewals.Select(r => new RenewalDto(ContractDto.From(r.Contract), r.VendorName, r.Applications)).ToList(),
+        d.LiveIntegrations,
+        d.RiskyIntegrations.Where(r => r.Risk == RiskLevel.High).Select(r => new Ref(r.Integration.Id, r.Integration.Name)).ToList(),
+        d.RiskyIntegrations.Where(r => r.Risk == RiskLevel.Medium).Select(r => new Ref(r.Integration.Id, r.Integration.Name)).ToList(),
+        d.Benefits, d.ValueByCategory,
+        d.Initiatives.Select(i => new StrategicItemDto(i.ItemId, new Ref(i.ProductId, i.ProductName), i.ItemType, i.Title, i.Status, i.ProgressPct,
+            i.EndDate, i.Overdue, i.Applications, i.Benefits)).ToList(),
+        d.OpenPainPoints,
+        d.RecentDecisions.Select(x => new Ref(x.Id, x.Title)).ToList());
+}

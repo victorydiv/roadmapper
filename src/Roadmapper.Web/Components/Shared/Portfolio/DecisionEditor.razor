@@ -1,0 +1,140 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "Record a decision" : "Edit decision")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <label class="field">Title
+                    <InputText @bind-Value="draft.Title" placeholder="e.g. Keep Contoso as the EDI provider through the next renewal" autofocus />
+                </label>
+                <div class="grid-3">
+                    <label class="field">Decided on
+                        <InputDate @bind-Value="draft.DecidedOn" />
+                    </label>
+                    <label class="field" title="Proposed: not decided yet. Superseded: replaced by a later decision. Reversed: undone.">Status
+                        <InputSelect @bind-Value="draft.Status">
+                            @foreach (var s in Enum.GetValues<DecisionStatus>())
+                            {
+                                <option value="@s">@PortfolioText.Label(s)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field">Decided by
+                        <InputText @bind-Value="draft.DecidedBy" placeholder="A person or a group" />
+                    </label>
+                </div>
+                <label class="field">Context
+                    <InputTextArea @bind-Value="draft.Context" placeholder="The situation and the problem that needed a decision" />
+                </label>
+                <label class="field">Decision
+                    <InputTextArea @bind-Value="draft.DecisionText" placeholder="What was decided" />
+                </label>
+
+                <fieldset>
+                    <legend>Alternatives considered</legend>
+                    @foreach (var (alt, n) in draft.Alternatives.Select((a, n) => (a, n)).ToList())
+                    {
+                        <div class="alt-row stack">
+                            <div class="row nowrap">
+                                <input placeholder="Option" @bind="alt.Option" style="flex:1" />
+                                <button type="button" class="btn sm" title="Remove" @onclick="() => draft.Alternatives.RemoveAt(n)">Remove</button>
+                            </div>
+                            <div class="grid-3">
+                                <textarea placeholder="Pros" @bind="alt.Pros" rows="2"></textarea>
+                                <textarea placeholder="Cons" @bind="alt.Cons" rows="2"></textarea>
+                                <textarea placeholder="Why not chosen" @bind="alt.WhyRejected" rows="2"></textarea>
+                            </div>
+                        </div>
+                    }
+                    <div><button type="button" class="btn sm" @onclick="() => draft.Alternatives.Add(new AlternativeDraft())">+ Add alternative</button></div>
+                </fieldset>
+
+                <label class="field" title="Filled in later: did it work?">Outcome
+                    <InputTextArea @bind-Value="draft.Outcome" placeholder="How it turned out (fill in later)" />
+                </label>
+                @if (draft.Status == DecisionStatus.Superseded)
+                {
+                    <label class="field">Superseded by
+                        <InputSelect @bind-Value="draft.SupersededById">
+                            <option value="">— choose the later decision —</option>
+                            @foreach (var d in others)
+                            {
+                                <option value="@d.Id">@PortfolioUi.Date(d.DecidedOn) · @d.Title</option>
+                            }
+                        </InputSelect>
+                    </label>
+                }
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete this decision? Marking it Reversed keeps the record.</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Record" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DecisionDraft Draft { get; set; } = default!;
+    /// <summary>Links a new decision to this record when it's created.</summary>
+    [Parameter] public DecisionTarget? LinkTo { get; set; }
+    /// <summary>Called with the saved decision's id, 0 when it was deleted, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private DecisionDraft draft = default!;
+    private List<Decision> others = [];
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        others = (await Svc.GetDecisionsAsync()).Where(d => d.Id != draft.Id).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            if (draft.Status != DecisionStatus.Superseded) draft.SupersededById = null;
+            var id = await Svc.SaveDecisionAsync(draft, LinkTo);
+            await CloseAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteDecisionAsync(draft.Id);
+        await CloseAsync(0);
+    }
+
+    private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);
+}

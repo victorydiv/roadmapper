@@ -1,0 +1,13 @@
+@if (Health is { } h)
+{
+    <span class="badge health-@h.Rating" title="@($"Health {h.Score}/100 · {h.Summary}")">● @PortfolioText.Label(h.Rating)@(ShowScore ? $" {h.Score}" : "")</span>
+}
+else
+{
+    <span class="muted small" title="Retired applications aren't rated">–</span>
+}
+
+@code {
+    [Parameter] public AppHealth? Health { get; set; }
+    [Parameter] public bool ShowScore { get; set; }
+}

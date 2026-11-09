@@ -385,6 +385,124 @@ public class BenefitMeasurement
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// A decision worth remembering: what was decided, why, what else was considered, and how it turned out. Linked to
+/// every record it affects, so it shows up there and in impact analysis.
+/// </summary>
+public class Decision
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public DateOnly DecidedOn { get; set; }
+    public DecisionStatus Status { get; set; } = DecisionStatus.Decided;
+    /// <summary>The situation and the problem that needed a decision.</summary>
+    public string? Context { get; set; }
+    /// <summary>What was decided.</summary>
+    public string DecisionText { get; set; } = "";
+    /// <summary>How it turned out, filled in later.</summary>
+    public string? Outcome { get; set; }
+    /// <summary>Who made the call: a person, a steering committee.</summary>
+    public string? DecidedBy { get; set; }
+    /// <summary>The later decision that replaced this one.</summary>
+    public int? SupersededById { get; set; }
+    public Decision? SupersededBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<DecisionAlternative> Alternatives { get; set; } = new();
+    public List<DecisionLink> Links { get; set; } = new();
+}
+
+/// <summary>An option that was considered and not chosen.</summary>
+public class DecisionAlternative
+{
+    public int Id { get; set; }
+    public int DecisionId { get; set; }
+    public string Option { get; set; } = "";
+    public string? Pros { get; set; }
+    public string? Cons { get; set; }
+    public string? WhyRejected { get; set; }
+    public int SortOrder { get; set; }
+}
+
+/// <summary>Ties a decision to one record. Exactly one target id is set (a CHECK constraint enforces it).</summary>
+public class DecisionLink
+{
+    public int Id { get; set; }
+    public int DecisionId { get; set; }
+    public Decision? Decision { get; set; }
+    public int? ApplicationId { get; set; }
+    public Application? Application { get; set; }
+    public int? IntegrationId { get; set; }
+    public Integration? Integration { get; set; }
+    public int? VendorId { get; set; }
+    public Vendor? Vendor { get; set; }
+    public int? ContractId { get; set; }
+    public Contract? Contract { get; set; }
+    public int? ProcessId { get; set; }
+    public BusinessProcess? Process { get; set; }
+    public int? RoadmapItemId { get; set; }
+    public RoadmapItem? RoadmapItem { get; set; }
+    public int? TradingPartnerId { get; set; }
+    public TradingPartner? TradingPartner { get; set; }
+
+    public DecisionTarget Target => DecisionTarget.Of(this);
+
+    /// <summary>The target's name (needs its navigation loaded).</summary>
+    public string TargetName => Application?.Name ?? Integration?.Name ?? Vendor?.Name ?? Contract?.Name ?? Process?.Name
+        ?? RoadmapItem?.Title ?? TradingPartner?.Name ?? "";
+}
+
+/// <summary>A decision link's target as one value. <see cref="Key"/> ("a12", "i3", "v2", "c5", "pr4", "r9", "p3") is used in select lists and URLs.</summary>
+public readonly record struct DecisionTarget(DecisionTargetKind Kind, int Id)
+{
+    private static readonly (DecisionTargetKind Kind, string Prefix)[] Prefixes =
+    [
+        (DecisionTargetKind.Process, "pr"), (DecisionTargetKind.Application, "a"), (DecisionTargetKind.Integration, "i"),
+        (DecisionTargetKind.Vendor, "v"), (DecisionTargetKind.Contract, "c"), (DecisionTargetKind.RoadmapItem, "r"),
+        (DecisionTargetKind.TradingPartner, "p"),
+    ];
+
+    public string Key { get { var kind = Kind; return Prefixes.First(p => p.Kind == kind).Prefix + Id; } }
+
+    public static DecisionTarget? Parse(string? key)
+    {
+        if (string.IsNullOrEmpty(key)) return null;
+        foreach (var (kind, prefix) in Prefixes)
+            if (key.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(key.AsSpan(prefix.Length), out var id) && id > 0)
+                return new DecisionTarget(kind, id);
+        return null;
+    }
+
+    public static DecisionTarget Of(DecisionLink l) =>
+        l.ApplicationId is { } a ? new(DecisionTargetKind.Application, a)
+        : l.IntegrationId is { } i ? new(DecisionTargetKind.Integration, i)
+        : l.VendorId is { } v ? new(DecisionTargetKind.Vendor, v)
+        : l.ContractId is { } c ? new(DecisionTargetKind.Contract, c)
+        : l.ProcessId is { } p ? new(DecisionTargetKind.Process, p)
+        : l.RoadmapItemId is { } r ? new(DecisionTargetKind.RoadmapItem, r)
+        : new(DecisionTargetKind.TradingPartner, l.TradingPartnerId ?? 0);
+
+    /// <summary>A new link from <paramref name="decisionId"/> to this target.</summary>
+    public DecisionLink ToLink(int decisionId)
+    {
+        var l = new DecisionLink { DecisionId = decisionId };
+        switch (Kind)
+        {
+            case DecisionTargetKind.Application: l.ApplicationId = Id; break;
+            case DecisionTargetKind.Integration: l.IntegrationId = Id; break;
+            case DecisionTargetKind.Vendor: l.VendorId = Id; break;
+            case DecisionTargetKind.Contract: l.ContractId = Id; break;
+            case DecisionTargetKind.Process: l.ProcessId = Id; break;
+            case DecisionTargetKind.RoadmapItem: l.RoadmapItemId = Id; break;
+            default: l.TradingPartnerId = Id; break;
+        }
+        return l;
+    }
+
+    public override string ToString() => Key;
+}
+
 /// <summary>Portfolio-wide settings; a single row with Id 1.</summary>
 public class PortfolioSettings
 {

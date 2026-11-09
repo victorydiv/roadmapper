@@ -1,0 +1,137 @@
+@page "/portfolio/decisions"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Decision log" Subtitle="What was decided, why, what else was considered, and how it turned out. Link each decision to the records it affects.">
+    <button class="btn primary" @onclick="() => editing = DecisionDraft.New(Svc.Today)">+ Record decision</button>
+</PortfolioHeader>
+
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (decisions is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (decisions.Count == 0)
+{
+    <div class="card empty stack">
+        <div>
+            No decisions yet. Record the calls that shape the portfolio (renewing a vendor, replacing a system, changing how
+            data flows) so the reasoning isn't lost when people move on.
+        </div>
+        @if (canSeed)
+        {
+            <div><button class="btn" @onclick="SeedAsync">Add sample decisions</button></div>
+        }
+    </div>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search decisions" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="status">
+            <option value="">Any status</option>
+            @foreach (var s in Enum.GetValues<DecisionStatus>())
+            {
+                <option value="@s">@PortfolioText.Label(s)</option>
+            }
+        </select>
+        <select @bind="kind">
+            <option value="">Linked to anything</option>
+            @foreach (var k in Enum.GetValues<DecisionTargetKind>())
+            {
+                <option value="@k">Linked to a @PortfolioText.Label(k).ToLowerInvariant()</option>
+            }
+        </select>
+        <label class="check small"><input type="checkbox" @bind="openOnly" /> Missing an outcome</label>
+    </div>
+
+    <div class="card table-wrap">
+        <table class="tree">
+            <thead>
+                <tr><th>Date</th><th>Decision</th><th>Status</th><th>Decided by</th><th>Linked to</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Filtered)
+                {
+                    <tr class="@(d.Status is DecisionStatus.Superseded or DecisionStatus.Reversed ? "muted" : "")">
+                        <td class="small nowrap">@PortfolioUi.Date(d.DecidedOn)</td>
+                        <td class="title-cell">
+                            <a class="title-link" href="/portfolio/decisions/@d.Id">@d.Title</a>
+                            <div class="muted small">@Excerpt(d.DecisionText)</div>
+                        </td>
+                        <td>
+                            <DecisionStatusBadge Status="d.Status" />
+                            @if (d.SupersededBy is { } s) { <div class="small">by <a href="/portfolio/decisions/@s.Id">@s.Title</a></div> }
+                        </td>
+                        <td class="small">@(d.DecidedBy ?? "–")</td>
+                        <td class="small">
+                            @foreach (var (l, n) in d.Links.OrderBy(l => l.Target.Kind).Select((l, n) => (l, n)))
+                            {
+                                @if (n > 0) { <text>, </text> }
+                                <DecisionTargetLink Link="l" />
+                            }
+                            @if (d.Links.Count == 0) { <span class="muted">–</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (!Filtered.Any())
+        {
+            <div class="empty muted">No decisions match these filters.</div>
+        }
+    </div>
+}
+
+@if (editing is not null)
+{
+    <DecisionEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<Decision>? decisions;
+    private DecisionDraft? editing;
+    private bool canSeed, openOnly;
+    private string? error;
+    private string search = "";
+    private DecisionStatus? status;
+    private DecisionTargetKind? kind;
+
+    private IEnumerable<Decision> Filtered => decisions!
+        .Where(d => status is null || d.Status == status)
+        .Where(d => kind is null || d.Links.Any(l => l.Target.Kind == kind))
+        .Where(d => !openOnly || (d.Outcome is null && d.Status == DecisionStatus.Decided))
+        .Where(d => string.IsNullOrWhiteSpace(search)
+            || d.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || d.DecisionText.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (d.Context?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || d.Links.Any(l => l.TargetName.Contains(search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        decisions = await Svc.GetDecisionsAsync();
+        canSeed = decisions.Count == 0 && await Svc.CanSeedSampleDecisionsAsync();
+    }
+
+    private async Task SeedAsync()
+    {
+        error = null;
+        try { await Svc.SeedSampleDecisionsAsync(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private void OnEditorClosed(int? id)
+    {
+        editing = null;
+        if (id is > 0) Nav.NavigateTo($"/portfolio/decisions/{id}");
+    }
+
+    private static string Excerpt(string text) => text.Length > 160 ? text[..157] + "…" : text;
+}

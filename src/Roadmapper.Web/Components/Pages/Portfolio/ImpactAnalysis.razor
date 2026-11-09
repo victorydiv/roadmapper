@@ -295,6 +295,26 @@ else
             }
         </div>
 
+        @if (r.Decisions.Count > 0)
+        {
+            <div class="card stack" style="margin-top:1rem">
+                <div class="row">
+                    <h2 style="margin:0">Past decisions <span class="muted small">(@r.Decisions.Count)</span></h2>
+                    <span class="muted small">Decisions about @r.SubjectName, its integrations, its vendor or the processes involved.</span>
+                </div>
+                <ul class="dep-list">
+                    @foreach (var dec in r.Decisions)
+                    {
+                        <li class="@(dec.Status is DecisionStatus.Superseded or DecisionStatus.Reversed ? "muted" : "")">
+                            <span class="small nowrap">@PortfolioUi.Date(dec.DecidedOn)</span>
+                            <DecisionStatusBadge Status="dec.Status" />
+                            <span><a href="/portfolio/decisions/@dec.Id"><b>@dec.Title</b></a> <span class="muted small">@dec.DecisionText</span></span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
         @if (r.OpenRisks.Count + r.OpenPainPoints.Count > 0)
         {
             <div class="settings" style="margin-top:1rem">

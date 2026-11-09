@@ -23,6 +23,8 @@ public sealed class ImpactInput
     public required IReadOnlyList<Integration> Integrations { get; init; }
     public IReadOnlyList<BusinessProcess> Processes { get; init; } = [];
     public IReadOnlyList<ImpactInitiative> Initiatives { get; init; } = [];
+    /// <summary>Decisions with their links.</summary>
+    public IReadOnlyList<Decision> Decisions { get; init; } = [];
 }
 
 /// <summary>An affected integration. Direct: the subject is its source, target or middle hop. Indirect: it carries the subject's data further on.</summary>
@@ -66,7 +68,8 @@ public sealed record ImpactReport(
     IReadOnlyList<ImpactedInitiative> Initiatives,
     IReadOnlyList<ImpactedVendor> Vendors,
     IReadOnlyList<ImpactedRisk> OpenRisks,
-    IReadOnlyList<ImpactedPainPoint> OpenPainPoints)
+    IReadOnlyList<ImpactedPainPoint> OpenPainPoints,
+    IReadOnlyList<Decision> Decisions)
 {
     public int Tier1Integrations => Integrations.Count(i => i.Integration.Criticality == Criticality.Tier1);
     public int KeyPartners => Partners.Count(p => p.IsKeyPartner);
@@ -208,9 +211,20 @@ public static class ImpactAnalyzer
             .Select(x => new ImpactedPainPoint(x.pp, x.p))
             .OrderByDescending(x => x.PainPoint.Severity).ThenBy(x => x.Process.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
+        // 7. Decisions about the subject, its direct integrations, its vendor or contract, or an affected process.
+        bool Relevant(DecisionLink l) =>
+            (subjectApp is not null && (l.ApplicationId == subjectApp.Id || (l.VendorId is { } v && v == subjectApp.VendorId)
+                || (l.ContractId is { } c && c == subjectApp.ContractId)))
+            || (subjectPartner is not null && l.TradingPartnerId == subjectPartner.Id)
+            || (l.IntegrationId is { } i && directIds.Contains(i))
+            || (l.ProcessId is { } p && painProcesses.Any(pp => pp.Id == p));
+        var decisions = input.Decisions.Where(d => d.Links.Any(Relevant))
+            .OrderBy(d => d.Status is DecisionStatus.Superseded or DecisionStatus.Reversed).ThenByDescending(d => d.DecidedOn).ThenBy(d => d.Title)
+            .ToList();
+
         var (severity, reasons) = Rate(subjectApp, subjectPartner, integrations, affectedPartners, processes, initiatives);
         return new ImpactReport(subject, NameOf(subject), depth, today, severity, reasons, integrations, affectedApps, affectedPartners,
-            processes, initiatives, vendors, risks, pains);
+            processes, initiatives, vendors, risks, pains, decisions);
     }
 
     private static List<ImpactedProcess> AffectedProcesses(IReadOnlyList<BusinessProcess> all, Application? subjectApp,
@@ -344,6 +358,11 @@ public static class ImpactAnalyzer
                 (v.NextRenewal?.NoticeDeadline is { } nd ? $", notice deadline {D(nd)}{(nd < r.AsOf ? " (passed)" : "")}" : ""));
         }
 
+        if (r.Decisions.Count > 0)
+        {
+            Section("Past decisions", r.Decisions.Count);
+            foreach (var d in r.Decisions) sb.AppendLine($"- {D(d.DecidedOn)} {d.Title} [{PortfolioText.Label(d.Status)}]: {d.DecisionText}");
+        }
         if (r.OpenRisks.Count > 0)
         {
             Section("Open risks", r.OpenRisks.Count);

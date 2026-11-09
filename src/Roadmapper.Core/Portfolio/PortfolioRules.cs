@@ -184,6 +184,17 @@ public static class PortfolioText
 
     public static string Label(ImpactSeverity s) => $"{s} impact";
 
+    public static string Label(HealthRating h) => h.ToString();
+
+    public static string Label(DecisionStatus s) => s.ToString();
+
+    public static string Label(DecisionTargetKind k) => k switch
+    {
+        DecisionTargetKind.RoadmapItem => "Roadmap item",
+        DecisionTargetKind.TradingPartner => "Trading partner",
+        _ => k.ToString(),
+    };
+
     public static string Label(BenefitCategory c) => c switch
     {
         BenefitCategory.CostSavings => "Cost savings",
@@ -224,6 +235,7 @@ public static class PortfolioText
         PainPointStatus s => Label(s),
         KpiDirection d => Label(d),
         BenefitCategory c => Label(c),
+        DecisionStatus s => Label(s),
         BenefitUnit u => Label(u),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),

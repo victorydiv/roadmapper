@@ -164,6 +164,8 @@ else
             <PortfolioActivityList Entries="history" />
         </div>
     </div>
+
+    <DecisionList Target="new DecisionTarget(DecisionTargetKind.Vendor, vendor.Id)" Name="@vendor.Name" />
 }
 
 @if (editingVendor is not null)

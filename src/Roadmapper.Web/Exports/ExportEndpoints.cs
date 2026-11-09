@@ -14,6 +14,11 @@ public static class ExportEndpoints
         app.MapGet("/export/template.csv", () =>
             Results.File(Encoding.UTF8.GetBytes(TemplateCsv()), "text/csv", "roadmap-import-template.csv"));
 
+        // The whole application portfolio as a workbook, one sheet per kind of record.
+        app.MapGet("/export/portfolio.xlsx", async (Roadmapper.Data.Portfolio.PortfolioService svc) =>
+            Results.File(await Roadmapper.Data.Portfolio.PortfolioExport.ToXlsxAsync(svc),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"portfolio-{svc.Today:yyyy-MM-dd}.xlsx"));
+
         var export = app.MapGroup("/export/{productId:int}");
 
         export.MapGet("/roadmap.csv", async (int productId, RoadmapService svc) =>

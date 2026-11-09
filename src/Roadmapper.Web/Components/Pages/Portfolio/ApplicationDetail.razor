@@ -21,6 +21,7 @@ else
         <LifecycleBadge Status="app.Status" />
         <span class="badge tag">@PortfolioText.Label(app.Category)</span>
         <span class="badge tag">@PortfolioText.Label(app.Hosting)</span>
+        <HealthBadge Health="health" ShowScore="true" />
         <a class="btn" href="/portfolio/impact?app=@app.Id" title="What a change to this application touches">Impact analysis</a>
         <button class="btn" @onclick="() => editing = ApplicationDraft.From(app)">Edit</button>
     </PortfolioHeader>
@@ -67,6 +68,14 @@ else
                 <dd>
                     <TimeBadge Quadrant="app.TimeQuadrant" />
                     <span class="muted small">business fit @PortfolioUi.Fit(app.BusinessFit), technical fit @PortfolioUi.Fit(app.TechnicalFit)</span>
+                </dd>
+                <dt>Health</dt>
+                <dd>
+                    @if (health is { } h)
+                    {
+                        <span class="inline-gap"><HealthBadge Health="h" ShowScore="true" /> <span class="muted small">@h.Summary</span></span>
+                    }
+                    else { <span class="muted">Not rated (retired)</span> }
                 </dd>
                 <dt>Own roadmap</dt>
                 <dd>@if (app.Product is { } p) { <a href="/products/@p.Id">@p.Name →</a> } else { <span class="muted">None</span> }</dd>
@@ -286,6 +295,8 @@ else
         </div>
     }
 
+    <DecisionList Target="new DecisionTarget(DecisionTargetKind.Application, app.Id)" Name="@app.Name" />
+
     <div class="card stack" style="margin-top:1rem">
         <h2>History</h2>
         <PortfolioActivityList Entries="history" />
@@ -322,6 +333,7 @@ else
     private IntegrationDraft? editingIntegration;
     private List<ProcessUse> processUses = [];
     private List<Benefit> benefits = [];
+    private AppHealth? health;
 
     private int? newContactId;
     private SupportRole newRole = SupportRole.L1Support;
@@ -351,6 +363,7 @@ else
         integrations = await Svc.GetIntegrationsForApplicationAsync(Id);
         processUses = await Svc.GetProcessesForApplicationAsync(Id);
         benefits = await Svc.GetBenefitsAsync(applicationId: Id);
+        health = (await Svc.GetHealthAsync()).GetValueOrDefault(Id);
         await LoadDependenciesAsync();
     }
 

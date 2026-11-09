@@ -569,3 +569,71 @@ public class BenefitDraft
         b.Notes = DraftText.Clean(Notes);
     }
 }
+
+public class AlternativeDraft
+{
+    public string Option { get; set; } = "";
+    public string? Pros { get; set; }
+    public string? Cons { get; set; }
+    public string? WhyRejected { get; set; }
+
+    public bool IsBlank => string.IsNullOrWhiteSpace(Option) && string.IsNullOrWhiteSpace(Pros)
+        && string.IsNullOrWhiteSpace(Cons) && string.IsNullOrWhiteSpace(WhyRejected);
+}
+
+public class DecisionDraft
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public DateOnly DecidedOn { get; set; }
+    public DecisionStatus Status { get; set; } = DecisionStatus.Decided;
+    public string? Context { get; set; }
+    public string DecisionText { get; set; } = "";
+    public string? Outcome { get; set; }
+    public string? DecidedBy { get; set; }
+    public int? SupersededById { get; set; }
+    /// <summary>Options considered, in order. Blank rows are dropped on save.</summary>
+    public List<AlternativeDraft> Alternatives { get; set; } = new();
+
+    public bool IsNew => Id == 0;
+
+    public static DecisionDraft New(DateOnly today) => new() { DecidedOn = today };
+
+    public static DecisionDraft From(Decision d) => new()
+    {
+        Id = d.Id, Title = d.Title, DecidedOn = d.DecidedOn, Status = d.Status, Context = d.Context, DecisionText = d.DecisionText,
+        Outcome = d.Outcome, DecidedBy = d.DecidedBy, SupersededById = d.SupersededById,
+        Alternatives = d.Alternatives.OrderBy(a => a.SortOrder)
+            .Select(a => new AlternativeDraft { Option = a.Option, Pros = a.Pros, Cons = a.Cons, WhyRejected = a.WhyRejected }).ToList(),
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Title)) return "Give the decision a title.";
+        if (Title.Trim().Length > 300) return "Title can be at most 300 characters.";
+        if (string.IsNullOrWhiteSpace(DecisionText)) return "Say what was decided.";
+        if (DecisionText.Trim().Length > PortfolioRules.MaxNotesLength || Context?.Trim().Length > PortfolioRules.MaxNotesLength
+            || Outcome?.Trim().Length > PortfolioRules.MaxNotesLength)
+            return $"Context, decision and outcome can be at most {PortfolioRules.MaxNotesLength} characters each.";
+        if (DecidedBy?.Trim().Length > PortfolioRules.MaxNameLength) return $"Decided by can be at most {PortfolioRules.MaxNameLength} characters.";
+        if (Alternatives.Any(a => !a.IsBlank && string.IsNullOrWhiteSpace(a.Option))) return "Name each alternative, or clear the row.";
+        if (Alternatives.Any(a => a.Option?.Trim().Length > 500)) return "An alternative's name can be at most 500 characters.";
+        if (Alternatives.Any(a => a.Pros?.Trim().Length > 2000 || a.Cons?.Trim().Length > 2000 || a.WhyRejected?.Trim().Length > 2000))
+            return "Pros, cons and why rejected can be at most 2000 characters each.";
+        if (SupersededById is not null && !IsNew && SupersededById == Id) return "A decision can't supersede itself.";
+        if (SupersededById is not null && Status != DecisionStatus.Superseded) return "Only a superseded decision has a replacement. Set the status to Superseded, or clear “Superseded by”.";
+        return null;
+    }
+
+    public void ApplyTo(Decision d)
+    {
+        d.Title = Title.Trim();
+        d.DecidedOn = DecidedOn;
+        d.Status = Status;
+        d.Context = DraftText.Clean(Context);
+        d.DecisionText = DecisionText.Trim();
+        d.Outcome = DraftText.Clean(Outcome);
+        d.DecidedBy = DraftText.Clean(DecidedBy);
+        d.SupersededById = SupersededById;
+    }
+}

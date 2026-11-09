@@ -21,13 +21,15 @@
 </div>
 
 <nav class="tabs">
-    <NavLink href="/portfolio/applications" class="@(AtPortfolioRoot ? "active" : null)">Applications</NavLink>
+    <NavLink href="/portfolio" Match="NavLinkMatch.All">Dashboard</NavLink>
+    <NavLink href="/portfolio/applications">Applications</NavLink>
     <NavLink href="/portfolio/partners">Trading partners</NavLink>
     <NavLink href="/portfolio/integrations">Integrations</NavLink>
     <NavLink href="/portfolio/map">Map</NavLink>
     <NavLink href="/portfolio/processes">Processes</NavLink>
     <NavLink href="/portfolio/impact">Impact analysis</NavLink>
     <NavLink href="/portfolio/benefits">Benefits</NavLink>
+    <NavLink href="/portfolio/decisions">Decisions</NavLink>
     <NavLink href="/portfolio/vendors">Vendors &amp; contracts</NavLink>
     <NavLink href="/portfolio/contacts">Contacts</NavLink>
 </nav>
@@ -39,7 +41,4 @@
     [Parameter] public (string Label, string Href)? Parent { get; set; }
     /// <summary>Page actions shown at the right of the header.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    /// <summary>"/portfolio" shows the applications list, so its tab should read as current there too.</summary>
-    private bool AtPortfolioRoot => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/') == "portfolio";
 }

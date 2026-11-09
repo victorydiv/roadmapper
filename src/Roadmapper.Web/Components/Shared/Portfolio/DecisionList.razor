@@ -1,0 +1,57 @@
+@* Decisions linked to one record, for its detail page, with "+ Record decision" pre-linked to it. *@
+@inject PortfolioService Svc
+
+<div class="card stack" style="margin-top:1rem">
+    <div class="row">
+        <h2 style="margin:0">Decisions</h2>
+        <span class="muted small">Why things are the way they are. Recorded decisions also show up in impact analysis.</span>
+        <span class="spacer"></span>
+        <button class="btn" @onclick="New">+ Record decision</button>
+    </div>
+    @if (decisions is null)
+    {
+        <div class="muted small">Loading…</div>
+    }
+    else if (decisions.Count == 0)
+    {
+        <div class="muted small">None recorded for @Name.</div>
+    }
+    else
+    {
+        <ul class="dep-list">
+            @foreach (var d in decisions)
+            {
+                <li class="@(d.Status is DecisionStatus.Superseded or DecisionStatus.Reversed ? "muted" : "")">
+                    <span class="small nowrap">@PortfolioUi.Date(d.DecidedOn)</span>
+                    <DecisionStatusBadge Status="d.Status" />
+                    <span><a href="/portfolio/decisions/@d.Id"><b>@d.Title</b></a> <span class="muted small">@Excerpt(d.DecisionText)</span></span>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@if (editing is not null)
+{
+    <DecisionEditor Draft="editing" LinkTo="Target" OnClose="OnClosed" />
+}
+
+@code {
+    [Parameter, EditorRequired] public DecisionTarget Target { get; set; }
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    private List<Decision>? decisions;
+    private DecisionDraft? editing;
+
+    protected override async Task OnParametersSetAsync() => decisions = await Svc.GetDecisionsAsync(Target);
+
+    private void New() => editing = DecisionDraft.New(Svc.Today);
+
+    private async Task OnClosed(int? id)
+    {
+        editing = null;
+        if (id is not null) decisions = await Svc.GetDecisionsAsync(Target);
+    }
+
+    private static string Excerpt(string text) => text.Length > 140 ? text[..137] + "…" : text;
+}

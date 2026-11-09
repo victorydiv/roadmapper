@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -68,6 +68,15 @@ public enum BenefitUnit { USD, Hours, Percent, Count }
 
 /// <summary>Where a benefit stands. See <see cref="BenefitMath.Status"/>.</summary>
 public enum BenefitStatus { NotMeasured, Realizing, AtRisk, Realized }
+
+/// <summary>An application's overall health. See <see cref="PortfolioHealth"/>.</summary>
+public enum HealthRating { Green, Amber, Red }
+
+/// <summary>Superseded: replaced by a later decision. Reversed: undone.</summary>
+public enum DecisionStatus { Proposed, Decided, Superseded, Reversed }
+
+/// <summary>What a decision is linked to.</summary>
+public enum DecisionTargetKind { Application, Integration, Vendor, Contract, Process, RoadmapItem, TradingPartner }
 
 /// <summary>Overall severity of a change impact. See <see cref="ImpactAnalyzer"/>.</summary>
 public enum ImpactSeverity { Low, Medium, High }

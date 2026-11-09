@@ -1,0 +1,241 @@
+@page "/portfolio"
+@page "/portfolio/dashboard"
+@inject PortfolioService Svc
+@inject IJSRuntime JS
+
+<PortfolioHeader Title="Portfolio dashboard" Subtitle="Health, cost, renewals, integration risk, strategic work and the value it's delivering, on one page.">
+    <a class="btn" href="/export/portfolio.xlsx" download title="Every portfolio record, one sheet per kind">Export to Excel</a>
+    <button class="btn" @onclick="PrintAsync">Print</button>
+</PortfolioHeader>
+
+@if (d is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (d.Applications.Count == 0 && d.LiveIntegrations == 0)
+{
+    <div class="card empty">
+        The portfolio is empty. Start with <a href="/portfolio/applications">Applications</a>: add the systems you own, their vendors and contracts.
+    </div>
+}
+else
+{
+    var rated = d.Applications.Where(a => a.Health is not null).ToList();
+    var highRisk = d.RiskyIntegrations.Count(r => r.Risk == RiskLevel.High);
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Application health</span>
+            <span class="health-counts">
+                <span class="health-dot health-Green" title="Green: 80+">● @d.Count(HealthRating.Green)</span>
+                <span class="health-dot health-Amber" title="Amber: 60–79">● @d.Count(HealthRating.Amber)</span>
+                <span class="health-dot health-Red" title="Red: below 60">● @d.Count(HealthRating.Red)</span>
+            </span>
+            <span class="muted small">@rated.Count applications rated</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Annual run cost</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(d.AnnualRunCost)</span>
+            <span class="muted small">across @d.Applications.Count applications</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Integrations</span>
+            <span class="tile-value">@d.LiveIntegrations</span>
+            <span class="small @(highRisk > 0 ? "overdue" : "muted")">@highRisk high risk</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Value realized / yr</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(d.Benefits.RealizedUsd)</span>
+            <span class="muted small">of @PortfolioUi.MoneyShort(d.Benefits.ExpectedUsd) expected@(d.Benefits.AtRisk > 0 ? $" · {d.Benefits.AtRisk} at risk" : "")</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Renewals due</span>
+            <span class="tile-value @(d.Renewals.Any(r => PortfolioRules.NoticeMissed(r.Contract, d.AsOf)) ? "overdue" : d.Renewals.Count > 0 ? "due-soon" : "")">@d.Renewals.Count</span>
+            <span class="muted small">notice within @d.RenewalWarningDays days</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Open pain points</span>
+            <span class="tile-value">@d.OpenPainPoints</span>
+            <span class="small @(d.HighPainPoints > 0 ? "due-soon" : "muted")">@d.HighPainPoints high or critical</span>
+        </div>
+    </div>
+
+    <div class="dash-grid">
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Application health</h2>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/applications">All applications →</a>
+            </div>
+            <ul class="dep-list">
+                @foreach (var a in rated.Take(8))
+                {
+                    <li>
+                        <HealthBadge Health="a.Health" ShowScore="true" />
+                        <a href="/portfolio/applications/@a.Application.Id"><b>@a.Application.Name</b></a>
+                        <TierBadge Tier="a.Application.Criticality" />
+                        <span class="muted small">@(a.Health!.Factors.FirstOrDefault()?.Reason ?? "No issues")@(a.Health.Factors.Count > 1 ? $" (+{a.Health.Factors.Count - 1} more)" : "")</span>
+                    </li>
+                }
+            </ul>
+            <div class="row time-strip">
+                @foreach (var (q, n) in d.Time)
+                {
+                    <span title="@PortfolioText.Describe(q)"><TimeBadge Quadrant="q" /> @n</span>
+                }
+                @if (d.TimeUnrated > 0) { <span class="muted small">@d.TimeUnrated without fit scores</span> }
+            </div>
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Upcoming renewals</h2>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/vendors">Vendors &amp; contracts →</a>
+            </div>
+            @if (d.Renewals.Count == 0)
+            {
+                <div class="muted small">No notice deadlines in the next @d.RenewalWarningDays days.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var r in d.Renewals.Take(8))
+                {
+                    var c = r.Contract;
+                    <li>
+                        <span class="small nowrap @PortfolioUi.NoticeClass(c, d.AsOf, d.RenewalWarningDays)">
+                            @(PortfolioRules.NoticeMissed(c, d.AsOf) ? "Notice missed" : $"Notice by {PortfolioUi.Date(c.NoticeDeadline)}")
+                        </span>
+                        <span><a href="/portfolio/vendors/@c.VendorId"><b>@r.VendorName</b></a> <span class="muted small">@c.Name@(r.Applications.Count > 0 ? $" · {string.Join(", ", r.Applications)}" : "")</span></span>
+                        <span class="spacer"></span>
+                        <span class="small nowrap">@PortfolioUi.Money(c.AnnualValue)@(c.AutoRenews ? " · auto-renews" : "")</span>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Integrations needing attention</h2>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/integrations">All integrations →</a>
+            </div>
+            @if (d.RiskyIntegrations.Count == 0)
+            {
+                <div class="muted small">All live integrations are low risk and reviewed on time.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var r in d.RiskyIntegrations.Take(8))
+                {
+                    var i = r.Integration;
+                    <li>
+                        <RiskBadge Level="r.Risk" />
+                        <span>
+                            <a href="/portfolio/integrations/@i.Id"><b>@i.Name</b></a>
+                            <span class="muted small">@i.SourceName → @i.TargetName</span>
+                        </span>
+                        <span class="spacer"></span>
+                        <TierBadge Tier="i.Criticality" />
+                        @if (PortfolioRules.TopRiskScore(i) is > 0 and var score) { <RiskScore Score="score" /> }
+                        @if (r.ReviewOverdue) { <span class="due-soon small nowrap">review overdue</span> }
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Value by category</h2>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/benefits">Benefits →</a>
+            </div>
+            @if (d.ValueByCategory.Count == 0)
+            {
+                <div class="muted small">No benefits with a dollar value yet.@(d.LaborRate is null ? " Set a labor rate on the Benefits page to value labor-hour savings." : "")</div>
+            }
+            else
+            {
+                var max = d.ValueByCategory.Max(c => Math.Max(c.ExpectedUsd, c.RealizedUsd));
+                <div class="value-bars">
+                    @foreach (var c in d.ValueByCategory)
+                    {
+                        <div class="value-row" title="@($"{PortfolioText.Label(c.Category)}: {PortfolioUi.Money(c.RealizedUsd)} realized of {PortfolioUi.Money(c.ExpectedUsd)} expected per year")">
+                            <span class="small">@PortfolioText.Label(c.Category)</span>
+                            <span class="value-track">
+                                <span class="value-expected" style="width:@Pct(c.ExpectedUsd, max)%"></span>
+                                <span class="value-realized" style="width:@Pct(c.RealizedUsd, max)%"></span>
+                            </span>
+                            <span class="small nowrap">@PortfolioUi.MoneyShort(c.RealizedUsd) / @PortfolioUi.MoneyShort(c.ExpectedUsd)</span>
+                        </div>
+                    }
+                </div>
+                <div class="muted small"><span class="legend-swatch value-realized"></span> realized <span class="legend-swatch value-expected"></span> expected, per year</div>
+            }
+        </div>
+
+        <div class="card stack wide">
+            <div class="row">
+                <h2 style="margin:0">Strategic roadmap work</h2>
+                <span class="muted small">Roadmap items linked to an application or carrying benefits. Progress comes from the roadmap.</span>
+            </div>
+            @if (d.Initiatives.Count == 0)
+            {
+                <div class="muted small">None yet. Link roadmap initiatives to applications, or record benefits on them.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="tree">
+                        <thead><tr><th>Item</th><th>Roadmap</th><th>Applications</th><th>Status</th><th>Progress</th><th>Due</th><th class="num">Benefits</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in d.Initiatives.Take(12))
+                            {
+                                <tr>
+                                    <td class="title-cell"><TypeBadge Type="i.ItemType" /> <a href="/products/@i.ProductId">@i.Title</a></td>
+                                    <td class="small">@i.ProductName</td>
+                                    <td class="small">@(i.Applications.Count > 0 ? string.Join(", ", i.Applications) : "–")</td>
+                                    <td><StatusBadge Status="i.Status" /></td>
+                                    <td class="progress-cell"><div class="progress"><span style="width:@(i.ProgressPct)%"></span></div> <span class="small muted">@i.ProgressPct%</span></td>
+                                    <td class="small @(i.Overdue ? "overdue" : "")">@PortfolioUi.Date(i.EndDate)</td>
+                                    <td class="num">@if (i.Benefits > 0) { <a href="/portfolio/benefits?item=@i.ItemId">@i.Benefits</a> } else { <span class="muted">–</span> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (d.Initiatives.Count > 12) { <div class="muted small">… and @(d.Initiatives.Count - 12) more.</div> }
+            }
+        </div>
+
+        <div class="card stack wide">
+            <div class="row">
+                <h2 style="margin:0">Recent decisions</h2>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/decisions">Decision log →</a>
+            </div>
+            @if (d.RecentDecisions.Count == 0)
+            {
+                <div class="muted small">None recorded yet.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var dec in d.RecentDecisions)
+                {
+                    <li>
+                        <span class="small nowrap">@PortfolioUi.Date(dec.DecidedOn)</span>
+                        <DecisionStatusBadge Status="dec.Status" />
+                        <a href="/portfolio/decisions/@dec.Id"><b>@dec.Title</b></a>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@code {
+    private PortfolioDashboard? d;
+
+    protected override async Task OnInitializedAsync() => d = await Svc.GetDashboardAsync();
+
+    private static string Pct(decimal value, decimal max) =>
+        (max <= 0 ? 0 : Math.Round(value / max * 100m, 1)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}

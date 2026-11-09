@@ -1,0 +1,194 @@
+@page "/portfolio/decisions/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (decision is null)
+{
+    <PageTitle>Decision not found</PageTitle>
+    <div class="card empty">
+        <h2>Decision not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/decisions">Back to the decision log</a></p>
+    </div>
+}
+else
+{
+    <PortfolioHeader Title="@decision.Title" Subtitle="@($"{PortfolioUi.Date(decision.DecidedOn)}{(decision.DecidedBy is { } by ? $" · {by}" : "")}")"
+                     Parent="@(("Decisions", "/portfolio/decisions"))">
+        <DecisionStatusBadge Status="decision.Status" />
+        <button class="btn" @onclick="() => editing = DecisionDraft.From(decision)">Edit</button>
+    </PortfolioHeader>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    @if (decision.SupersededBy is { } next)
+    {
+        <div class="card notice" style="margin-bottom:1rem">Superseded by <a href="/portfolio/decisions/@next.Id">@next.Title</a> (@PortfolioUi.Date(next.DecidedOn)).</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Decision</h2>
+            <div class="notes-plain">@decision.DecisionText</div>
+            @if (decision.Context is { } context)
+            {
+                <h3 class="sub">Context</h3>
+                <div class="notes-plain">@context</div>
+            }
+            <h3 class="sub">Outcome</h3>
+            @if (decision.Outcome is { } outcome)
+            {
+                <div class="notes-plain">@outcome</div>
+            }
+            else
+            {
+                <div class="muted small">Not recorded yet. Come back and say how it turned out.</div>
+            }
+            @if (replaced.Count > 0)
+            {
+                <h3 class="sub">Replaced</h3>
+                <ul class="dep-list">
+                    @foreach (var r in replaced)
+                    {
+                        <li><span class="small">@PortfolioUi.Date(r.DecidedOn)</span> <a href="/portfolio/decisions/@r.Id">@r.Title</a></li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="card stack">
+            <h2>Linked to</h2>
+            <div class="muted small">The decision shows on each of these, and in impact analysis for them.</div>
+            @if (decision.Links.Count == 0)
+            {
+                <div class="muted small">Nothing yet.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var l in decision.Links.OrderBy(l => l.Target.Kind).ThenBy(l => l.TargetName))
+                {
+                    <li>
+                        <span class="badge tag">@PortfolioText.Label(l.Target.Kind)</span>
+                        <DecisionTargetLink Link="l" />
+                        <span class="spacer"></span>
+                        <button class="btn sm" @onclick="() => RunAsync(() => Svc.UnlinkDecisionAsync(l.Id))">Remove</button>
+                    </li>
+                }
+            </ul>
+            <div class="row add-row">
+                <select @bind="newTarget" style="flex:1;width:auto">
+                    <option value="">— link to —</option>
+                    @foreach (var g in targets.Where(t => decision.Links.All(l => l.Target != t.Target)).GroupBy(t => t.Target.Kind))
+                    {
+                        <optgroup label="@Plural(g.Key)">
+                            @foreach (var t in g)
+                            {
+                                <option value="@t.Target.Key">@t.Name@(t.Detail is { } d ? $" ({d})" : "")</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <button class="btn" disabled="@(DecisionTarget.Parse(newTarget) is null)" @onclick="LinkAsync">Link</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>Alternatives considered</h2>
+        @if (decision.Alternatives.Count == 0)
+        {
+            <div class="muted small">None recorded.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead><tr><th>Option</th><th>Pros</th><th>Cons</th><th>Why not chosen</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in decision.Alternatives.OrderBy(a => a.SortOrder))
+                        {
+                            <tr>
+                                <td class="strong">@a.Option</td>
+                                <td class="small">@(a.Pros ?? "–")</td>
+                                <td class="small">@(a.Cons ?? "–")</td>
+                                <td class="small">@(a.WhyRejected ?? "–")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>History</h2>
+        <PortfolioActivityList Entries="history" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <DecisionEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Decision? decision;
+    private bool loaded;
+    private string? error;
+    private string newTarget = "";
+    private List<Decision> replaced = [];
+    private List<DecisionTargetOption> targets = [];
+    private List<PortfolioAuditEntry> history = [];
+    private DecisionDraft? editing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        targets = await Svc.GetDecisionTargetOptionsAsync();
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        decision = await Svc.GetDecisionAsync(Id);
+        if (decision is null) return;
+        replaced = await Svc.GetSupersededByAsync(Id);
+        history = await Svc.GetActivityAsync(PortfolioEntityType.Decision, Id);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task LinkAsync()
+    {
+        if (DecisionTarget.Parse(newTarget) is not { } target) return;
+        await RunAsync(() => Svc.LinkDecisionAsync(Id, target));
+        newTarget = "";
+    }
+
+    private static string Plural(DecisionTargetKind k) => k switch
+    {
+        DecisionTargetKind.Process => "Processes",
+        DecisionTargetKind.RoadmapItem => "Roadmap goals and initiatives",
+        _ => PortfolioText.Label(k) + "s",
+    };
+
+    private async Task OnEditorClosed(int? result)
+    {
+        editing = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/decisions"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+}

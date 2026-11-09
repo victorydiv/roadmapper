@@ -566,6 +566,151 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("Contracts");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Decision", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Context")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DecidedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecisionText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Decision");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SupersededById")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedOn");
+
+                    b.HasIndex("SupersededById");
+
+                    b.ToTable("Decisions", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DecisionAlternative", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Cons")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DecisionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Option")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Pros")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WhyRejected")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecisionId");
+
+                    b.ToTable("DecisionAlternatives", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DecisionLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ContractId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DecisionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("IntegrationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("RoadmapItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TradingPartnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("DecisionId");
+
+                    b.HasIndex("IntegrationId");
+
+                    b.HasIndex("ProcessId");
+
+                    b.HasIndex("RoadmapItemId");
+
+                    b.HasIndex("TradingPartnerId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("DecisionLinks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DecisionLinks_OneTarget", "(\"ApplicationId\" IS NOT NULL) + (\"IntegrationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"ProcessId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) + (\"TradingPartnerId\" IS NOT NULL) = 1");
+                        });
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
                 {
                     b.Property<int>("Id")
@@ -1659,6 +1804,85 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Vendor");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Decision", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Decision", "SupersededBy")
+                        .WithMany()
+                        .HasForeignKey("SupersededById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("SupersededBy");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DecisionAlternative", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Decision", null)
+                        .WithMany("Alternatives")
+                        .HasForeignKey("DecisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DecisionLink", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contract", "Contract")
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Decision", "Decision")
+                        .WithMany("Links")
+                        .HasForeignKey("DecisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Integration", "Integration")
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "Process")
+                        .WithMany()
+                        .HasForeignKey("ProcessId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "RoadmapItem")
+                        .WithMany()
+                        .HasForeignKey("RoadmapItemId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TradingPartner")
+                        .WithMany()
+                        .HasForeignKey("TradingPartnerId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Decision");
+
+                    b.Navigation("Integration");
+
+                    b.Navigation("Process");
+
+                    b.Navigation("RoadmapItem");
+
+                    b.Navigation("TradingPartner");
+
+                    b.Navigation("Vendor");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.Contact", "Owner")
@@ -1966,6 +2190,13 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Kpis");
 
                     b.Navigation("PainPoints");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Decision", b =>
+                {
+                    b.Navigation("Alternatives");
+
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>

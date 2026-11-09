@@ -14,6 +14,7 @@ public partial class PortfolioService
         return await db.Vendors.AsNoTracking()
             .Include(v => v.Contracts)
             .Include(v => v.AccountManager)
+            .Include(v => v.TechnicalContact)
             .Include(v => v.Applications)
             .OrderBy(v => v.Name)
             .AsSplitQuery()
