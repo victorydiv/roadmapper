@@ -56,23 +56,47 @@ public static class MapLayout
     };
 
     /// <summary>
-    /// Columns for a dependency view. Which nodes appear comes from the dependency walk (up to <paramref name="depth"/>
-    /// integrations away); where they sit follows the path the data takes, so an integration routed through a middle
-    /// hop draws as source → hop → target in a line. Upstream nodes get negative columns, downstream positive; a node
-    /// that is both (it sends to and receives from the focus, by any route) is always drawn downstream, so a two-way
-    /// path stays in one line and the other flows curve back to it.
+    /// Columns for a dependency view (focus at 0, upstream negative, downstream positive).
+    /// <list type="bullet">
+    /// <item>Which nodes appear comes from the dependency walk, up to <paramref name="depth"/> integrations away.</item>
+    /// <item>Placement lays out whole integrations in their recorded direction (source → via → target), even two-way
+    /// ones: "Morton → Synapse via Boomi" draws Morton | Boomi | Synapse wherever it's seen from.</item>
+    /// <item>It starts with the selected node's own integrations, longest routes first, then works outward from what is
+    /// placed. A node keeps its first place, so a routed path stays in one line and a direct shortcut between the
+    /// same two nodes curves back to it.</item>
+    /// </list>
     /// </summary>
     public static Dictionary<NodeRef, int> FocusColumns(PortfolioGraph graph, NodeRef focus, int depth)
     {
         var down = graph.Downstream(focus, depth).ToDictionary(r => r.Node, r => r.Distance);
         var up = graph.Upstream(focus, depth).ToDictionary(r => r.Node, r => r.Distance);
-        var downPath = graph.PathDistances(focus, downstream: true, down.Keys.ToHashSet());
-        var upPath = graph.PathDistances(focus, downstream: false, up.Keys.ToHashSet());
+        var members = down.Keys.Concat(up.Keys).ToHashSet();
 
         var columns = new Dictionary<NodeRef, int> { [focus] = 0 };
-        foreach (var (node, distance) in down) columns[node] = downPath.GetValueOrDefault(node, distance);
-        foreach (var (node, distance) in up)
-            if (!columns.ContainsKey(node)) columns[node] = -upPath.GetValueOrDefault(node, distance);
+        var queue = new Queue<NodeRef>([focus]);
+        while (queue.TryDequeue(out var node))
+        {
+            // Partners are end points: lay out the focus's own flows, never flows beyond another partner.
+            if (node.IsPartner && node != focus) continue;
+            var integrations = graph.IntegrationsTouching(node).Select(graph.Edge)
+                .OrderByDescending(e => e.Via is null ? 2 : 3).ThenBy(e => e.IntegrationId);
+            foreach (var e in integrations)
+            {
+                var path = PortfolioGraph.PathOf(e);
+                var at = path.ToList().IndexOf(node);
+                for (var j = 0; j < path.Count; j++)
+                {
+                    var other = path[j];
+                    if (j == at || columns.ContainsKey(other) || !members.Contains(other)) continue;
+                    columns[other] = columns[node] + (j - at);
+                    queue.Enqueue(other);
+                }
+            }
+        }
+
+        // Anything the walk found that no laid-out integration reached: downstream first, by distance.
+        foreach (var node in members.Where(n => !columns.ContainsKey(n)))
+            columns[node] = down.TryGetValue(node, out var d) ? d : -up[node];
         return columns;
     }
 

@@ -31,40 +31,65 @@ public sealed record GraphEdge(int IntegrationId, NodeRef Source, NodeRef Target
 {
     public static GraphEdge From(Integration i) =>
         new(i.Id, i.SourceNode, i.TargetNode, i.ViaNode, i.Direction == FlowDirection.Bidirectional);
+
+    /// <summary>The trading partner at one end, if any: the integration carries that partner's data.</summary>
+    public NodeRef? Partner => Source.IsPartner ? Source : Target.IsPartner ? Target : null;
 }
 
 /// <summary>An application or partner reached from the start, <see cref="Distance"/> integrations away, through <see cref="IntegrationIds"/>.</summary>
 public sealed record Reach(NodeRef Node, int Distance, IReadOnlyList<int> IntegrationIds);
 
 /// <summary>
-/// Applications, trading partners and the integrations between them, for dependency questions: what feeds this
-/// node (upstream) and what it feeds (downstream). Each integration is one step. An integration that runs through
-/// a middle hop links source → via, via → target and source → target, so the source's direct dependents are
-/// both the hop and the target. Bidirectional integrations count in both directions. Cycles are fine. Trading
-/// partners are end points: walks stop at them. Walking from a partner uses only that partner's own integrations and
-/// integrations between your applications, never another partner's: Synapse sending one customer's data to Cleo is
-/// not a dependency of a different customer that also uses Synapse.
+/// Applications, trading partners and the integrations between them, for dependency questions: what feeds a node
+/// (upstream) and what it feeds (downstream).
+/// <list type="bullet">
+/// <item>Each integration is one step. One routed through a middle hop links source → via, via → target and
+/// source → target, so the source's direct dependents are both the hop and the target. Bidirectional integrations
+/// count both ways. Cycles are fine.</item>
+/// <item>Data stays with its partner. An integration with a trading partner at one end carries only that partner's
+/// data, so a walk that has followed one partner's integration never continues along another partner's: Synapse
+/// passing PCP's data to Cleo is no dependency of Morton Salt, or of Boomi, which only carries Morton's.
+/// Integrations between your own applications carry everyone's data and are always followed.</item>
+/// <item>Partners are end points: a walk arrives at a partner but never continues through one.</item>
+/// </list>
 /// </summary>
 public sealed class PortfolioGraph
 {
-    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _forward = new();
-    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _backward = new();
+    private sealed record Step(NodeRef To, int IntegrationId, NodeRef? Partner);
+
+    private sealed class Adjacency
+    {
+        public readonly Dictionary<NodeRef, List<Step>> Forward = new();
+        public readonly Dictionary<NodeRef, List<Step>> Backward = new();
+
+        public void Add(NodeRef from, NodeRef to, GraphEdge e, bool bothWays)
+        {
+            Put(Forward, from, new Step(to, e.IntegrationId, e.Partner));
+            Put(Backward, to, new Step(from, e.IntegrationId, e.Partner));
+            if (!bothWays) return;
+            Put(Forward, to, new Step(from, e.IntegrationId, e.Partner));
+            Put(Backward, from, new Step(to, e.IntegrationId, e.Partner));
+        }
+
+        private static void Put(Dictionary<NodeRef, List<Step>> map, NodeRef from, Step step)
+        {
+            if (from == step.To) return;
+            var list = map.TryGetValue(from, out var l) ? l : map[from] = new();
+            if (!list.Contains(step)) list.Add(step);
+        }
+    }
+
+    // Dependency steps (with the source → target shortcut of a routed integration), both directions for two-way flows.
+    private readonly Adjacency _deps = new();
     private readonly Dictionary<NodeRef, List<int>> _touching = new();
-    // The same steps without the source → target shortcut of a routed integration: the path as drawn.
-    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathForward = new();
-    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathBackward = new();
-    // The trading partners at either end of each integration (none for application-to-application flows).
-    private readonly Dictionary<int, NodeRef[]> _partnersOf = new();
+    private readonly Dictionary<int, GraphEdge> _edges = new();
 
     public PortfolioGraph(IEnumerable<GraphEdge> edges)
     {
         foreach (var e in edges)
         {
-            foreach (var (from, to) in Hops(e))
-                Link(_forward, _backward, from, to, e);
-            foreach (var (from, to) in PathHops(e))
-                Link(_pathForward, _pathBackward, from, to, e);
-            _partnersOf[e.IntegrationId] = new[] { e.Source, e.Target }.Where(n => n.IsPartner).ToArray();
+            foreach (var (from, to) in Hops(e)) _deps.Add(from, to, e, e.Bidirectional);
+            _edges[e.IntegrationId] = e;
             var ends = new List<NodeRef> { e.Source, e.Target };
             if (e.Via is { } v) ends.Add(v);
             foreach (var node in ends)
@@ -77,7 +102,7 @@ public sealed class PortfolioGraph
 
     public static PortfolioGraph From(IEnumerable<Integration> integrations) => new(integrations.Select(GraphEdge.From));
 
-    /// <summary>The node-to-node steps one integration makes.</summary>
+    /// <summary>The node-to-node dependency steps one integration makes (including the source → target shortcut).</summary>
     public static IEnumerable<(NodeRef From, NodeRef To)> Hops(GraphEdge e)
     {
         yield return (e.Source, e.Target);
@@ -99,94 +124,59 @@ public sealed class PortfolioGraph
         else yield return (e.Source, e.Target);
     }
 
-    private static void Link(Dictionary<NodeRef, List<(NodeRef, int)>> forward, Dictionary<NodeRef, List<(NodeRef, int)>> backward,
-        NodeRef from, NodeRef to, GraphEdge e)
-    {
-        Add(forward, from, to, e.IntegrationId);
-        Add(backward, to, from, e.IntegrationId);
-        if (!e.Bidirectional) return;
-        Add(forward, to, from, e.IntegrationId);
-        Add(backward, from, to, e.IntegrationId);
-    }
+    /// <summary>The integration with this id, as the graph holds it.</summary>
+    public GraphEdge Edge(int integrationId) => _edges[integrationId];
 
-    /// <summary>
-    /// How many steps along the drawn path (source → via → target) each node in <paramref name="within"/> is from
-    /// <paramref name="start"/>, downstream or upstream. Used to lay out a dependency map so a middle hop sits
-    /// between the two ends rather than beside the target. Same partner rules as <see cref="Downstream"/>.
-    /// </summary>
-    public Dictionary<NodeRef, int> PathDistances(NodeRef start, bool downstream, IReadOnlySet<NodeRef> within)
-    {
-        var adjacency = downstream ? _pathForward : _pathBackward;
-        var distances = new Dictionary<NodeRef, int> { [start] = 0 };
-        var queue = new Queue<NodeRef>([start]);
-        while (queue.TryDequeue(out var from))
-        {
-            if (from.IsPartner && from != start) continue;
-            if (!adjacency.TryGetValue(from, out var next)) continue;
-            foreach (var (to, integrationId) in next.OrderBy(n => n.To))
-            {
-                if (distances.ContainsKey(to) || !within.Contains(to) || !Usable(start, to, integrationId)) continue;
-                distances[to] = distances[from] + 1;
-                queue.Enqueue(to);
-            }
-        }
-        distances.Remove(start);
-        return distances;
-    }
+    /// <summary>The nodes an integration's data passes, in its recorded direction: source, via (if any), target.</summary>
+    public static IReadOnlyList<NodeRef> PathOf(GraphEdge e) => e.Via is { } v ? [e.Source, v, e.Target] : [e.Source, e.Target];
 
     /// <summary>Every integration in which the node is the source, target or middle hop.</summary>
     public IReadOnlyList<int> IntegrationsTouching(NodeRef node) => _touching.TryGetValue(node, out var list) ? list : [];
 
-    /// <summary>Nodes that receive data from <paramref name="start"/>, directly or through others, up to <paramref name="maxDepth"/> steps.</summary>
-    public IReadOnlyList<Reach> Downstream(NodeRef start, int maxDepth) => Walk(_forward, start, maxDepth);
+    /// <summary>Nodes that receive data from <paramref name="start"/>, directly or through others, up to <paramref name="maxDepth"/> integrations away.</summary>
+    public IReadOnlyList<Reach> Downstream(NodeRef start, int maxDepth) => Walk(_deps.Forward, start, maxDepth);
 
-    /// <summary>Nodes that send data to <paramref name="start"/>, directly or through others, up to <paramref name="maxDepth"/> steps.</summary>
-    public IReadOnlyList<Reach> Upstream(NodeRef start, int maxDepth) => Walk(_backward, start, maxDepth);
+    /// <summary>Nodes that send data to <paramref name="start"/>, directly or through others, up to <paramref name="maxDepth"/> integrations away.</summary>
+    public IReadOnlyList<Reach> Upstream(NodeRef start, int maxDepth) => Walk(_deps.Backward, start, maxDepth);
 
     /// <summary>
-    /// Breadth-first walk. Trading partners are end points: the walk can arrive at a partner but never carries on
-    /// through one, and a walk that starts at a partner never reports other partners. Two customers that use the
-    /// same WMS depend on the WMS, not on each other.
+    /// Breadth-first over (node, whose data) states, so a node reached carrying one partner's data can still be
+    /// reached again carrying another's or everyone's. Each node is reported once, at its shortest distance, with
+    /// every integration that reaches it at that distance.
     /// </summary>
-    private IReadOnlyList<Reach> Walk(Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> adjacency, NodeRef start, int maxDepth)
+    private static List<Reach> Walk(Dictionary<NodeRef, List<Step>> adjacency, NodeRef start, int maxDepth)
     {
-        var result = new List<Reach>();
-        var seen = new HashSet<NodeRef> { start };
-        var frontier = new List<NodeRef> { start };
+        var startState = (Node: start, Carrying: start.IsPartner ? start : (NodeRef?)null);
+        var seenStates = new HashSet<(NodeRef, NodeRef?)> { startState };
+        var found = new Dictionary<NodeRef, (int Distance, SortedSet<int> Ids)>();
+        var frontier = new List<(NodeRef Node, NodeRef? Carrying)> { startState };
+
         for (var distance = 1; distance <= maxDepth && frontier.Count > 0; distance++)
         {
-            // Every integration that reaches a new node from the previous layer, in a stable order.
-            var reached = new SortedDictionary<NodeRef, SortedSet<int>>();
-            foreach (var from in frontier)
+            var next = new List<(NodeRef, NodeRef?)>();
+            foreach (var (node, carrying) in frontier)
             {
-                if (!adjacency.TryGetValue(from, out var next)) continue;
-                foreach (var (to, integrationId) in next)
+                // Partners are end points; only the start may be one.
+                if (node.IsPartner && node != start) continue;
+                if (!adjacency.TryGetValue(node, out var steps)) continue;
+                foreach (var step in steps.OrderBy(s => s.To).ThenBy(s => s.IntegrationId))
                 {
-                    if (seen.Contains(to) || !Usable(start, to, integrationId)) continue;
-                    (reached.TryGetValue(to, out var ids) ? ids : reached[to] = new()).Add(integrationId);
+                    if (step.To == start) continue;
+                    // An integration with a partner carries only that partner's data.
+                    if (step.Partner is { } p && carrying is { } c && p != c) continue;
+                    var nowCarrying = step.Partner ?? carrying;
+
+                    if (!found.TryGetValue(step.To, out var f)) found[step.To] = (distance, new SortedSet<int> { step.IntegrationId });
+                    else if (f.Distance == distance) f.Ids.Add(step.IntegrationId);
+
+                    if (seenStates.Add((step.To, nowCarrying))) next.Add((step.To, nowCarrying));
                 }
             }
-            foreach (var (node, ids) in reached)
-            {
-                seen.Add(node);
-                result.Add(new Reach(node, distance, ids.ToList()));
-            }
-            frontier = reached.Keys.Where(n => !n.IsPartner).ToList();
+            frontier = next;
         }
-        return result;
-    }
 
-    /// <summary>
-    /// Whether a walk from <paramref name="start"/> may take this step: from a partner, never onto another partner and
-    /// never along an integration that belongs to another partner.
-    /// </summary>
-    private bool Usable(NodeRef start, NodeRef to, int integrationId) =>
-        !start.IsPartner || (!to.IsPartner && _partnersOf.GetValueOrDefault(integrationId, []).All(p => p == start));
-
-    private static void Add(Dictionary<NodeRef, List<(NodeRef, int)>> map, NodeRef from, NodeRef to, int integrationId)
-    {
-        if (from == to) return;
-        var list = map.TryGetValue(from, out var l) ? l : map[from] = new();
-        if (!list.Contains((to, integrationId))) list.Add((to, integrationId));
+        return found.OrderBy(f => f.Value.Distance).ThenBy(f => f.Key)
+            .Select(f => new Reach(f.Key, f.Value.Distance, f.Value.Ids.ToList()))
+            .ToList();
     }
 }

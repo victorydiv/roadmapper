@@ -188,7 +188,31 @@ public class MapLayoutTests
         Assert.Equal(-1, columns[P(1)]);
         Assert.Equal(1, columns[A(3)]);
         Assert.Equal(2, columns[A(4)]);
-        Assert.Equal(1, columns[A(5)]); // both up- and downstream: ties go downstream
+        Assert.Equal(1, columns[A(5)]); // two-way, recorded as app 2 → app 5: downstream
+    }
+
+    [Fact]
+    public void An_integration_platform_sees_only_the_flows_it_carries_in_their_recorded_direction()
+    {
+        // Morton (partner 3) ⇄ Synapse (app 1) via Boomi (app 5); PCP (partner 2) ⇄ Synapse via Cleo (app 2);
+        // ACH (partner 1) ⇄ Synapse via Cleo; Synapse → PCP by SFTP.
+        var g = new PortfolioGraph([
+            new GraphEdge(5, P(3), A(1), Via: A(5), Bidirectional: true),
+            new GraphEdge(3, P(2), A(1), Via: A(2), Bidirectional: true),
+            new GraphEdge(1, P(1), A(1), Via: A(2), Bidirectional: true),
+            new GraphEdge(4, A(1), P(2)),
+        ]);
+
+        // Boomi carries only Morton's data: Morton | Boomi | Synapse, and nothing of Cleo's customers.
+        var boomi = MapLayout.FocusColumns(g, A(5), 5);
+        Assert.Equal(new[] { A(1), A(5), P(3) }.Order(), boomi.Keys.Order());
+        Assert.Equal(-1, boomi[P(3)]);
+        Assert.Equal(1, boomi[A(1)]);
+        Assert.Equal([A(1), P(3)], g.Downstream(A(5), 5).Select(r => r.Node).Order());
+
+        // Cleo carries ACH's and PCP's data, not Morton's.
+        Assert.DoesNotContain(P(3), g.Downstream(A(2), 5).Select(r => r.Node));
+        Assert.DoesNotContain(A(5), g.Downstream(A(2), 5).Select(r => r.Node));
     }
 
     [Fact]
@@ -201,10 +225,10 @@ public class MapLayoutTests
         Assert.Equal(2, columns[A(1)]);
         Assert.False(columns.ContainsKey(A(3))); // two integrations away: outside depth 1
 
-        // From the WMS's side the customer sits beyond the platform, and the TMS-like app 3 is downstream.
+        // From the WMS's side, the flow is recorded customer → WMS: customer | platform | WMS, with app 3 downstream.
         var fromWms = MapLayout.FocusColumns(g, A(1), 1);
-        Assert.Equal(1, fromWms[A(2)]);
-        Assert.Equal(2, fromWms[P(1)]);
+        Assert.Equal(-1, fromWms[A(2)]);
+        Assert.Equal(-2, fromWms[P(1)]);
         Assert.Equal(1, fromWms[A(3)]);
     }
 

@@ -25,8 +25,8 @@ public static class IntegrationMapSvg
     private const string FontFamily = "Segoe UI, system-ui, -apple-system, sans-serif";
     private const string Ink = "#1d2330", Muted = "#667085", Line = "#e1e4ea";
     private const string PartnerFill = "#f6f3fd", PartnerStroke = "#b9a6e3";
-    /// <summary>How far a line that skips a column bows above or below the row; and the room kept for it.</summary>
-    private const double ArcLift = 76, ArcRoom = 48;
+    /// <summary>How far past the boxes a line that skips a column bows; and the room kept for it.</summary>
+    private const double ArcClearance = 14, ArcRoom = 48;
 
     public static string TypeColor(IntegrationType t) => t switch
     {
@@ -107,7 +107,7 @@ public static class IntegrationMapSvg
         static string Count(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
         var subtitle = Count(appCount, "application", "applications") + (partnerCount > 0 ? $" · {Count(partnerCount, "trading partner", "trading partners")}" : "")
             + $" · {Count(shown.Count, "integration", "integrations")} · {today.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"
-            + (focusMode ? " · anything that both sends and receives is shown downstream" : "");
+            + (focusMode ? " · flows run left to right in their recorded direction" : "");
         svg.Append($"""<text x="{F(MapLayout.Margin)}" y="42" fill="{Muted}">{E(subtitle)}</text>""");
 
         if (nodes.Count == 0)
@@ -130,6 +130,7 @@ public static class IntegrationMapSvg
             .SelectMany(g => g.Select((s, k) => (s, offset: (k - (g.Count() - 1) / 2.0) * 7)))
             .ToDictionary(x => x.s, x => x.offset);
         var risks = new List<(double X, double Y, RiskLevel Level, Integration I)>();
+        var boxExtent = (Top: top + layout.Boxes.Values.Min(b => b.Y), Bottom: top + layout.Boxes.Values.Max(b => b.Y) + MapLayout.NodeHeight);
         foreach (var i in shown)
         {
             var color = TypeColor(i.Type);
@@ -141,7 +142,7 @@ public static class IntegrationMapSvg
             foreach (var s in segments.Where(s => s.IntegrationId == i.Id))
             {
                 var (a, b) = (layout.Boxes[s.From], layout.Boxes[s.To]);
-                var (path, m) = Curve(a, b, top, lanes[s]);
+                var (path, m) = Curve(a, b, top, lanes[s], boxExtent);
                 // In a dependency view, flows between two neighbors of the same rank are context, not the path to or from the selected node: fade them.
                 var side = focusMode && a.ColumnIndex == b.ColumnIndex && s.From != focus && s.To != focus;
                 if (!side) mid ??= m;
@@ -221,7 +222,7 @@ public static class IntegrationMapSvg
     }
 
     /// <summary>A smooth curve between the facing sides of two boxes (or out and back on the right when they share a column), and its midpoint.</summary>
-    private static (string Path, (double X, double Y) Mid) Curve(NodeBox a, NodeBox b, double top, double lane)
+    private static (string Path, (double X, double Y) Mid) Curve(NodeBox a, NodeBox b, double top, double lane, (double Top, double Bottom) boxes)
     {
         var (w, h) = (MapLayout.NodeWidth, MapLayout.NodeHeight);
         var ay = a.Y + top + h / 2 + lane;
@@ -239,11 +240,11 @@ public static class IntegrationMapSvg
         }
         if (span > 1)
         {
-            // Skipping a column: arc over the boxes in between (forward flows above, backward flows below) instead of through them.
-            var lift = ArcLift + 12 * (span - 2);
-            (cy0, cy1) = b.ColumnIndex > a.ColumnIndex
-                ? (Math.Min(ay, by) - lift, Math.Min(ay, by) - lift)
-                : (Math.Max(ay, by) + lift, Math.Max(ay, by) + lift);
+            // Skipping a column: arc clear of every box (forward flows above, backward flows below) instead of through them.
+            // A cubic with both control points at cy peaks at (ay + by) / 8 + 0.75 * cy; solve for a peak just past the boxes.
+            var clearance = ArcClearance + 6 * (span - 2) + Math.Abs(lane);
+            var peak = b.ColumnIndex > a.ColumnIndex ? boxes.Top - clearance : boxes.Bottom + clearance;
+            cy0 = cy1 = (peak - (ay + by) / 8) / 0.75;
             (c0, c1) = (x0 + (x1 - x0) / 4, x1 - (x1 - x0) / 4);
         }
         var mid = ((x0 + 3 * c0 + 3 * c1 + x1) / 8, (ay + 3 * cy0 + 3 * cy1 + by) / 8);
