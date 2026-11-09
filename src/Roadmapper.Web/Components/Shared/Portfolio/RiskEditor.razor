@@ -1,0 +1,115 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New risk" : "Edit risk")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(false)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <label class="field">Risk
+                    <InputTextArea @bind-Value="draft.Description" placeholder="What could go wrong, and what it would cause" autofocus />
+                </label>
+                <div class="grid-4">
+                    <label class="field" title="1 = rare, 5 = almost certain">Likelihood
+                        <InputSelect @bind-Value="draft.Likelihood">
+                            @foreach (var n in Scale)
+                            {
+                                <option value="@n">@n</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="1 = minor, 5 = operations stop">Impact
+                        <InputSelect @bind-Value="draft.Impact">
+                            @foreach (var n in Scale)
+                            {
+                                <option value="@n">@n</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <div class="field">Score
+                        <div><RiskScore Score="draft.Score" /></div>
+                    </div>
+                    <label class="field">Status
+                        <InputSelect @bind-Value="draft.Status">
+                            @foreach (var s in Enum.GetValues<RiskStatus>())
+                            {
+                                <option value="@s">@PortfolioText.Label(s)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+                <label class="field">Mitigation
+                    <InputTextArea @bind-Value="draft.Mitigation" placeholder="What reduces the likelihood or impact" />
+                </label>
+                <div class="grid-2">
+                    <label class="field">Owner
+                        <ContactSelect Contacts="contacts" Vendors="vendors" @bind-Value="draft.OwnerId" />
+                    </label>
+                    <label class="field">Raised on
+                        <InputDate @bind-Value="draft.RaisedOn" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Delete</button>
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(false)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Add" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RiskDraft Draft { get; set; } = default!;
+    /// <summary>Called with true when the risk was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private static readonly int[] Scale = [1, 2, 3, 4, 5];
+
+    private RiskDraft draft = default!;
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private bool saving;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveRiskAsync(draft);
+            await CloseAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteRiskAsync(draft.Id);
+        await CloseAsync(true);
+    }
+
+    private Task CloseAsync(bool changed) => OnClose.InvokeAsync(changed);
+}

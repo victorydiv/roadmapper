@@ -1,0 +1,5 @@
+<span class="score-chip risk-@PortfolioRules.ScoreLevel(Score)" title="Likelihood × impact">@Score</span>
+
+@code {
+    [Parameter, EditorRequired] public int Score { get; set; }
+}

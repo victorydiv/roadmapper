@@ -1,0 +1,163 @@
+@page "/portfolio/integrations"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Integrations" Subtitle="Every flow of data between your applications and trading partners: what it's for, who owns it and how risky it is.">
+    <a class="btn" href="/portfolio/map">View map</a>
+    <button class="btn primary" @onclick="() => editing = NewDraft()">+ New integration</button>
+</PortfolioHeader>
+
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (items is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (items.Count == 0)
+{
+    <div class="card empty stack">
+        <div>No integrations yet. Add the flows between your WMS, TMS, ERP, EDI platform and partners to see dependencies and risk.</div>
+        <div class="row" style="justify-content:center">
+            <button class="btn primary" @onclick="() => editing = NewDraft()">+ New integration</button>
+            @if (canSeed)
+            {
+                <button class="btn" @onclick="SeedAsync">Add sample integrations</button>
+            }
+        </div>
+    </div>
+}
+else
+{
+    var live = items.Where(i => i.Status != LifecycleStatus.Retired).ToList();
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Live integrations</span>
+            <span class="tile-value">@live.Count</span>
+            <span class="muted small">@live.Count(i => i.Criticality == Criticality.Tier1) Tier 1</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">High risk</span>
+            <span class="tile-value @(HighRisk > 0 ? "overdue" : "")">@HighRisk</span>
+            <a class="small" href="" @onclick="() => risk = RiskLevel.High" @onclick:preventDefault>Show them</a>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Reviews overdue</span>
+            <span class="tile-value @(Overdue > 0 ? "due-soon" : "")">@Overdue</span>
+            <span class="muted small">reviewed every @settingsMonths months by default</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Open risks</span>
+            <span class="tile-value">@live.Sum(i => i.Risks.Count(r => r.IsActive))</span>
+            <span class="muted small">@live.Count(i => i.Type == IntegrationType.Manual) manual flows</span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input placeholder="Search name, application or purpose" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="type">
+            <option value="">All types</option>
+            @foreach (var t in Enum.GetValues<IntegrationType>())
+            {
+                <option value="@t">@PortfolioText.Label(t)</option>
+            }
+        </select>
+        <select @bind="tier">
+            <option value="">All tiers</option>
+            @foreach (var t in Enum.GetValues<Criticality>())
+            {
+                <option value="@t">@PortfolioText.Label(t)</option>
+            }
+        </select>
+        <select @bind="risk">
+            <option value="">Any risk</option>
+            @foreach (var r in Enum.GetValues<RiskLevel>().Reverse())
+            {
+                <option value="@r">@PortfolioText.Label(r)</option>
+            }
+        </select>
+        <select @bind="status">
+            <option value="">All but retired</option>
+            @foreach (var s in Enum.GetValues<LifecycleStatus>())
+            {
+                <option value="@s">@PortfolioText.Label(s)</option>
+            }
+        </select>
+        <label class="check"><input type="checkbox" @bind="overdueOnly" /> Review overdue</label>
+    </div>
+
+    <div class="card">
+        <IntegrationTable Items="Filtered" Today="today" />
+        @if (!Filtered.Any())
+        {
+            <div class="empty muted">No integrations match these filters.</div>
+        }
+    </div>
+}
+
+@if (editing is not null)
+{
+    <IntegrationEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<Integration>? items;
+    private IntegrationDraft? editing;
+    private DateOnly today;
+    private int settingsMonths = 12;
+    private bool canSeed, overdueOnly;
+    private string? error;
+    private string search = "";
+    private IntegrationType? type;
+    private Criticality? tier;
+    private RiskLevel? risk;
+    private LifecycleStatus? status;
+
+    private int HighRisk => items!.Count(i => PortfolioRules.RiskLevel(i, today) == RiskLevel.High);
+    private int Overdue => items!.Count(i => PortfolioRules.ReviewOverdue(i, today));
+
+    private IEnumerable<Integration> Filtered => items!
+        .Where(i => status is { } s ? i.Status == s : i.Status != LifecycleStatus.Retired)
+        .Where(i => type is null || i.Type == type)
+        .Where(i => tier is null || i.Criticality == tier)
+        .Where(i => risk is null || PortfolioRules.RiskLevel(i, today) == risk)
+        .Where(i => !overdueOnly || PortfolioRules.ReviewOverdue(i, today))
+        .Where(i => string.IsNullOrWhiteSpace(search)
+            || i.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || i.BusinessPurpose.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (i.MessageFormat?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || new[] { i.Source, i.Target, i.Via }.Any(a => a?.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderBy(i => PortfolioRules.RiskLevel(i, today) == RiskLevel.High ? 0 : 1).ThenBy(i => i.Criticality).ThenBy(i => i.Name);
+
+    private IntegrationDraft NewDraft() => new() { ReviewIntervalMonths = settingsMonths, LastReviewDate = today };
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Svc.Today;
+        settingsMonths = (await Svc.GetSettingsAsync()).DefaultReviewIntervalMonths;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        items = await Svc.GetIntegrationsAsync();
+        canSeed = items.Count == 0 && await Svc.CanSeedSampleIntegrationsAsync();
+    }
+
+    private async Task OnEditorClosed(int? id)
+    {
+        editing = null;
+        if (id is > 0) Nav.NavigateTo($"/portfolio/integrations/{id}");
+        else if (id is not null) await ReloadAsync();
+    }
+
+    private async Task SeedAsync()
+    {
+        error = null;
+        try { await Svc.SeedSampleIntegrationsAsync(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+}

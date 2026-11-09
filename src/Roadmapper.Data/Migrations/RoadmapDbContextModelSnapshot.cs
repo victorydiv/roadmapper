@@ -419,6 +419,151 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("Contracts");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BusinessPurpose")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Criticality")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("LastReviewDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MessageFormat")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("OwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ReviewIntervalMonths")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(12);
+
+                    b.Property<int>("SourceApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TargetApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ViaApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("SourceApplicationId");
+
+                    b.HasIndex("TargetApplicationId");
+
+                    b.HasIndex("ViaApplicationId");
+
+                    b.ToTable("Integrations", t =>
+                        {
+                            t.HasCheckConstraint("CK_Integrations_SourceNotTarget", "\"SourceApplicationId\" <> \"TargetApplicationId\"");
+                        });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.IntegrationRisk", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Impact")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("IntegrationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Likelihood")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Mitigation")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("OwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("RaisedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IntegrationId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("IntegrationRisks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IntegrationRisks_Scale", "\"Likelihood\" BETWEEN 1 AND 5 AND \"Impact\" BETWEEN 1 AND 5");
+                        });
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioAuditEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -1095,6 +1240,57 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Vendor");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Target")
+                        .WithMany()
+                        .HasForeignKey("TargetApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Via")
+                        .WithMany()
+                        .HasForeignKey("ViaApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("Source");
+
+                    b.Navigation("Target");
+
+                    b.Navigation("Via");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.IntegrationRisk", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Integration", "Integration")
+                        .WithMany("Risks")
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Integration");
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.Contact", "AccountManager")
@@ -1237,6 +1433,11 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Initiatives");
 
                     b.Navigation("SupportContacts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
+                {
+                    b.Navigation("Risks");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>

@@ -1,0 +1,57 @@
+<div class="table-wrap">
+    <table class="tree">
+        <thead>
+            <tr>
+                <th>Integration</th>
+                <th>Flow</th>
+                <th>Type</th>
+                <th>Frequency</th>
+                <th>Tier</th>
+                <th>Status</th>
+                <th>Owner</th>
+                <th>Last review</th>
+                <th>Risk</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Items)
+            {
+                var overdue = PortfolioRules.ReviewOverdue(i, Today);
+                <tr class="@(i.Status == LifecycleStatus.Retired ? "muted" : "")">
+                    <td class="title-cell"><a class="title-link" href="/portfolio/integrations/@i.Id">@i.Name</a></td>
+                    <td class="small">
+                        <span class="inline-gap">
+                            <AppRef App="i.Source" Id="i.SourceApplicationId" Current="CurrentAppId" />
+                            <span class="muted">@(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
+                            <AppRef App="i.Target" Id="i.TargetApplicationId" Current="CurrentAppId" />
+                            @if (i.Via is { } via)
+                            {
+                                <span class="muted">via</span>
+                                <AppRef App="via" Id="via.Id" Current="CurrentAppId" />
+                            }
+                        </span>
+                    </td>
+                    <td><span class="inline-gap"><IntegrationTypeBadge Type="i.Type" /> @if (i.MessageFormat is { } fmt) { <span class="muted small">@fmt</span> }</span></td>
+                    <td class="small">@PortfolioText.Label(i.Frequency)</td>
+                    <td><TierBadge Tier="i.Criticality" /></td>
+                    <td><LifecycleBadge Status="i.Status" /></td>
+                    <td>@(i.Owner?.Name ?? "–")</td>
+                    <td class="@(overdue ? "overdue" : "")" title="@(i.NextReviewDate is { } n ? $"Next review {PortfolioUi.Date(n)}" : "Never reviewed")">
+                        @(i.LastReviewDate is { } d ? PortfolioUi.Date(d) : "never")
+                    </td>
+                    <td>
+                        <RiskBadge Level="PortfolioRules.RiskLevel(i, Today)" />
+                        @if (PortfolioRules.TopRiskScore(i) is > 0 and var top) { <RiskScore Score="top" /> }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<Integration> Items { get; set; } = [];
+    [Parameter, EditorRequired] public DateOnly Today { get; set; }
+    /// <summary>On an application's page, that application is shown in bold instead of as a link.</summary>
+    [Parameter] public int? CurrentAppId { get; set; }
+}

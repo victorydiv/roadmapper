@@ -145,7 +145,7 @@ Any item level is allowed (Initiative is the default in the UI); status, dates, 
 | Name | text(200) req | e.g. "Order release WMS→TMS" |
 | SourceApplicationId | int FK→Applications (**Restrict**) | can't delete an app that still has integrations — UI explains |
 | TargetApplicationId | int FK→Applications (Restrict) | ≠ Source (check) |
-| ViaApplicationId | int? FK→Applications (SetNull) | middleware/EDI VAN/iPaaS hop |
+| ViaApplicationId | int? FK→Applications (Restrict) | middleware/EDI VAN/iPaaS hop; an app used as a hop can't be deleted either |
 | Type | enum text: API, SFTP, EDI, Manual, Batch | |
 | Direction | enum text: OneWay, Bidirectional | source→target is the primary flow |
 | Frequency | enum text: RealTime, NearRealTime, Hourly, Daily, Weekly, OnDemand | |
@@ -157,7 +157,7 @@ Any item level is allowed (Initiative is the default in the UI); status, dates, 
 | LastReviewDate | DateOnly? | |
 | ReviewIntervalMonths | int default 12 | → *ReviewOverdue* derived |
 | Notes | text(4000) | |
-| *RiskRating* | *derived* | max open risk score, bumped by Tier1 + overdue review |
+| *RiskLevel* | *derived* | `PortfolioRules.RiskLevel`: **High** = an Open/Accepted risk scores ≥ 15, or ≥ 8 on a Tier 1 flow; **Medium** = a risk ≥ 6 or review overdue (never reviewed counts); **Low** otherwise; Retired is always Low |
 Index: (SourceApplicationId), (TargetApplicationId), (ViaApplicationId).
 
 **IntegrationRisks** — "Risks" as rows, so high-risk integrations are computable
@@ -403,6 +403,7 @@ docs/USER_GUIDE.md               (new "Portfolio" sections + §10 data model/rou
 **Phase 2 — Integrations, catalog map, dependency view**
 - Integrations + risks, `AddIntegrations`; `PortfolioGraph`, `MapLayout`, `IntegrationMapSvg`; Integrations page, Map page, application Dependencies tab; `/integrations`, `/applications/{id}/dependencies`, `/map.svg`.
 - Tests: graph traversal (cycles, bidirectional, via), layout determinism, delete-restrict rule.
+- *As built:* pages `/portfolio/integrations` (catalog with tiles + filters), `/portfolio/integrations/{id}` (flow strip, risk register, "Mark reviewed", history), `/portfolio/map` (`?focus=&depth=`); the application page gained Integrations and Dependencies sections (lists + focused map). Graph semantics: every integration is one step; a Via hop links source→via, via→target and source→target; bidirectional counts both ways; retired integrations are ignored. In the dependency map an app that is both up- and downstream is drawn downstream, and flows between two apps in the same column are faded. The sample portfolio adds two external parties (EDI customers, carriers) and 10 integrations; an existing sample portfolio gets an "Add sample integrations" button.
 
 **Phase 3 — Business processes + Change Impact Analysis**
 - Processes, pain points, KPIs, `AddBusinessProcesses`; `ImpactAnalyzer`; Processes pages; Impact Analysis page; pain point → "Create initiative" (reuses `ItemDraft`/`ItemEditor`); `/processes`, `/applications/{id}/impact`.
@@ -416,9 +417,15 @@ docs/USER_GUIDE.md               (new "Portfolio" sections + §10 data model/rou
 - `PortfolioHealth`; dashboard page; Decisions + alternatives + links, `AddDecisionLog`; decisions surface on app/integration/vendor detail and in impact reports; `/dashboard`, `/decisions`, `/export/portfolio.xlsx`.
 - Tests: health scoring, dashboard aggregates, DecisionLinks check constraint.
 
-**Phase 6 — Polish & release**
+**Phase 6 — Portfolio backup file, polish & release**
+- **Portfolio file (`.rpf`)**, the portfolio's counterpart to `.rmp`: one versioned JSON file (`PortfolioFile`, same camelCase + string-enum options as `RoadmapFile`) holding contacts, vendors, escalation paths, contracts, applications, support contacts, integrations + risks, processes + pain points + KPIs, benefits + measurements, decisions + alternatives + links, settings and portfolio history.
+  - Ids are file-local and re-assigned on import; every reference is relinked, in one transaction.
+  - Links into roadmaps (`Application.ProductId`, `ApplicationInitiatives`, `Benefits`, pain point `AddressedByItemId`, `DecisionLinks.RoadmapItemId`) are stored as **product name + item path** (e.g. `Customer Portal › Self-service tracking`), and re-linked when a matching product exists; unmatched links are listed in the import summary instead of failing.
+  - Import modes: **Restore** (only into an empty portfolio) and **Merge** (adds; records whose name already exists are skipped and reported).
+  - UI: Portfolio › Settings › "Back up portfolio" / "Import portfolio file"; endpoint `GET /export/portfolio.rpf`.
+  - Tests: round-trip equality, relinking by product/item path, merge skips duplicates, older file versions still import.
 - `Items.JiraKey/ExternalUrl` (link out to Jira), portfolio PDF print, user guide chapters + §10 reference, bump `<Version>` to 1.2.0, `publish.ps1` dry run.
-- (Deferred / optional: portfolio backup file format, Jira read-sync — out of scope until asked.)
+- (Deferred / optional: Jira read-sync — out of scope until asked.)
 
 ## 10. Verification (each phase)
 - `dotnet build` and `dotnet test` from repo root — all existing + new tests green.

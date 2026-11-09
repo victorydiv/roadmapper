@@ -1,0 +1,131 @@
+@page "/portfolio/map"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Integration map" Subtitle="How data moves between your applications. Click a box or a line to open it.">
+    <a class="btn" href="@DownloadUrl" download>Download SVG</a>
+</PortfolioHeader>
+
+@if (apps is null || integrations is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <label class="inline-gap small">Focus on
+            <select @bind="FocusValue">
+                <option value="0">— whole portfolio —</option>
+                @foreach (var a in apps.Where(a => connected.Contains(a.Id)))
+                {
+                    <option value="@a.Id">@a.Name</option>
+                }
+            </select>
+        </label>
+        @if (Focus is not null)
+        {
+            <label class="inline-gap small">Depth
+                <select @bind="DepthValue">
+                    @for (var d = 1; d <= PortfolioService.MaxDependencyDepth; d++)
+                    {
+                        var n = d;
+                        <option value="@n">@n step@(n == 1 ? "" : "s")</option>
+                    }
+                </select>
+            </label>
+        }
+        <select @bind="type">
+            <option value="">All types</option>
+            @foreach (var t in Enum.GetValues<IntegrationType>())
+            {
+                <option value="@t">@PortfolioText.Label(t)</option>
+            }
+        </select>
+        <select @bind="maxTier">
+            <option value="">All tiers</option>
+            <option value="@Criticality.Tier1">Tier 1 only</option>
+            <option value="@Criticality.Tier2">Tier 1 and 2</option>
+        </select>
+        <label class="check"><input type="checkbox" @bind="includeRetired" /> Show retired</label>
+        @if (Focus is { } f)
+        {
+            <a class="small" href="/portfolio/applications/@f">Open @apps.FirstOrDefault(a => a.Id == f)?.Name →</a>
+        }
+    </div>
+
+    @if (integrations.Count == 0)
+    {
+        <div class="card empty">No integrations yet. <a href="/portfolio/integrations">Add integrations</a> to draw the map.</div>
+    }
+    else
+    {
+        <div class="card map-card">
+            @((MarkupString)Picture.Svg)
+        </div>
+        @if (Focus is null && apps.Count(a => !connected.Contains(a.Id) && a.Status != LifecycleStatus.Retired) is > 0 and var alone)
+        {
+            <div class="muted small" style="margin-top:.5rem">
+                Not shown (no integrations yet): @string.Join(", ", apps.Where(a => !connected.Contains(a.Id) && a.Status != LifecycleStatus.Retired).Select(a => a.Name))
+            </div>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "focus")] public int? Focus { get; set; }
+    [SupplyParameterFromQuery(Name = "depth")] public int? Depth { get; set; }
+
+    private List<Application>? apps;
+    private List<Integration>? integrations;
+    private HashSet<int> connected = [];
+    private DateOnly today;
+    private IntegrationType? type;
+    private Criticality? maxTier;
+    private bool includeRetired;
+
+    private int FocusValue
+    {
+        get => Focus ?? 0;
+        set => Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?> { ["focus"] = value == 0 ? null : value, ["depth"] = value == 0 ? null : Depth }), replace: true);
+    }
+
+    private int DepthValue
+    {
+        get => Depth ?? 2;
+        set => Nav.NavigateTo(Nav.GetUriWithQueryParameter("depth", value), replace: true);
+    }
+
+    private MapOptions Options => new(Focus, Depth ?? 2, type, maxTier, includeRetired);
+
+    private MapPicture Picture
+    {
+        get
+        {
+            var title = Focus is { } f && apps!.FirstOrDefault(a => a.Id == f) is { } app ? $"{app.Name}: dependencies" : "Integration map";
+            return IntegrationMapSvg.Render(apps!, integrations!, Options, today, title);
+        }
+    }
+
+    private string DownloadUrl
+    {
+        get
+        {
+            var query = new List<string> { "download=true" };
+            if (Focus is { } f) query.Add($"focus={f}&depth={Depth ?? 2}");
+            if (type is { } t) query.Add($"type={t}");
+            if (maxTier is { } m) query.Add($"tier={(int)m}");
+            if (includeRetired) query.Add("retired=true");
+            return "/api/portfolio/map.svg?" + string.Join("&", query);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Svc.Today;
+        apps = await Svc.GetApplicationsAsync();
+        integrations = await Svc.GetIntegrationsAsync();
+        connected = integrations
+            .SelectMany(i => new[] { i.SourceApplicationId, i.TargetApplicationId, i.ViaApplicationId ?? 0 })
+            .Where(id => id != 0).ToHashSet();
+    }
+}

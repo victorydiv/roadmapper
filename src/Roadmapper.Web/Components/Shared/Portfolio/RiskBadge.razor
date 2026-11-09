@@ -1,0 +1,12 @@
+<span class="badge risk-@Level" title="@Title">@PortfolioText.Label(Level)</span>
+
+@code {
+    [Parameter, EditorRequired] public RiskLevel Level { get; set; }
+
+    private string Title => Level switch
+    {
+        RiskLevel.High => $"An open risk scores {PortfolioRules.HighRiskScore}+ (or {PortfolioRules.HighRiskScoreTier1}+ on a Tier 1 integration)",
+        RiskLevel.Medium => $"An open risk scores {PortfolioRules.MediumRiskScore}+, or the review is overdue",
+        _ => "No significant open risks, and reviewed on time",
+    };
+}

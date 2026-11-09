@@ -56,6 +56,10 @@ public partial class PortfolioService
         roles.AddRange((await db.VendorEscalationContacts.Where(x => x.ContactId == id)
             .Join(db.Vendors, x => x.VendorId, v => v.Id, (x, v) => new { v.Name, x.Level }).ToListAsync())
             .Select(x => $"Escalation level {x.Level} for {x.Name}"));
+        roles.AddRange((await db.Integrations.Where(i => i.OwnerId == id).Select(i => i.Name).ToListAsync()).Select(n => $"Owner of integration {n}"));
+        roles.AddRange((await db.IntegrationRisks.Where(r => r.OwnerId == id)
+            .Join(db.Integrations, r => r.IntegrationId, i => i.Id, (r, i) => i.Name).ToListAsync())
+            .Select(n => $"Risk owner on {n}"));
         return roles;
     }
 }

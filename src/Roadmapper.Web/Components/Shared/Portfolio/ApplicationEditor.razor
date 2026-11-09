@@ -227,8 +227,17 @@
 
     private async Task DeleteAsync()
     {
-        await Svc.DeleteApplicationAsync(draft.Id);
-        await CloseAsync(0);
+        error = null;
+        try
+        {
+            await Svc.DeleteApplicationAsync(draft.Id);
+            await CloseAsync(0);
+        }
+        catch (InvalidOperationException ex)
+        {
+            error = ex.Message;
+            confirmingDelete = false;
+        }
     }
 
     private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);

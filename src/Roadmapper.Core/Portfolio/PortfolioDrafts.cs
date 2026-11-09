@@ -199,3 +199,108 @@ public class ApplicationDraft
         a.Notes = DraftText.Clean(Notes);
     }
 }
+
+public class IntegrationDraft
+{
+    public int Id { get; set; }
+    /// <summary>Optional: when blank the service names it "Source → Target".</summary>
+    public string? Name { get; set; }
+    public int? SourceApplicationId { get; set; }
+    public int? TargetApplicationId { get; set; }
+    public int? ViaApplicationId { get; set; }
+    public IntegrationType Type { get; set; } = IntegrationType.API;
+    public FlowDirection Direction { get; set; } = FlowDirection.OneWay;
+    public IntegrationFrequency Frequency { get; set; } = IntegrationFrequency.RealTime;
+    public string? MessageFormat { get; set; }
+    public string BusinessPurpose { get; set; } = "";
+    public Criticality Criticality { get; set; } = Criticality.Tier2;
+    public int? OwnerId { get; set; }
+    public LifecycleStatus Status { get; set; } = LifecycleStatus.Active;
+    public DateOnly? LastReviewDate { get; set; }
+    public int ReviewIntervalMonths { get; set; } = 12;
+    public string? Notes { get; set; }
+
+    public bool IsNew => Id == 0;
+
+    public static IntegrationDraft From(Integration i) => new()
+    {
+        Id = i.Id, Name = i.Name, SourceApplicationId = i.SourceApplicationId, TargetApplicationId = i.TargetApplicationId,
+        ViaApplicationId = i.ViaApplicationId, Type = i.Type, Direction = i.Direction, Frequency = i.Frequency,
+        MessageFormat = i.MessageFormat, BusinessPurpose = i.BusinessPurpose, Criticality = i.Criticality, OwnerId = i.OwnerId,
+        Status = i.Status, LastReviewDate = i.LastReviewDate, ReviewIntervalMonths = i.ReviewIntervalMonths, Notes = i.Notes,
+    };
+
+    public string? Validate()
+    {
+        if (SourceApplicationId is null || TargetApplicationId is null) return "Choose both the source and the target application.";
+        if (SourceApplicationId == TargetApplicationId) return "Source and target must be different applications.";
+        if (ViaApplicationId is { } via && (via == SourceApplicationId || via == TargetApplicationId))
+            return "The “via” application must be different from the source and target.";
+        if (string.IsNullOrWhiteSpace(BusinessPurpose)) return "Describe the business purpose: what the flow is for.";
+        if (Name?.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
+        if (ReviewIntervalMonths is < 1 or > 60) return "Review interval must be between 1 and 60 months.";
+        return null;
+    }
+
+    public void ApplyTo(Integration i, string name)
+    {
+        i.Name = name;
+        i.SourceApplicationId = SourceApplicationId!.Value;
+        i.TargetApplicationId = TargetApplicationId!.Value;
+        i.ViaApplicationId = ViaApplicationId;
+        i.Type = Type;
+        i.Direction = Direction;
+        i.Frequency = Frequency;
+        i.MessageFormat = DraftText.Clean(MessageFormat);
+        i.BusinessPurpose = BusinessPurpose.Trim();
+        i.Criticality = Criticality;
+        i.OwnerId = OwnerId;
+        i.Status = Status;
+        i.LastReviewDate = LastReviewDate;
+        i.ReviewIntervalMonths = ReviewIntervalMonths;
+        i.Notes = DraftText.Clean(Notes);
+    }
+}
+
+public class RiskDraft
+{
+    public int Id { get; set; }
+    public int IntegrationId { get; set; }
+    public string Description { get; set; } = "";
+    public int Likelihood { get; set; } = 3;
+    public int Impact { get; set; } = 3;
+    public string? Mitigation { get; set; }
+    public RiskStatus Status { get; set; } = RiskStatus.Open;
+    public int? OwnerId { get; set; }
+    public DateOnly? RaisedOn { get; set; }
+
+    public bool IsNew => Id == 0;
+    public int Score => Likelihood * Impact;
+
+    public static RiskDraft New(int integrationId, DateOnly today) => new() { IntegrationId = integrationId, RaisedOn = today };
+
+    public static RiskDraft From(IntegrationRisk r) => new()
+    {
+        Id = r.Id, IntegrationId = r.IntegrationId, Description = r.Description, Likelihood = r.Likelihood, Impact = r.Impact,
+        Mitigation = r.Mitigation, Status = r.Status, OwnerId = r.OwnerId, RaisedOn = r.RaisedOn,
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Description)) return "Describe the risk.";
+        if (Description.Trim().Length > 1000) return "Description can be at most 1000 characters.";
+        if (Likelihood is < 1 or > 5 || Impact is < 1 or > 5) return "Likelihood and impact go from 1 to 5.";
+        return null;
+    }
+
+    public void ApplyTo(IntegrationRisk r)
+    {
+        r.Description = Description.Trim();
+        r.Likelihood = Likelihood;
+        r.Impact = Impact;
+        r.Mitigation = DraftText.Clean(Mitigation);
+        r.Status = Status;
+        r.OwnerId = OwnerId;
+        r.RaisedOn = RaisedOn;
+    }
+}

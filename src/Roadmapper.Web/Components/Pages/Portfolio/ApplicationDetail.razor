@@ -116,6 +116,53 @@ else
 
     <div class="card stack" style="margin-top:1rem">
         <div class="row">
+            <h2 style="margin:0">Integrations</h2>
+            <span class="muted small">Flows where @app.Name is the source, target or middle hop.</span>
+            <span class="spacer"></span>
+            <button class="btn" @onclick="NewIntegration">+ New integration</button>
+        </div>
+        @if (integrations.Count == 0)
+        {
+            <div class="muted small">No integrations yet.</div>
+        }
+        else
+        {
+            <IntegrationTable Items="integrations" Today="today" CurrentAppId="app.Id" />
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Dependencies</h2>
+            <span class="muted small">Upstream applications send data to @app.Name; downstream applications receive it. Retired integrations are left out.</span>
+            <span class="spacer"></span>
+            <label class="inline-gap small">Depth
+                <select @bind="depth" @bind:after="LoadDependenciesAsync" style="width:auto">
+                    @for (var step = 1; step <= PortfolioService.MaxDependencyDepth; step++)
+                    {
+                        var n = step;
+                        <option value="@n">@n step@(n == 1 ? "" : "s")</option>
+                    }
+                </select>
+            </label>
+            <a class="small" href="/portfolio/map?focus=@app.Id&depth=@depth">Open in map →</a>
+        </div>
+        @if (deps is { } dv && dv.Upstream.Count + dv.Downstream.Count > 0)
+        {
+            <div class="settings">
+                <DependencyList Title="Upstream" Hint="feeds it" Rows="dv.Upstream" />
+                <DependencyList Title="Downstream" Hint="it feeds" Rows="dv.Downstream" />
+            </div>
+            <div class="map-card">@((MarkupString)mapSvg)</div>
+        }
+        else
+        {
+            <div class="muted small">No dependencies: no live integrations touch @app.Name.</div>
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
             <h2 style="margin:0">Roadmap items</h2>
             <span class="muted small">Initiatives and features from any roadmap that change this application. Status and progress come from the roadmap.</span>
         </div>
@@ -190,6 +237,10 @@ else
 {
     <ApplicationEditor Draft="editing" OnClose="OnEditorClosed" />
 }
+@if (editingIntegration is not null)
+{
+    <IntegrationEditor Draft="editingIntegration" OnClose="OnIntegrationClosed" />
+}
 
 @code {
     [Parameter] public int Id { get; set; }
@@ -205,6 +256,11 @@ else
     private List<Contact> contacts = [];
     private List<Vendor> vendors = [];
     private List<(int Id, string Name)> products = [];
+    private List<Integration> integrations = [];
+    private DependencyView? deps;
+    private int depth = 2;
+    private string mapSvg = "";
+    private IntegrationDraft? editingIntegration;
 
     private int? newContactId;
     private SupportRole newRole = SupportRole.L1Support;
@@ -231,6 +287,29 @@ else
         if (app is null) return;
         linked = await Svc.GetLinkedItemsAsync(Id);
         history = await Svc.GetActivityAsync(PortfolioEntityType.Application, Id);
+        integrations = await Svc.GetIntegrationsForApplicationAsync(Id);
+        await LoadDependenciesAsync();
+    }
+
+    private async Task LoadDependenciesAsync()
+    {
+        deps = await Svc.GetDependenciesAsync(Id, depth);
+        if (deps is null || deps.Upstream.Count + deps.Downstream.Count == 0) { mapSvg = ""; return; }
+        var picture = IntegrationMapSvg.Render(await Svc.GetApplicationsAsync(), await Svc.GetIntegrationsAsync(),
+            new MapOptions(Id, depth), today, $"{app!.Name}: dependencies");
+        mapSvg = picture.Svg;
+    }
+
+    private async Task NewIntegration()
+    {
+        var months = (await Svc.GetSettingsAsync()).DefaultReviewIntervalMonths;
+        editingIntegration = new IntegrationDraft { SourceApplicationId = Id, ReviewIntervalMonths = months, LastReviewDate = today };
+    }
+
+    private async Task OnIntegrationClosed(int? result)
+    {
+        editingIntegration = null;
+        if (result is not null) await ReloadAsync();
     }
 
     private static RenderFragment ContactText(Contact? c) => c is null

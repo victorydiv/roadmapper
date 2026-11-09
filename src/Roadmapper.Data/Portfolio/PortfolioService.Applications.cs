@@ -70,11 +70,21 @@ public partial class PortfolioService
         return app.Id;
     }
 
-    /// <summary>Deletes the application and its links. The linked roadmap and its items are untouched.</summary>
+    /// <summary>
+    /// Deletes the application and its links. The linked roadmap and its items are untouched. Refused while
+    /// integrations still use it: delete or re-point those first, or set the application to Retired instead.
+    /// </summary>
     public async Task DeleteApplicationAsync(int id)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         if (await db.Applications.FindAsync(id) is not { } app) return;
+        var used = await db.Integrations
+            .Where(i => i.SourceApplicationId == id || i.TargetApplicationId == id || i.ViaApplicationId == id)
+            .OrderBy(i => i.Name).Select(i => i.Name).ToListAsync();
+        if (used.Count > 0)
+            throw new InvalidOperationException(
+                $"{app.Name} is used by {used.Count} integration{(used.Count == 1 ? "" : "s")}: {string.Join(", ", used.Take(5))}{(used.Count > 5 ? ", …" : "")}. " +
+                "Delete those integrations first, or set the application to Retired to keep its history.");
         db.Applications.Remove(app);
         await db.SaveChangesAsync();
     }

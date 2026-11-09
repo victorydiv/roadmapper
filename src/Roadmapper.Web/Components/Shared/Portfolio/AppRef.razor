@@ -1,0 +1,14 @@
+@if (Id == Current)
+{
+    <b>@(App?.Name ?? $"#{Id}")</b>
+}
+else
+{
+    <a href="/portfolio/applications/@Id">@(App?.Name ?? $"#{Id}")</a>
+}
+
+@code {
+    [Parameter] public Application? App { get; set; }
+    [Parameter, EditorRequired] public int Id { get; set; }
+    [Parameter] public int? Current { get; set; }
+}

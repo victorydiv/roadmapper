@@ -1,0 +1,36 @@
+<div class="stack">
+    <h3 class="sub" style="margin:0">@Title <span class="muted small">(@Hint · @Rows.Count)</span></h3>
+    @if (Rows.Count == 0)
+    {
+        <div class="muted small">None.</div>
+    }
+    else
+    {
+        <ul class="dep-list">
+            @foreach (var r in Rows)
+            {
+                <li>
+                    <span class="distance" title="@(r.Distance == 1 ? "Direct" : $"{r.Distance} integrations away")">@r.Distance</span>
+                    <span class="inline-gap">
+                        <a href="/portfolio/applications/@r.Application.Id"><b>@r.Application.Name</b></a>
+                        <TierBadge Tier="r.Application.Criticality" />
+                        <span class="muted small">
+                            via
+                            @foreach (var (i, n) in r.Integrations.Select((i, n) => (i, n)))
+                            {
+                                @if (n > 0) { <text>, </text> }
+                                <a href="/portfolio/integrations/@i.Id">@i.Name</a>
+                            }
+                        </span>
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string Hint { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<DependencyRow> Rows { get; set; } = [];
+}

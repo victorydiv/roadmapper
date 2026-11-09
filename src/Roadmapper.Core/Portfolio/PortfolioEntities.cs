@@ -138,6 +138,64 @@ public class ApplicationInitiative
     public InitiativeImpact ImpactType { get; set; } = InitiativeImpact.Enhances;
 }
 
+/// <summary>
+/// A flow of data from <see cref="Source"/> to <see cref="Target"/>, optionally through a middle hop
+/// (<see cref="Via"/>: an EDI VAN, iPaaS or middleware application).
+/// </summary>
+public class Integration
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public int SourceApplicationId { get; set; }
+    public Application? Source { get; set; }
+    public int TargetApplicationId { get; set; }
+    public Application? Target { get; set; }
+    public int? ViaApplicationId { get; set; }
+    public Application? Via { get; set; }
+    public IntegrationType Type { get; set; } = IntegrationType.API;
+    public FlowDirection Direction { get; set; } = FlowDirection.OneWay;
+    public IntegrationFrequency Frequency { get; set; } = IntegrationFrequency.RealTime;
+    /// <summary>e.g. "X12 940", "JSON", "CSV".</summary>
+    public string? MessageFormat { get; set; }
+    public string BusinessPurpose { get; set; } = "";
+    public Criticality Criticality { get; set; } = Criticality.Tier2;
+    public int? OwnerId { get; set; }
+    public Contact? Owner { get; set; }
+    public LifecycleStatus Status { get; set; } = LifecycleStatus.Active;
+    public DateOnly? LastReviewDate { get; set; }
+    public int ReviewIntervalMonths { get; set; } = 12;
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<IntegrationRisk> Risks { get; set; } = new();
+
+    /// <summary>When the next review is due; null when it has never been reviewed.</summary>
+    public DateOnly? NextReviewDate => LastReviewDate?.AddMonths(ReviewIntervalMonths);
+}
+
+/// <summary>A risk on an integration, scored likelihood × impact (each 1–5).</summary>
+public class IntegrationRisk
+{
+    public int Id { get; set; }
+    public int IntegrationId { get; set; }
+    public Integration? Integration { get; set; }
+    public string Description { get; set; } = "";
+    public int Likelihood { get; set; } = 3;
+    public int Impact { get; set; } = 3;
+    public string? Mitigation { get; set; }
+    public RiskStatus Status { get; set; } = RiskStatus.Open;
+    public int? OwnerId { get; set; }
+    public Contact? Owner { get; set; }
+    public DateOnly? RaisedOn { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>1–25.</summary>
+    public int Score => Likelihood * Impact;
+    public bool IsActive => Status is RiskStatus.Open or RiskStatus.Accepted;
+}
+
 /// <summary>Portfolio-wide settings; a single row with Id 1.</summary>
 public class PortfolioSettings
 {

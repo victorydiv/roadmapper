@@ -1,0 +1,170 @@
+@page "/portfolio/integrations/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (item is null)
+{
+    <PageTitle>Integration not found</PageTitle>
+    <div class="card empty">
+        <h2>Integration not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/integrations">Back to integrations</a></p>
+    </div>
+}
+else
+{
+    var level = PortfolioRules.RiskLevel(item, today);
+    var overdue = PortfolioRules.ReviewOverdue(item, today);
+    <PortfolioHeader Title="@item.Name" Subtitle="@item.BusinessPurpose" Parent="@(("Integrations", "/portfolio/integrations"))">
+        <IntegrationTypeBadge Type="item.Type" />
+        <TierBadge Tier="item.Criticality" />
+        <LifecycleBadge Status="item.Status" />
+        <RiskBadge Level="level" />
+        <button class="btn" @onclick="() => RunAsync(() => Svc.MarkReviewedAsync(item.Id))" title="Set the last review date to today">Mark reviewed</button>
+        <button class="btn" @onclick="() => editing = IntegrationDraft.From(item)">Edit</button>
+    </PortfolioHeader>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Overview</h2>
+            <div class="flow-strip">
+                <a class="flow-node" href="/portfolio/applications/@item.SourceApplicationId">@item.Source?.Name</a>
+                <span class="flow-arrow">@(item.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
+                @if (item.Via is { } via)
+                {
+                    <a class="flow-node via" href="/portfolio/applications/@via.Id" title="Passes through">@via.Name</a>
+                    <span class="flow-arrow">@(item.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
+                }
+                <a class="flow-node" href="/portfolio/applications/@item.TargetApplicationId">@item.Target?.Name</a>
+            </div>
+            <dl class="facts">
+                <dt>Type</dt>
+                <dd>@PortfolioText.Label(item.Type)@(item.MessageFormat is { } f ? $" · {f}" : "")</dd>
+                <dt>Direction</dt>
+                <dd>@PortfolioText.Label(item.Direction)</dd>
+                <dt>Frequency</dt>
+                <dd>@PortfolioText.Label(item.Frequency)</dd>
+                <dt>Owner</dt>
+                <dd>@if (item.Owner is { } o) { <span class="inline-gap">@o.Name @if (o.Email is { } e) { <a class="small" href="mailto:@e">@e</a> }</span> } else { <span class="muted">–</span> }</dd>
+                <dt>Last review</dt>
+                <dd class="@(overdue ? "overdue" : "")">
+                    @(item.LastReviewDate is { } last ? PortfolioUi.Date(last) : "Never")
+                    <span class="small muted">
+                        · every @item.ReviewIntervalMonths months
+                        @if (item.NextReviewDate is { } next) { <text>· next @PortfolioUi.Date(next) (@PortfolioUi.Relative(next, today))</text> }
+                    </span>
+                </dd>
+            </dl>
+            @if (item.Notes is { } notes)
+            {
+                <div class="small notes">@notes</div>
+            }
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">Risks</h2>
+                <span class="spacer"></span>
+                <button class="btn" @onclick="() => editingRisk = RiskDraft.New(item.Id, today)">+ Add risk</button>
+            </div>
+            @if (item.Risks.Count == 0)
+            {
+                <div class="muted small">No risks recorded. Add what could break this flow and what it would cost the business.</div>
+            }
+            else
+            {
+                <ul class="dep-list risks">
+                    @foreach (var r in item.Risks.OrderByDescending(r => r.IsActive).ThenByDescending(r => r.Score))
+                    {
+                        <li class="@(r.IsActive ? "" : "muted")">
+                            <RiskScore Score="r.Score" />
+                            <div style="flex:1">
+                                <div>@r.Description</div>
+                                <div class="small muted">
+                                    likelihood @r.Likelihood × impact @r.Impact · @PortfolioText.Label(r.Status)
+                                    @if (r.Owner is { } ro) { <text> · @ro.Name</text> }
+                                    @if (r.RaisedOn is { } raised) { <text> · raised @PortfolioUi.Date(raised)</text> }
+                                </div>
+                                @if (r.Mitigation is { } m) { <div class="small">Mitigation: @m</div> }
+                            </div>
+                            <button class="btn sm" @onclick="() => editingRisk = RiskDraft.From(r)">Edit</button>
+                        </li>
+                    }
+                </ul>
+            }
+            <div class="muted small">
+                Score = likelihood × impact (1–25). High risk: an open or accepted risk scores @PortfolioRules.HighRiskScore+,
+                or @PortfolioRules.HighRiskScoreTier1+ on a Tier 1 integration.
+            </div>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>History</h2>
+        <PortfolioActivityList Entries="history" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <IntegrationEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+@if (editingRisk is not null)
+{
+    <RiskEditor Draft="editingRisk" OnClose="OnRiskClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Integration? item;
+    private bool loaded;
+    private string? error;
+    private DateOnly today;
+    private List<PortfolioAuditEntry> history = [];
+    private IntegrationDraft? editing;
+    private RiskDraft? editingRisk;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        item = await Svc.GetIntegrationAsync(Id);
+        if (item is null) return;
+        history = await Svc.GetActivityAsync(PortfolioEntityType.Integration, Id);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task OnEditorClosed(int? result)
+    {
+        editing = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/integrations"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+
+    private async Task OnRiskClosed(bool changed)
+    {
+        editingRisk = null;
+        if (changed) await ReloadAsync();
+    }
+}

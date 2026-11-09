@@ -1,0 +1,211 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New integration" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                @if (!loaded)
+                {
+                    <p class="muted">Loading…</p>
+                }
+                else
+                {
+                    <div class="grid-3">
+                        <label class="field">Source (sends)
+                            <InputSelect @bind-Value="draft.SourceApplicationId">
+                                <option value="">— choose —</option>
+                                @foreach (var a in apps)
+                                {
+                                    <option value="@a.Id">@AppLabel(a)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Target (receives)
+                            <InputSelect @bind-Value="draft.TargetApplicationId">
+                                <option value="">— choose —</option>
+                                @foreach (var a in apps)
+                                {
+                                    <option value="@a.Id">@AppLabel(a)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field" title="A middle hop the data passes through, such as an EDI VAN, iPaaS or middleware">Via (optional)
+                            <InputSelect @bind-Value="draft.ViaApplicationId">
+                                <option value="">— direct —</option>
+                                @foreach (var a in apps)
+                                {
+                                    <option value="@a.Id">@AppLabel(a)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </div>
+
+                    <label class="field">Name
+                        <InputText @bind-Value="draft.Name" placeholder="@NamePlaceholder" />
+                    </label>
+                    <label class="field">Business purpose
+                        <InputTextArea @bind-Value="draft.BusinessPurpose" placeholder="What the flow is for, in business terms" />
+                    </label>
+
+                    <div class="grid-4">
+                        <label class="field">Type
+                            <InputSelect @bind-Value="draft.Type">
+                                @foreach (var t in Enum.GetValues<IntegrationType>())
+                                {
+                                    <option value="@t">@PortfolioText.Label(t)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Direction
+                            <InputSelect @bind-Value="draft.Direction">
+                                @foreach (var d in Enum.GetValues<FlowDirection>())
+                                {
+                                    <option value="@d">@PortfolioText.Label(d)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Frequency
+                            <InputSelect @bind-Value="draft.Frequency">
+                                @foreach (var f in Enum.GetValues<IntegrationFrequency>())
+                                {
+                                    <option value="@f">@PortfolioText.Label(f)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field" title="e.g. X12 940, JSON, CSV">Message format
+                            <InputText @bind-Value="draft.MessageFormat" />
+                        </label>
+                    </div>
+
+                    <fieldset>
+                        <legend>Ownership &amp; review</legend>
+                        <div class="grid-3">
+                            <label class="field" title="Business criticality of this flow: Tier 1 = operations stop if it fails">Criticality
+                                <InputSelect @bind-Value="draft.Criticality">
+                                    @foreach (var c in Enum.GetValues<Criticality>())
+                                    {
+                                        <option value="@c">@PortfolioText.Label(c)</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field">Status
+                                <InputSelect @bind-Value="draft.Status">
+                                    @foreach (var s in Enum.GetValues<LifecycleStatus>())
+                                    {
+                                        <option value="@s">@PortfolioText.Label(s)</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field">Owner
+                                <ContactSelect Contacts="contacts" Vendors="vendors" @bind-Value="draft.OwnerId" />
+                            </label>
+                        </div>
+                        <div class="grid-3">
+                            <label class="field">Last review
+                                <InputDate @bind-Value="draft.LastReviewDate" />
+                            </label>
+                            <label class="field">Review every (months)
+                                <InputNumber @bind-Value="draft.ReviewIntervalMonths" min="1" max="60" />
+                            </label>
+                            <div class="field small muted" style="align-self:end">
+                                @if (draft.LastReviewDate is { } last)
+                                {
+                                    <span>Next review @PortfolioUi.Date(last.AddMonths(draft.ReviewIntervalMonths))</span>
+                                }
+                                else
+                                {
+                                    <span>Never reviewed: counts as overdue.</span>
+                                }
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <label class="field">Notes
+                        <InputTextArea @bind-Value="draft.Notes" />
+                    </label>
+                }
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete this integration and its risks? Setting it to Retired keeps it on record.</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@(saving || !loaded)">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IntegrationDraft Draft { get; set; } = default!;
+    /// <summary>Called with the saved integration's id, 0 when it was deleted, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private IntegrationDraft draft = default!;
+    private string original = "";
+    private List<Application> apps = [];
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private bool loaded, saving, confirmingDelete;
+    private string? error;
+
+    private static string AppLabel(Application a) => a.Status == LifecycleStatus.Retired ? $"{a.Name} (retired)" : a.Name;
+
+    private string NamePlaceholder =>
+        apps.FirstOrDefault(a => a.Id == draft.SourceApplicationId) is { } s && apps.FirstOrDefault(a => a.Id == draft.TargetApplicationId) is { } t
+            ? $"{s.Name} → {t.Name}"
+            : "Leave blank to name it “Source → Target”";
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        original = Draft.Name ?? "integration";
+        apps = await Svc.GetApplicationsAsync();
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+        loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var id = await Svc.SaveIntegrationAsync(draft);
+            await CloseAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteIntegrationAsync(draft.Id);
+        await CloseAsync(0);
+    }
+
+    private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);
+}

@@ -108,5 +108,100 @@ public partial class PortfolioService
                 await LinkItemAsync(erp, billing.Id, InitiativeImpact.Integrates);
             }
         }
+
+        await SeedSampleIntegrationsAsync();
+    }
+
+    // The sample applications the sample integrations connect; they must all exist.
+    private static readonly string[] SampleIntegrationApps =
+        ["Northwind WMS", "Fabrikam TMS", "Litware ERP", "Contoso EDI", "Customer Portal", "Operations Reporting", "Yard Log Spreadsheet"];
+
+    /// <summary>True when there are no integrations yet and the sample applications are all present.</summary>
+    public async Task<bool> CanSeedSampleIntegrationsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.Integrations.AnyAsync()) return false;
+        return await db.Applications.CountAsync(a => SampleIntegrationApps.Contains(a.Name)) == SampleIntegrationApps.Length;
+    }
+
+    /// <summary>
+    /// Adds made-up integrations between the sample applications, plus two external parties (EDI customers and
+    /// carriers) so EDI flows have both ends. Only while there are no integrations.
+    /// </summary>
+    public async Task SeedSampleIntegrationsAsync()
+    {
+        if (!await CanSeedSampleIntegrationsAsync())
+            throw new InvalidOperationException("Sample integrations need the sample applications and an empty integration catalog.");
+        var today = Today;
+
+        Dictionary<string, Application> apps;
+        Dictionary<string, int> people;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            apps = await db.Applications.AsNoTracking().ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+            people = (await db.Contacts.AsNoTracking().Where(c => c.VendorId == null).ToListAsync())
+                .GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().Id);
+        }
+
+        async Task<int> External(string name, string description)
+        {
+            if (apps.TryGetValue(name, out var existing)) return existing.Id;
+            return await SaveApplicationAsync(new ApplicationDraft
+            {
+                Name = name, Description = description, Category = AppCategory.ExternalParty, Criticality = Criticality.Tier1,
+                Hosting = Hosting.SaaS,
+            });
+        }
+
+        int App(string name) => apps[name].Id;
+        int? Who(string name) => people.TryGetValue(name, out var id) ? id : null;
+
+        var customers = await External("Customers (EDI trading partners)", "Retail and e-commerce customers who send orders and receive ship confirmations by EDI.");
+        var carriers = await External("Carriers", "Truckload, LTL and parcel carriers exchanging tenders and shipment status.");
+        var (wms, tms, erp, edi, portal, reporting, yard) = (App("Northwind WMS"), App("Fabrikam TMS"), App("Litware ERP"),
+            App("Contoso EDI"), App("Customer Portal"), App("Operations Reporting"), App("Yard Log Spreadsheet"));
+
+        Task<int> Flow(string name, int source, int target, IntegrationType type, IntegrationFrequency frequency, Criticality tier,
+            string purpose, string? format = null, int? via = null, FlowDirection direction = FlowDirection.OneWay,
+            string? owner = "Marcus Bell", int reviewedMonthsAgo = 3) =>
+            SaveIntegrationAsync(new IntegrationDraft
+            {
+                Name = name, SourceApplicationId = source, TargetApplicationId = target, ViaApplicationId = via, Type = type,
+                Frequency = frequency, Criticality = tier, BusinessPurpose = purpose, MessageFormat = format, Direction = direction,
+                OwnerId = owner is null ? null : Who(owner), LastReviewDate = today.AddMonths(-reviewedMonthsAgo),
+            });
+
+        Task Risk(int integration, string description, int likelihood, int impact, string? mitigation = null, string? owner = "Marcus Bell") =>
+            SaveRiskAsync(new RiskDraft
+            {
+                IntegrationId = integration, Description = description, Likelihood = likelihood, Impact = impact,
+                Mitigation = mitigation, OwnerId = owner is null ? null : Who(owner), RaisedOn = today.AddDays(-40),
+            });
+
+        await Flow("Inbound warehouse orders (940)", customers, wms, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
+            "Customers release orders to the warehouse for picking and shipping.", "X12 940", via: edi);
+        var asn = await Flow("Ship confirmations (945)", wms, customers, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
+            "Tells customers what shipped, so they can bill their customers and update inventory.", "X12 945", via: edi);
+        await Risk(asn, "Trading-partner map changes go live without regression testing.", 3, 5,
+            "Add a test partner and replay last week's 945s before each map change.");
+        await Flow("Order release for load planning", wms, tms, IntegrationType.API, IntegrationFrequency.NearRealTime, Criticality.Tier1,
+            "Sends released orders to the TMS to build loads and tender to carriers.", "JSON");
+        await Flow("Load tenders (204)", tms, carriers, IntegrationType.EDI, IntegrationFrequency.RealTime, Criticality.Tier2,
+            "Offers loads to carriers.", "X12 204", via: edi);
+        await Flow("Shipment status (214)", carriers, tms, IntegrationType.EDI, IntegrationFrequency.Hourly, Criticality.Tier2,
+            "Carrier pickup, in-transit and delivery events for track & trace.", "X12 214", via: edi, reviewedMonthsAgo: 16);
+        var billing = await Flow("Billable activity for invoicing", wms, erp, IntegrationType.Batch, IntegrationFrequency.Daily, Criticality.Tier1,
+            "Nightly handling, storage and accessorial charges for customer invoicing.", "CSV", owner: "Dana Kim");
+        await Risk(billing, "The nightly file can fail without an alert, delaying invoices.", 3, 4,
+            "Alert when the file hasn't landed by 6 a.m.", owner: "Dana Kim");
+        await Flow("Invoices and statements", erp, portal, IntegrationType.API, IntegrationFrequency.Hourly, Criticality.Tier2,
+            "Publishes invoices and statements to customers in the portal.", "JSON");
+        await Flow("Self-service orders and inventory", portal, wms, IntegrationType.API, IntegrationFrequency.RealTime, Criticality.Tier2,
+            "Customers enter orders in the portal; inventory levels flow back.", "JSON", direction: FlowDirection.Bidirectional);
+        await Flow("Throughput and labor extract", wms, reporting, IntegrationType.Batch, IntegrationFrequency.Daily, Criticality.Tier3,
+            "Feeds the operations dashboards.", "CSV", owner: "Priya Shah");
+        var gate = await Flow("Trailer arrivals keyed into WMS", yard, wms, IntegrationType.Manual, IntegrationFrequency.OnDemand, Criticality.Tier3,
+            "Gate staff re-key trailer arrivals so receiving can schedule doors.", owner: "Jordan Ruiz", reviewedMonthsAgo: 14);
+        await Risk(gate, "Typos in trailer numbers delay receiving.", 4, 2, "Replace with the yard management initiative.", owner: "Jordan Ruiz");
     }
 }

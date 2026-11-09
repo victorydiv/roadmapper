@@ -100,6 +100,41 @@ internal static class PortfolioModel
             e.HasIndex(x => x.RoadmapItemId);
         });
 
+        b.Entity<Integration>(e =>
+        {
+            e.Property(i => i.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
+            e.Property(i => i.MessageFormat).HasMaxLength(100);
+            e.Property(i => i.BusinessPurpose).IsRequired().HasMaxLength(2000);
+            e.Property(i => i.Notes).HasMaxLength(Notes);
+            e.Property(i => i.Type).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.Direction).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.Frequency).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.Criticality).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(i => i.ReviewIntervalMonths).HasDefaultValue(12);
+            // An application can't be deleted while integrations still use it; the service explains which ones.
+            e.HasOne(i => i.Source).WithMany().HasForeignKey(i => i.SourceApplicationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.Target).WithMany().HasForeignKey(i => i.TargetApplicationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.Via).WithMany().HasForeignKey(i => i.ViaApplicationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.Owner).WithMany().HasForeignKey(i => i.OwnerId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(i => i.SourceApplicationId);
+            e.HasIndex(i => i.TargetApplicationId);
+            e.HasIndex(i => i.ViaApplicationId);
+            e.ToTable(t => t.HasCheckConstraint("CK_Integrations_SourceNotTarget", "\"SourceApplicationId\" <> \"TargetApplicationId\""));
+        });
+
+        b.Entity<IntegrationRisk>(e =>
+        {
+            e.ToTable("IntegrationRisks", t => t.HasCheckConstraint("CK_IntegrationRisks_Scale",
+                "\"Likelihood\" BETWEEN 1 AND 5 AND \"Impact\" BETWEEN 1 AND 5"));
+            e.Property(r => r.Description).IsRequired().HasMaxLength(1000);
+            e.Property(r => r.Mitigation).HasMaxLength(2000);
+            e.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasOne(r => r.Integration).WithMany(i => i.Risks).HasForeignKey(r => r.IntegrationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Owner).WithMany().HasForeignKey(r => r.OwnerId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(r => r.IntegrationId);
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

@@ -1,6 +1,7 @@
 using Roadmapper.Core;
 using Roadmapper.Core.Portfolio;
 using Roadmapper.Data.Portfolio;
+using Roadmapper.Web.Exports;
 
 namespace Roadmapper.Web.Api;
 
@@ -42,6 +43,37 @@ public static class PortfolioApi
 
         api.MapGet("/contacts", async (PortfolioService svc) =>
             (await svc.GetContactsAsync()).Select(ContactDto.From).ToList());
+
+        // ?risk=high&type=EDI&applicationId=3 (as source, target or via)
+        api.MapGet("/integrations", async (PortfolioService svc, string? risk, string? type, int? applicationId) =>
+        {
+            var today = svc.Today;
+            IEnumerable<Integration> list = applicationId is { } appId
+                ? await svc.GetIntegrationsForApplicationAsync(appId)
+                : await svc.GetIntegrationsAsync();
+            if (Parse<RiskLevel>(risk) is { } r) list = list.Where(i => PortfolioRules.RiskLevel(i, today) == r);
+            if (Parse<IntegrationType>(type) is { } t) list = list.Where(i => i.Type == t);
+            return list.Select(i => IntegrationDto.From(i, today)).ToList();
+        });
+
+        api.MapGet("/integrations/{id:int}", async (int id, PortfolioService svc) =>
+            await svc.GetIntegrationAsync(id) is { } i ? Results.Ok(IntegrationDetailDto.From(i, svc.Today)) : Results.NotFound());
+
+        // Upstream: applications that send data to this one. Downstream: applications it sends data to. depth = 1–5 integrations away.
+        api.MapGet("/applications/{id:int}/dependencies", async (int id, PortfolioService svc, int? depth) =>
+            await svc.GetDependenciesAsync(id, depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
+
+        // The integration map as SVG. ?focus={applicationId}&depth=2 draws its dependency view; type, tier (1–3: that tier
+        // and more critical) and retired=true filter; download=true saves it as a file.
+        api.MapGet("/map.svg", async (PortfolioService svc, int? focus, int? depth, string? type, string? tier, bool? retired, bool? download) =>
+        {
+            var options = new MapOptions(focus, depth ?? 2, Parse<IntegrationType>(type), ParseTier(tier), retired == true);
+            var apps = await svc.GetApplicationsAsync();
+            var title = focus is { } f && apps.FirstOrDefault(a => a.Id == f) is { } app ? $"{app.Name}: dependencies" : "Integration map";
+            var picture = IntegrationMapSvg.Render(apps, await svc.GetIntegrationsAsync(), options, svc.Today, title);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(picture.Svg);
+            return download == true ? Results.File(bytes, "image/svg+xml", "integration-map.svg") : Results.Bytes(bytes, "image/svg+xml");
+        });
     }
 
     private static T? Parse<T>(string? value) where T : struct, Enum =>
@@ -115,3 +147,40 @@ public record ContactDto(int Id, string Name, string? Title, string? Email, stri
 }
 
 public record RenewalDto(ContractDto Contract, string VendorName, IReadOnlyList<string> Applications);
+
+public record RiskDto(int Id, string Description, int Likelihood, int Impact, int Score, RiskStatus Status, string? Mitigation, Ref? Owner, DateOnly? RaisedOn)
+{
+    public static RiskDto From(IntegrationRisk r) =>
+        new(r.Id, r.Description, r.Likelihood, r.Impact, r.Score, r.Status, r.Mitigation, Ref.Of(r.Owner), r.RaisedOn);
+}
+
+public record IntegrationDto(int Id, string Name, Ref Source, Ref Target, Ref? Via, IntegrationType Type, FlowDirection Direction,
+    IntegrationFrequency Frequency, string? MessageFormat, string BusinessPurpose, Criticality Criticality, LifecycleStatus Status,
+    Ref? Owner, DateOnly? LastReviewDate, DateOnly? NextReviewDate, bool ReviewOverdue, RiskLevel RiskLevel, int TopRiskScore, int OpenRiskCount)
+{
+    public static IntegrationDto From(Integration i, DateOnly today) => new(i.Id, i.Name,
+        new Ref(i.SourceApplicationId, i.Source?.Name ?? ""), new Ref(i.TargetApplicationId, i.Target?.Name ?? ""),
+        i.Via is { } v ? new Ref(v.Id, v.Name) : null, i.Type, i.Direction, i.Frequency, i.MessageFormat, i.BusinessPurpose,
+        i.Criticality, i.Status, Ref.Of(i.Owner), i.LastReviewDate, i.NextReviewDate, PortfolioRules.ReviewOverdue(i, today),
+        PortfolioRules.RiskLevel(i, today), PortfolioRules.TopRiskScore(i), i.Risks.Count(r => r.IsActive));
+}
+
+public record IntegrationDetailDto(IntegrationDto Integration, int ReviewIntervalMonths, string? Notes, IReadOnlyList<RiskDto> Risks)
+{
+    public static IntegrationDetailDto From(Integration i, DateOnly today) => new(IntegrationDto.From(i, today), i.ReviewIntervalMonths, i.Notes,
+        i.Risks.OrderByDescending(r => r.IsActive).ThenByDescending(r => r.Score).Select(RiskDto.From).ToList());
+}
+
+public record DependencyRowDto(Ref Application, AppCategory Category, Criticality Criticality, int Distance, IReadOnlyList<Ref> Integrations);
+
+public record DependencyDto(Ref Application, int Depth, IReadOnlyList<IntegrationDto> Direct,
+    IReadOnlyList<DependencyRowDto> Upstream, IReadOnlyList<DependencyRowDto> Downstream)
+{
+    public static DependencyDto From(DependencyView v, DateOnly today)
+    {
+        static DependencyRowDto Row(DependencyRow r) => new(new Ref(r.Application.Id, r.Application.Name), r.Application.Category,
+            r.Application.Criticality, r.Distance, r.Integrations.Select(i => new Ref(i.Id, i.Name)).ToList());
+        return new(new Ref(v.Application.Id, v.Application.Name), v.Depth, v.Direct.Select(i => IntegrationDto.From(i, today)).ToList(),
+            v.Upstream.Select(Row).ToList(), v.Downstream.Select(Row).ToList());
+    }
+}

@@ -38,6 +38,39 @@ public static class PortfolioRules
     /// <summary>The notice deadline has passed but the renewal date hasn't: the contract will renew as-is.</summary>
     public static bool NoticeMissed(Contract c, DateOnly today) =>
         c.NoticeDeadline is { } d && d < today && c.RenewalDate >= today;
+
+    // ---- Integrations ----
+
+    /// <summary>Risk scores (likelihood × impact) at or above this make an integration high risk.</summary>
+    public const int HighRiskScore = 15;
+    /// <summary>On a Tier 1 integration, a risk this high is already enough for high risk.</summary>
+    public const int HighRiskScoreTier1 = 8;
+    /// <summary>Risk scores at or above this make an integration at least medium risk.</summary>
+    public const int MediumRiskScore = 6;
+
+    /// <summary>The highest score among risks that are still open or accepted; 0 when there are none.</summary>
+    public static int TopRiskScore(Integration i) => i.Risks.Where(r => r.IsActive).Select(r => r.Score).DefaultIfEmpty(0).Max();
+
+    /// <summary>A live integration that has never been reviewed, or whose review interval has passed.</summary>
+    public static bool ReviewOverdue(Integration i, DateOnly today) =>
+        i.Status is LifecycleStatus.Active or LifecycleStatus.Retiring && (i.NextReviewDate is not { } next || next < today);
+
+    /// <summary>
+    /// High: an open or accepted risk scores 15+, or 8+ on a Tier 1 integration.
+    /// Medium: a risk scores 6+, or the review is overdue. Low: otherwise. Retired integrations are always low.
+    /// </summary>
+    public static RiskLevel RiskLevel(Integration i, DateOnly today)
+    {
+        if (i.Status == LifecycleStatus.Retired) return Portfolio.RiskLevel.Low;
+        var top = TopRiskScore(i);
+        if (top >= HighRiskScore || (i.Criticality == Criticality.Tier1 && top >= HighRiskScoreTier1)) return Portfolio.RiskLevel.High;
+        if (top >= MediumRiskScore || ReviewOverdue(i, today)) return Portfolio.RiskLevel.Medium;
+        return Portfolio.RiskLevel.Low;
+    }
+
+    /// <summary>Severity band of a single risk score, for the colored score chip: 1–5 low, 6–14 medium, 15–25 high.</summary>
+    public static RiskLevel ScoreLevel(int score) =>
+        score >= HighRiskScore ? Portfolio.RiskLevel.High : score >= MediumRiskScore ? Portfolio.RiskLevel.Medium : Portfolio.RiskLevel.Low;
 }
 
 /// <summary>Display names for portfolio enums, shared by the UI, exports and API.</summary>
@@ -79,6 +112,22 @@ public static class PortfolioText
         _ => "Low business and technical fit: candidate to retire.",
     };
 
+    public static string Label(IntegrationType t) => t switch { IntegrationType.Batch => "Batch file", _ => t.ToString() };
+
+    public static string Label(FlowDirection d) => d switch { FlowDirection.OneWay => "One-way", _ => "Bidirectional" };
+
+    public static string Label(IntegrationFrequency f) => f switch
+    {
+        IntegrationFrequency.RealTime => "Real-time",
+        IntegrationFrequency.NearRealTime => "Near real-time",
+        IntegrationFrequency.OnDemand => "On demand",
+        _ => f.ToString(),
+    };
+
+    public static string Label(RiskStatus s) => s.ToString();
+
+    public static string Label(RiskLevel l) => $"{l} risk";
+
     /// <summary>Any portfolio enum (or other value) as display text, for history and exports.</summary>
     public static string Format(object value) => value switch
     {
@@ -86,6 +135,9 @@ public static class PortfolioText
         Criticality c => Label(c),
         Hosting h => Label(h),
         SupportRole r => Label(r),
+        IntegrationType t => Label(t),
+        FlowDirection d => Label(d),
+        IntegrationFrequency f => Label(f),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
