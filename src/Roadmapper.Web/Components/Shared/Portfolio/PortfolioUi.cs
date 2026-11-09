@@ -9,7 +9,7 @@ public static class PortfolioUi
     private static readonly CultureInfo Us = CultureInfo.GetCultureInfo("en-US");
 
     /// <summary>"$480,000", or "–" when unknown.</summary>
-    public static string Money(decimal? value) => value is { } v ? v.ToString("C0", Us) : "–";
+    public static string Money(decimal? value) => value is { } v ? v.ToString(v == decimal.Truncate(v) ? "C0" : "C2", Us) : "–";
 
     /// <summary>"$2.4M" / "$480K" for tiles.</summary>
     public static string MoneyShort(decimal value) => value switch

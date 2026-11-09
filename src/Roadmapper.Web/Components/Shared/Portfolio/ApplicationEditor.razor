@@ -84,7 +84,7 @@
                                 </InputSelect>
                             </label>
                             <label class="field" title="This application's share per year; one contract can cover several applications">Annual cost (USD)
-                                <InputNumber @bind-Value="draft.AnnualCost" min="0" step="1000" />
+                                <InputNumber @bind-Value="draft.AnnualCost" min="0" step="0.01" />
                             </label>
                         </div>
                         @if (draft.VendorId is not null && VendorContracts.Count == 0)
