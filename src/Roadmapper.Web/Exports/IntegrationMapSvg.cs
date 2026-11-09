@@ -25,6 +25,8 @@ public static class IntegrationMapSvg
     private const string FontFamily = "Segoe UI, system-ui, -apple-system, sans-serif";
     private const string Ink = "#1d2330", Muted = "#667085", Line = "#e1e4ea";
     private const string PartnerFill = "#f6f3fd", PartnerStroke = "#b9a6e3";
+    /// <summary>How far a line that skips a column bows above or below the row; and the room kept for it.</summary>
+    private const double ArcLift = 76, ArcRoom = 48;
 
     public static string TypeColor(IntegrationType t) => t switch
     {
@@ -83,8 +85,12 @@ public static class IntegrationMapSvg
         var loopRoom = loops.Count == 0 ? 0 : 56 + 8 * loops.Max(s => Math.Abs(layout.Boxes[s.From].Row - layout.Boxes[s.To].Row));
         var width = Math.Max(layout.Width + loopRoom, MinWidth);
         var focusMode = focus is not null && nodes.Count > 0;
-        var top = TitleHeight + HeaderHeight;
-        var height = top + Math.Max(layout.Height, 90) + LegendHeight;
+        // Lines that skip a column arc above or below the boxes; keep room for them.
+        // (forward flows bow above, backward flows below).
+        var arcsAbove = segments.Any(s => layout.Boxes[s.To].ColumnIndex - layout.Boxes[s.From].ColumnIndex > 1);
+        var arcsBelow = segments.Any(s => layout.Boxes[s.From].ColumnIndex - layout.Boxes[s.To].ColumnIndex > 1);
+        var top = TitleHeight + HeaderHeight + (arcsAbove ? ArcRoom : 0);
+        var height = top + Math.Max(layout.Height, 90) + (arcsBelow ? ArcRoom : 0) + LegendHeight;
 
         var svg = new StringBuilder();
         svg.Append($"""<svg xmlns="http://www.w3.org/2000/svg" class="integration-map" width="{F(width)}" height="{F(height)}" viewBox="0 0 {F(width)} {F(height)}" font-family="{FontFamily}" font-size="12">""");
@@ -221,6 +227,8 @@ public static class IntegrationMapSvg
         var ay = a.Y + top + h / 2 + lane;
         var by = b.Y + top + h / 2 + lane;
         double x0, x1, c0, c1;
+        double cy0 = ay, cy1 = by;
+        var span = Math.Abs(b.ColumnIndex - a.ColumnIndex);
         if (b.ColumnIndex > a.ColumnIndex) { x0 = a.X + w; x1 = b.X - 2; c0 = x0 + (x1 - x0) / 2; c1 = x1 - (x1 - x0) / 2; }
         else if (b.ColumnIndex < a.ColumnIndex) { x0 = a.X; x1 = b.X + w + 2; c0 = x0 - (x0 - x1) / 2; c1 = x1 + (x0 - x1) / 2; }
         else
@@ -229,8 +237,17 @@ public static class IntegrationMapSvg
             var bulge = 40 + 8 * Math.Abs(a.Row - b.Row);
             c0 = x0 + bulge; c1 = x1 + bulge;
         }
-        var mid = ((x0 + 3 * c0 + 3 * c1 + x1) / 8, (ay + by) / 2);
-        return ($"M{F(x0)},{F(ay)} C{F(c0)},{F(ay)} {F(c1)},{F(by)} {F(x1)},{F(by)}", mid);
+        if (span > 1)
+        {
+            // Skipping a column: arc over the boxes in between (forward flows above, backward flows below) instead of through them.
+            var lift = ArcLift + 12 * (span - 2);
+            (cy0, cy1) = b.ColumnIndex > a.ColumnIndex
+                ? (Math.Min(ay, by) - lift, Math.Min(ay, by) - lift)
+                : (Math.Max(ay, by) + lift, Math.Max(ay, by) + lift);
+            (c0, c1) = (x0 + (x1 - x0) / 4, x1 - (x1 - x0) / 4);
+        }
+        var mid = ((x0 + 3 * c0 + 3 * c1 + x1) / 8, (ay + 3 * cy0 + 3 * cy1 + by) / 8);
+        return ($"M{F(x0)},{F(ay)} C{F(c0)},{F(cy0)} {F(c1)},{F(cy1)} {F(x1)},{F(by)}", mid);
     }
 
     private static string Tooltip(Integration i, RiskLevel level)

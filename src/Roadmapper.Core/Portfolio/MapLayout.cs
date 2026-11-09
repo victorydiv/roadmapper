@@ -59,7 +59,8 @@ public static class MapLayout
     /// Columns for a dependency view. Which nodes appear comes from the dependency walk (up to <paramref name="depth"/>
     /// integrations away); where they sit follows the path the data takes, so an integration routed through a middle
     /// hop draws as source → hop → target in a line. Upstream nodes get negative columns, downstream positive; a node
-    /// that is both (a two-way flow) goes on the nearer side, downstream on a tie.
+    /// that is both (it sends to and receives from the focus, by any route) is always drawn downstream, so a two-way
+    /// path stays in one line and the other flows curve back to it.
     /// </summary>
     public static Dictionary<NodeRef, int> FocusColumns(PortfolioGraph graph, NodeRef focus, int depth)
     {
@@ -71,10 +72,7 @@ public static class MapLayout
         var columns = new Dictionary<NodeRef, int> { [focus] = 0 };
         foreach (var (node, distance) in down) columns[node] = downPath.GetValueOrDefault(node, distance);
         foreach (var (node, distance) in up)
-        {
-            var column = upPath.GetValueOrDefault(node, distance);
-            if (!columns.TryGetValue(node, out var d) || column < d) columns[node] = -column;
-        }
+            if (!columns.ContainsKey(node)) columns[node] = -upPath.GetValueOrDefault(node, distance);
         return columns;
     }
 

@@ -190,6 +190,29 @@ public class MapLayoutTests
     }
 
     [Fact]
+    public void A_direct_return_flow_does_not_pull_the_target_out_of_line()
+    {
+        // PCP ⇄ Synapse (app 1) via Cleo (app 2), plus a one-way SFTP straight from Synapse to PCP.
+        var g = new PortfolioGraph([
+            new GraphEdge(3, P(2), A(1), Via: A(2), Bidirectional: true),
+            new GraphEdge(4, A(1), P(2)),
+        ]);
+        var columns = MapLayout.FocusColumns(g, P(2), 2);
+        Assert.Equal(1, columns[A(2)]); // Cleo
+        Assert.Equal(2, columns[A(1)]); // Synapse, beyond Cleo; the SFTP curves back to PCP
+    }
+
+    [Fact]
+    public void Nodes_only_upstream_still_go_left()
+    {
+        var g = new PortfolioGraph([new GraphEdge(1, A(1), A(2)), new GraphEdge(2, A(3), A(1), Via: A(4))]);
+        var columns = MapLayout.FocusColumns(g, A(1), 2);
+        Assert.Equal(1, columns[A(2)]);
+        Assert.Equal(-1, columns[A(4)]);
+        Assert.Equal(-2, columns[A(3)]);
+    }
+
+    [Fact]
     public void Empty_input_gives_an_empty_layout()
     {
         var layout = MapLayout.Layout([], []);
