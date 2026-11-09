@@ -98,8 +98,9 @@ public static class IntegrationMapSvg
         svg.Append($"""<text x="{F(MapLayout.Margin)}" y="24" font-size="17" font-weight="600" fill="{Ink}">{E(title)}</text>""");
         var appCount = nodes.Count(n => !n.Id.IsPartner);
         var partnerCount = nodes.Count - appCount;
-        var subtitle = $"{appCount} applications" + (partnerCount > 0 ? $" · {partnerCount} trading partners" : "")
-            + $" · {shown.Count} integrations · {today.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"
+        static string Count(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+        var subtitle = Count(appCount, "application", "applications") + (partnerCount > 0 ? $" · {Count(partnerCount, "trading partner", "trading partners")}" : "")
+            + $" · {Count(shown.Count, "integration", "integrations")} · {today.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"
             + (focusMode ? " · anything that both sends and receives is shown downstream" : "");
         svg.Append($"""<text x="{F(MapLayout.Margin)}" y="42" fill="{Muted}">{E(subtitle)}</text>""");
 

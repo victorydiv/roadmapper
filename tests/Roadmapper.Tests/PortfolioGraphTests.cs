@@ -173,6 +173,23 @@ public class MapLayoutTests
     }
 
     [Fact]
+    public void A_routed_integration_lines_up_source_hop_and_target()
+    {
+        // Customer ⇄ WMS (app 1) via the integration platform (app 2): customer | platform | WMS.
+        var g = new PortfolioGraph([new GraphEdge(1, P(1), A(1), Via: A(2), Bidirectional: true), new GraphEdge(2, A(1), A(3))]);
+        var columns = MapLayout.FocusColumns(g, P(1), 1);
+        Assert.Equal(1, columns[A(2)]);
+        Assert.Equal(2, columns[A(1)]);
+        Assert.False(columns.ContainsKey(A(3))); // two integrations away: outside depth 1
+
+        // From the WMS's side the customer sits beyond the platform, and the TMS-like app 3 is downstream.
+        var fromWms = MapLayout.FocusColumns(g, A(1), 1);
+        Assert.Equal(1, fromWms[A(2)]);
+        Assert.Equal(2, fromWms[P(1)]);
+        Assert.Equal(1, fromWms[A(3)]);
+    }
+
+    [Fact]
     public void Empty_input_gives_an_empty_layout()
     {
         var layout = MapLayout.Layout([], []);

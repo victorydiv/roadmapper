@@ -45,26 +45,36 @@ public static class MapLayout
         _ => "Reporting & other",
     };
 
-    /// <summary>"2 steps upstream", "Upstream", "Selected", "Downstream", "3 steps downstream".</summary>
+    /// <summary>Headings for a dependency view. Columns follow the data's path, so they're "further", not a count of integrations.</summary>
     public static string FocusColumnTitle(int column) => column switch
     {
         0 => "Selected",
         -1 => "Upstream (feeds it)",
         1 => "Downstream (it feeds)",
-        < 0 => $"{-column} steps upstream",
-        _ => $"{column} steps downstream",
+        < 0 => "Further upstream",
+        _ => "Further downstream",
     };
 
     /// <summary>
-    /// Columns for a dependency view: upstream applications at negative distances, the focus at 0, downstream at
-    /// positive distances. An application that is both (a two-way partner) goes on the nearer side, downstream on a tie.
+    /// Columns for a dependency view. Which nodes appear comes from the dependency walk (up to <paramref name="depth"/>
+    /// integrations away); where they sit follows the path the data takes, so an integration routed through a middle
+    /// hop draws as source → hop → target in a line. Upstream nodes get negative columns, downstream positive; a node
+    /// that is both (a two-way flow) goes on the nearer side, downstream on a tie.
     /// </summary>
     public static Dictionary<NodeRef, int> FocusColumns(PortfolioGraph graph, NodeRef focus, int depth)
     {
+        var down = graph.Downstream(focus, depth).ToDictionary(r => r.Node, r => r.Distance);
+        var up = graph.Upstream(focus, depth).ToDictionary(r => r.Node, r => r.Distance);
+        var downPath = graph.PathDistances(focus, downstream: true, down.Keys.ToHashSet());
+        var upPath = graph.PathDistances(focus, downstream: false, up.Keys.ToHashSet());
+
         var columns = new Dictionary<NodeRef, int> { [focus] = 0 };
-        foreach (var r in graph.Downstream(focus, depth)) columns[r.Node] = r.Distance;
-        foreach (var r in graph.Upstream(focus, depth))
-            if (!columns.TryGetValue(r.Node, out var down) || r.Distance < down) columns[r.Node] = -r.Distance;
+        foreach (var (node, distance) in down) columns[node] = downPath.GetValueOrDefault(node, distance);
+        foreach (var (node, distance) in up)
+        {
+            var column = upPath.GetValueOrDefault(node, distance);
+            if (!columns.TryGetValue(node, out var d) || column < d) columns[node] = -column;
+        }
         return columns;
     }
 

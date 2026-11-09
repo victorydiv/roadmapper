@@ -48,21 +48,18 @@ public sealed class PortfolioGraph
     private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _forward = new();
     private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _backward = new();
     private readonly Dictionary<NodeRef, List<int>> _touching = new();
+    // The same steps without the source → target shortcut of a routed integration: the path as drawn.
+    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathForward = new();
+    private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathBackward = new();
 
     public PortfolioGraph(IEnumerable<GraphEdge> edges)
     {
         foreach (var e in edges)
         {
             foreach (var (from, to) in Hops(e))
-            {
-                Add(_forward, from, to, e.IntegrationId);
-                Add(_backward, to, from, e.IntegrationId);
-                if (e.Bidirectional)
-                {
-                    Add(_forward, to, from, e.IntegrationId);
-                    Add(_backward, from, to, e.IntegrationId);
-                }
-            }
+                Link(_forward, _backward, from, to, e);
+            foreach (var (from, to) in PathHops(e))
+                Link(_pathForward, _pathBackward, from, to, e);
             var ends = new List<NodeRef> { e.Source, e.Target };
             if (e.Via is { } v) ends.Add(v);
             foreach (var node in ends)
@@ -84,6 +81,52 @@ public sealed class PortfolioGraph
             yield return (e.Source, via);
             yield return (via, e.Target);
         }
+    }
+
+    /// <summary>The steps along the path an integration's data travels: source → via → target, or source → target.</summary>
+    public static IEnumerable<(NodeRef From, NodeRef To)> PathHops(GraphEdge e)
+    {
+        if (e.Via is { } via)
+        {
+            yield return (e.Source, via);
+            yield return (via, e.Target);
+        }
+        else yield return (e.Source, e.Target);
+    }
+
+    private static void Link(Dictionary<NodeRef, List<(NodeRef, int)>> forward, Dictionary<NodeRef, List<(NodeRef, int)>> backward,
+        NodeRef from, NodeRef to, GraphEdge e)
+    {
+        Add(forward, from, to, e.IntegrationId);
+        Add(backward, to, from, e.IntegrationId);
+        if (!e.Bidirectional) return;
+        Add(forward, to, from, e.IntegrationId);
+        Add(backward, from, to, e.IntegrationId);
+    }
+
+    /// <summary>
+    /// How many steps along the drawn path (source → via → target) each node in <paramref name="within"/> is from
+    /// <paramref name="start"/>, downstream or upstream. Used to lay out a dependency map so a middle hop sits
+    /// between the two ends rather than beside the target. Same partner rules as <see cref="Downstream"/>.
+    /// </summary>
+    public Dictionary<NodeRef, int> PathDistances(NodeRef start, bool downstream, IReadOnlySet<NodeRef> within)
+    {
+        var adjacency = downstream ? _pathForward : _pathBackward;
+        var distances = new Dictionary<NodeRef, int> { [start] = 0 };
+        var queue = new Queue<NodeRef>([start]);
+        while (queue.TryDequeue(out var from))
+        {
+            if (from.IsPartner && from != start) continue;
+            if (!adjacency.TryGetValue(from, out var next)) continue;
+            foreach (var (to, _) in next.OrderBy(n => n.To))
+            {
+                if (distances.ContainsKey(to) || !within.Contains(to) || (start.IsPartner && to.IsPartner)) continue;
+                distances[to] = distances[from] + 1;
+                queue.Enqueue(to);
+            }
+        }
+        distances.Remove(start);
+        return distances;
     }
 
     /// <summary>Every integration in which the node is the source, target or middle hop.</summary>
