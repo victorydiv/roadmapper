@@ -1,0 +1,125 @@
+@page "/portfolio/vendors"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Vendors & contracts" Subtitle="Who you buy from, what the contracts say, and when you must act on renewals.">
+    <button class="btn primary" @onclick="() => editing = new VendorDraft()">+ New vendor</button>
+</PortfolioHeader>
+
+@if (vendors is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="card stack" style="margin-bottom:1rem">
+        <div class="row">
+            <h2 style="margin:0">Upcoming renewals</h2>
+            <span class="muted small">Contracts whose notice deadline is in the next @warningDays days, or has passed before the renewal date.</span>
+        </div>
+        @if (renewals.Count == 0)
+        {
+            <div class="muted small">Nothing needs action in the next @warningDays days.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead>
+                        <tr><th>Notice deadline</th><th>Vendor</th><th>Contract</th><th>Renews</th><th>Applications</th><th class="num">Annual value</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in renewals)
+                        {
+                            var c = r.Contract;
+                            var missed = PortfolioRules.NoticeMissed(c, today);
+                            <tr>
+                                <td class="@(missed ? "overdue" : "due-soon")">
+                                    @PortfolioUi.Date(c.NoticeDeadline)
+                                    <span class="small">(@(missed ? "missed" : PortfolioUi.Relative(c.NoticeDeadline!.Value, today)))</span>
+                                </td>
+                                <td><a href="/portfolio/vendors/@c.VendorId">@r.VendorName</a></td>
+                                <td>@c.Name @if (c.AutoRenews) { <span class="badge tag">auto-renews</span> }</td>
+                                <td>@PortfolioUi.Date(c.RenewalDate)</td>
+                                <td class="small">@(r.Applications.Count == 0 ? "–" : string.Join(", ", r.Applications))</td>
+                                <td class="num">@PortfolioUi.Money(c.AnnualValue)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (vendors.Count == 0)
+    {
+        <div class="card empty">No vendors yet. Add the companies you buy software and services from.</div>
+    }
+    else
+    {
+        <div class="card table-wrap">
+            <table class="tree">
+                <thead>
+                    <tr>
+                        <th>Vendor</th>
+                        <th>Account manager</th>
+                        <th>Applications</th>
+                        <th class="num">Contracts</th>
+                        <th>Contract term</th>
+                        <th>Next renewal</th>
+                        <th class="num">Annual value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in vendors)
+                    {
+                        var next = PortfolioRules.NextRenewal(v.Contracts, today);
+                        <tr>
+                            <td class="title-cell"><a class="title-link" href="/portfolio/vendors/@v.Id">@v.Name</a></td>
+                            <td>@(v.AccountManager?.Name ?? "–")</td>
+                            <td class="small">@(v.Applications.Count == 0 ? "–" : string.Join(", ", v.Applications.OrderBy(a => a.Name).Select(a => a.Name)))</td>
+                            <td class="num">@v.Contracts.Count</td>
+                            <td class="small">@Ui.DateRange(PortfolioRules.ContractStart(v.Contracts), PortfolioRules.ContractEnd(v.Contracts))</td>
+                            <td class="@PortfolioUi.NoticeClass(next, today, warningDays)">
+                                @if (next is not null)
+                                {
+                                    @PortfolioUi.Date(next.RenewalDate)
+                                    @if (next.NoticePeriodDays > 0) { <span class="small"> · notice by @PortfolioUi.Date(next.NoticeDeadline)</span> }
+                                }
+                                else { <span class="muted">–</span> }
+                            </td>
+                            <td class="num">@PortfolioUi.Money(v.Contracts.Any(c => c.AnnualValue is not null) ? v.Contracts.Sum(c => c.AnnualValue ?? 0) : null)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@if (editing is not null)
+{
+    <VendorEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<Vendor>? vendors;
+    private List<RenewalRow> renewals = [];
+    private VendorDraft? editing;
+    private DateOnly today;
+    private int warningDays = 120;
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Svc.Today;
+        warningDays = (await Svc.GetSettingsAsync()).RenewalWarningDays;
+        vendors = await Svc.GetVendorsAsync();
+        renewals = await Svc.GetRenewalsAsync(warningDays);
+    }
+
+    private void OnEditorClosed(int? id)
+    {
+        editing = null;
+        if (id is > 0) Nav.NavigateTo($"/portfolio/vendors/{id}");
+    }
+}

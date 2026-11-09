@@ -1,0 +1,96 @@
+@inject PortfolioService Svc
+
+@* A person picker: internal staff first, then each vendor's people. "+ New" adds someone without leaving the form. *@
+<div class="contact-select">
+    @if (!adding)
+    {
+        <div class="row nowrap">
+            <select value="@(Value?.ToString() ?? "")" @onchange="OnPicked" style="flex:1">
+                <option value="">— none —</option>
+                @foreach (var group in Groups)
+                {
+                    <optgroup label="@group.Key">
+                        @foreach (var c in group)
+                        {
+                            <option value="@c.Id">@c.Name@(c.Title is { } t ? $" · {t}" : "")@(c.IsActive ? "" : " (inactive)")</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+            <button type="button" class="btn sm" title="Add a new person" @onclick="StartAdding">+ New</button>
+        </div>
+    }
+    else
+    {
+        <div class="stack new-contact">
+            @if (error is not null)
+            {
+                <div class="alert small">@error</div>
+            }
+            <div class="grid-2">
+                <input placeholder="Name" @bind="draft.Name" @bind:event="oninput" />
+                <input placeholder="Title (optional)" @bind="draft.Title" />
+                <input placeholder="Email (optional)" @bind="draft.Email" />
+                <select @bind="draft.VendorId">
+                    <option value="">Internal (our company)</option>
+                    @foreach (var v in Vendors)
+                    {
+                        <option value="@v.Id">@v.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="row">
+                <button type="button" class="btn primary sm" disabled="@string.IsNullOrWhiteSpace(draft.Name)" @onclick="CreateAsync">Add person</button>
+                <button type="button" class="btn sm" @onclick="() => adding = false">Cancel</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<Contact> Contacts { get; set; } = [];
+    /// <summary>Vendors offered for a new person's company.</summary>
+    [Parameter] public IReadOnlyList<Vendor> Vendors { get; set; } = [];
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+    /// <summary>This vendor's people are listed first, and a new person defaults to it.</summary>
+    [Parameter] public int? PreferVendorId { get; set; }
+
+    private bool adding;
+    private ContactDraft draft = new();
+    private string? error;
+
+    private IEnumerable<IGrouping<string, Contact>> Groups => Contacts
+        .Where(c => c.IsActive || c.Id == Value)
+        .OrderBy(c => c.VendorId == PreferVendorId && PreferVendorId is not null ? 0 : c.VendorId is null ? 1 : 2)
+        .ThenBy(c => c.Vendor?.Name).ThenBy(c => c.Name)
+        .GroupBy(c => c.Vendor?.Name ?? VendorName(c.VendorId) ?? "Internal");
+
+    private string? VendorName(int? id) => id is null ? null : Vendors.FirstOrDefault(v => v.Id == id)?.Name;
+
+    private Task OnPicked(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(int.TryParse(e.Value as string, out var id) ? id : null);
+
+    private void StartAdding()
+    {
+        draft = new ContactDraft { VendorId = PreferVendorId };
+        error = null;
+        adding = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        error = null;
+        try
+        {
+            var id = await Svc.SaveContactAsync(draft);
+            var contact = new Contact { Id = id, VendorId = draft.VendorId };
+            draft.ApplyTo(contact);
+            contact.Vendor = Vendors.FirstOrDefault(v => v.Id == draft.VendorId);
+            Contacts.Add(contact);
+            adding = false;
+            await ValueChanged.InvokeAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+}

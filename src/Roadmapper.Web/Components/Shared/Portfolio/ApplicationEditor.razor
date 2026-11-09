@@ -1,0 +1,235 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New application" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                @if (!loaded)
+                {
+                    <p class="muted">Loading…</p>
+                }
+                else
+                {
+                    <label class="field">Name
+                        <InputText @bind-Value="draft.Name" autofocus />
+                    </label>
+                    <label class="field">Description
+                        <InputTextArea @bind-Value="draft.Description" />
+                    </label>
+
+                    <div class="grid-4">
+                        <label class="field">Category
+                            <InputSelect @bind-Value="draft.Category">
+                                @foreach (var c in Enum.GetValues<AppCategory>())
+                                {
+                                    <option value="@c">@PortfolioText.Label(c)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field" title="Tier 1: operations stop without it. Tier 3: low impact.">Criticality
+                            <InputSelect @bind-Value="draft.Criticality">
+                                @foreach (var c in Enum.GetValues<Criticality>())
+                                {
+                                    <option value="@c">@PortfolioText.Label(c)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Status
+                            <InputSelect @bind-Value="draft.Status">
+                                @foreach (var s in Enum.GetValues<LifecycleStatus>())
+                                {
+                                    <option value="@s">@PortfolioText.Label(s)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                        <label class="field">Hosting
+                            <InputSelect @bind-Value="draft.Hosting">
+                                @foreach (var h in Enum.GetValues<Hosting>())
+                                {
+                                    <option value="@h">@PortfolioText.Label(h)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </div>
+
+                    <fieldset>
+                        <legend>Vendor &amp; cost</legend>
+                        <div class="grid-3">
+                            <label class="field">Vendor
+                                <InputSelect @bind-Value="draft.VendorId" @bind-Value:after="OnVendorChanged">
+                                    <option value="">— none (in-house or external party) —</option>
+                                    @foreach (var v in vendors)
+                                    {
+                                        <option value="@v.Id">@v.Name</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field" title="The renewal date comes from this contract">Contract
+                                <InputSelect @bind-Value="draft.ContractId" disabled="@(draft.VendorId is null)">
+                                    <option value="">— none —</option>
+                                    @foreach (var c in VendorContracts)
+                                    {
+                                        <option value="@c.Id">@ContractLabel(c)</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field" title="This application's share per year; one contract can cover several applications">Annual cost (USD)
+                                <InputNumber @bind-Value="draft.AnnualCost" min="0" step="1000" />
+                            </label>
+                        </div>
+                        @if (draft.VendorId is not null && VendorContracts.Count == 0)
+                        {
+                            <div class="muted small">This vendor has no contracts yet. Add one on the vendor's page to track the renewal date.</div>
+                        }
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Ownership</legend>
+                        <div class="grid-2">
+                            <label class="field">Business owner
+                                <ContactSelect Contacts="contacts" Vendors="vendors" @bind-Value="draft.BusinessOwnerId" />
+                            </label>
+                            <label class="field">Technical owner
+                                <ContactSelect Contacts="contacts" Vendors="vendors" @bind-Value="draft.TechnicalOwnerId" />
+                            </label>
+                        </div>
+                        <label class="field" title="A roadmap (product) that belongs to this application. Initiatives from any roadmap can also be linked on the application's page.">Own roadmap
+                            <InputSelect @bind-Value="draft.ProductId">
+                                <option value="">— none —</option>
+                                @foreach (var p in products)
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Assessment &amp; dates</legend>
+                        <div class="grid-4">
+                            <label class="field" title="1–5: how well it serves the business">Business fit
+                                <InputSelect @bind-Value="draft.BusinessFit">
+                                    <option value="">–</option>
+                                    @foreach (var n in FitScores)
+                                    {
+                                        <option value="@n">@n</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field" title="1–5: supportability, integration, security, vendor viability">Technical fit
+                                <InputSelect @bind-Value="draft.TechnicalFit">
+                                    <option value="">–</option>
+                                    @foreach (var n in FitScores)
+                                    {
+                                        <option value="@n">@n</option>
+                                    }
+                                </InputSelect>
+                            </label>
+                            <label class="field">Go-live
+                                <InputDate @bind-Value="draft.GoLiveDate" />
+                            </label>
+                            <label class="field">Retire
+                                <InputDate @bind-Value="draft.RetireDate" />
+                            </label>
+                        </div>
+                        @if (PortfolioRules.Quadrant(draft.BusinessFit, draft.TechnicalFit) is { } q)
+                        {
+                            <div class="small"><TimeBadge Quadrant="q" /> <span class="muted">@PortfolioText.Describe(q)</span></div>
+                        }
+                    </fieldset>
+
+                    <label class="field">Notes
+                        <InputTextArea @bind-Value="draft.Notes" />
+                    </label>
+                }
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete @original and its links? Roadmaps are kept.</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@(saving || !loaded)">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ApplicationDraft Draft { get; set; } = default!;
+    /// <summary>Called with the saved application's id, 0 when it was deleted, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private static readonly int[] FitScores = [1, 2, 3, 4, 5];
+
+    private ApplicationDraft draft = default!;
+    private string original = "";
+    private List<Vendor> vendors = [];
+    private List<Contact> contacts = [];
+    private List<(int Id, string Name)> products = [];
+    private bool loaded, saving, confirmingDelete;
+    private string? error;
+
+    private List<Contract> VendorContracts => vendors.FirstOrDefault(v => v.Id == draft.VendorId)?.Contracts.OrderBy(c => c.Name).ToList() ?? [];
+
+    private static string ContractLabel(Contract c) => c.RenewalDate is { } r ? $"{c.Name} · renews {PortfolioUi.Date(r)}" : c.Name;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        original = Draft.Name;
+        vendors = await Svc.GetVendorsAsync();
+        contacts = await Svc.GetContactsAsync();
+        products = await Svc.GetProductOptionsAsync();
+        loaded = true;
+    }
+
+    private void OnVendorChanged()
+    {
+        // A contract always belongs to the chosen vendor; preselect it when there's only one.
+        if (VendorContracts.All(c => c.Id != draft.ContractId))
+            draft.ContractId = VendorContracts.Count == 1 ? VendorContracts[0].Id : null;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var id = await Svc.SaveApplicationAsync(draft);
+            await CloseAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteApplicationAsync(draft.Id);
+        await CloseAsync(0);
+    }
+
+    private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);
+}

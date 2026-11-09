@@ -1,0 +1,244 @@
+@page "/portfolio/vendors/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (vendor is null)
+{
+    <PageTitle>Vendor not found</PageTitle>
+    <div class="card empty">
+        <h2>Vendor not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/vendors">Back to vendors</a></p>
+    </div>
+}
+else
+{
+    <PortfolioHeader Title="@vendor.Name" Parent="@(("Vendors & contracts", "/portfolio/vendors"))">
+        <button class="btn" @onclick="() => editingVendor = VendorDraft.From(vendor)">Edit</button>
+    </PortfolioHeader>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Overview</h2>
+            <dl class="facts">
+                <dt>Account manager</dt>
+                <dd>@Person(vendor.AccountManager)</dd>
+                <dt>Technical contact</dt>
+                <dd>@Person(vendor.TechnicalContact)</dd>
+                <dt>Support</dt>
+                <dd>
+                    @if (vendor.SupportPortalUrl is { } portal) { <a href="@portal" target="_blank" rel="noopener">Support portal</a> }
+                    @if (vendor.SupportPhone is { } phone) { <span> @phone</span> }
+                    @if (vendor.SupportPortalUrl is null && vendor.SupportPhone is null) { <span class="muted">–</span> }
+                </dd>
+                <dt>Website</dt>
+                <dd>@if (vendor.Website is { } site) { <a href="@site" target="_blank" rel="noopener">@site</a> } else { <span class="muted">–</span> }</dd>
+                <dt>Contract term</dt>
+                <dd>@Ui.DateRange(PortfolioRules.ContractStart(vendor.Contracts), PortfolioRules.ContractEnd(vendor.Contracts))</dd>
+                <dt>Next renewal</dt>
+                <dd class="@PortfolioUi.NoticeClass(next, today, warningDays)">
+                    @if (next is not null)
+                    {
+                        @PortfolioUi.Date(next.RenewalDate) <span class="small">(@next.Name)</span>
+                    }
+                    else { <span class="muted">–</span> }
+                </dd>
+                <dt>Applications</dt>
+                <dd>
+                    @if (vendor.Applications.Count == 0) { <span class="muted">None</span> }
+                    @foreach (var a in vendor.Applications)
+                    {
+                        <a class="chip-link" href="/portfolio/applications/@a.Id">@a.Name</a>
+                    }
+                </dd>
+            </dl>
+            @if (vendor.Notes is { } notes)
+            {
+                <div class="small notes">@notes</div>
+            }
+        </div>
+
+        <div class="card stack">
+            <h2>Escalation path</h2>
+            @if (vendor.EscalationContacts.Count == 0)
+            {
+                <div class="muted small">No escalation path yet. Add people in the order you'd call them.</div>
+            }
+            <ol class="escalation">
+                @foreach (var x in vendor.EscalationContacts)
+                {
+                    <li>
+                        <div>
+                            <span class="inline-gap"><b>@x.Contact?.Name</b> @if (x.Contact?.Title is { } t) { <span class="muted small">· @t</span> }</span>
+                            <div class="small inline-gap">
+                                @if (x.Contact?.Email is { } email) { <a href="mailto:@email">@email</a> }
+                                @if (x.Contact?.Phone is { } xPhone) { <span class="muted"> @xPhone</span> }
+                            </div>
+                            @if (x.Note is { } note) { <div class="muted small">@note</div> }
+                        </div>
+                        <span class="spacer"></span>
+                        <button class="btn icon" title="Call earlier" disabled="@(x.Level == 1)" @onclick="() => RunAsync(() => Svc.MoveEscalationContactAsync(vendor.Id, x.ContactId, -1))">▲</button>
+                        <button class="btn icon" title="Call later" disabled="@(x.Level == vendor.EscalationContacts.Count)" @onclick="() => RunAsync(() => Svc.MoveEscalationContactAsync(vendor.Id, x.ContactId, 1))">▼</button>
+                        <button class="btn sm" @onclick="() => RunAsync(() => Svc.RemoveEscalationContactAsync(vendor.Id, x.ContactId))">Remove</button>
+                    </li>
+                }
+            </ol>
+            <div class="stack add-row">
+                <ContactSelect Contacts="contacts" Vendors="vendors" PreferVendorId="vendor.Id" @bind-Value="newEscalationId" />
+                <div class="row nowrap">
+                    <input placeholder="When to call (optional)" @bind="newEscalationNote" />
+                    <button class="btn" disabled="@(newEscalationId is null)" @onclick="AddEscalationAsync">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Contracts</h2>
+            <span class="spacer"></span>
+            <button class="btn" @onclick="() => editingContract = ContractDraft.New(vendor.Id)">+ New contract</button>
+        </div>
+        @if (vendor.Contracts.Count == 0)
+        {
+            <div class="muted small">No contracts yet. Add one to track its renewal and notice deadline.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead>
+                        <tr><th>Contract</th><th>Number</th><th>Term</th><th>Renews</th><th>Notice deadline</th><th class="num">Annual value</th><th>Applications</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in vendor.Contracts)
+                        {
+                            <tr>
+                                <td class="title-cell">@c.Name @if (c.AutoRenews) { <span class="badge tag">auto-renews</span> }</td>
+                                <td>@(c.ContractNumber ?? "–")</td>
+                                <td class="small">@Ui.DateRange(c.StartDate, c.EndDate)</td>
+                                <td>@PortfolioUi.Date(c.RenewalDate)</td>
+                                <td class="@PortfolioUi.NoticeClass(c, today, warningDays)">
+                                    @(c.NoticePeriodDays > 0 ? $"{PortfolioUi.Date(c.NoticeDeadline)} ({c.NoticePeriodDays} days)" : "–")
+                                </td>
+                                <td class="num">@PortfolioUi.Money(c.AnnualValue)</td>
+                                <td class="small">@string.Join(", ", vendor.Applications.Where(a => a.ContractId == c.Id).Select(a => a.Name))</td>
+                                <td><button class="btn sm" @onclick="() => editingContract = ContractDraft.From(c)">Edit</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="settings" style="margin-top:1rem">
+        <div class="card stack">
+            <h2>People at @vendor.Name</h2>
+            @if (vendor.Staff.Count == 0)
+            {
+                <div class="muted small">No one yet. People added with this vendor as their company appear here.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var p in vendor.Staff)
+                {
+                    <li>
+                        <span class="inline-gap"><b>@p.Name</b> @if (p.Title is { } t) { <span class="muted small">· @t</span> }</span>
+                        <span class="spacer"></span>
+                        @if (p.Email is { } email) { <a class="small" href="mailto:@email">@email</a> }
+                        @if (p.Phone is { } staffPhone) { <span class="muted small">@staffPhone</span> }
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="card stack">
+            <h2>History</h2>
+            <PortfolioActivityList Entries="history" />
+        </div>
+    </div>
+}
+
+@if (editingVendor is not null)
+{
+    <VendorEditor Draft="editingVendor" OnClose="OnVendorEditorClosed" />
+}
+@if (editingContract is not null)
+{
+    <ContractEditor Draft="editingContract" OnClose="OnContractEditorClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Vendor? vendor;
+    private bool loaded;
+    private string? error;
+    private DateOnly today;
+    private int warningDays = 120;
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private List<PortfolioAuditEntry> history = [];
+    private VendorDraft? editingVendor;
+    private ContractDraft? editingContract;
+    private int? newEscalationId;
+    private string? newEscalationNote;
+
+    private Contract? next => vendor is null ? null : PortfolioRules.NextRenewal(vendor.Contracts, today);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        warningDays = (await Svc.GetSettingsAsync()).RenewalWarningDays;
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        vendor = await Svc.GetVendorAsync(Id);
+        if (vendor is null) return;
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+        history = await Svc.GetActivityAsync(PortfolioEntityType.Vendor, Id);
+    }
+
+    private static RenderFragment Person(Contact? c) => c is null
+        ? @<span class="muted">–</span>
+        : @<span class="inline-gap">@c.Name @if (c.Email is { } e) { <a class="small" href="mailto:@e">@e</a> } @if (c.Phone is { } p) { <span class="muted small">@p</span> }</span>;
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task AddEscalationAsync()
+    {
+        if (newEscalationId is not { } contactId) return;
+        await RunAsync(() => Svc.AddEscalationContactAsync(Id, contactId, newEscalationNote));
+        if (error is null) { newEscalationId = null; newEscalationNote = null; }
+    }
+
+    private async Task OnVendorEditorClosed(int? result)
+    {
+        editingVendor = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/vendors"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+
+    private async Task OnContractEditorClosed(bool changed)
+    {
+        editingContract = null;
+        if (changed) await ReloadAsync();
+    }
+}

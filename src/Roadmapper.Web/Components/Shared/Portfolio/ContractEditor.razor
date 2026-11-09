@@ -1,0 +1,108 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New contract" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <div class="grid-2">
+                    <label class="field">Name
+                        <InputText @bind-Value="draft.Name" placeholder="e.g. WMS SaaS subscription 2025–2028" autofocus />
+                    </label>
+                    <label class="field">Contract number
+                        <InputText @bind-Value="draft.ContractNumber" />
+                    </label>
+                    <label class="field">Start
+                        <InputDate @bind-Value="draft.StartDate" />
+                    </label>
+                    <label class="field">End
+                        <InputDate @bind-Value="draft.EndDate" />
+                    </label>
+                    <label class="field">Renewal date
+                        <InputDate @bind-Value="draft.RenewalDate" />
+                    </label>
+                    <label class="field" title="How many days before the renewal date you must give notice to cancel or renegotiate">Notice period (days)
+                        <InputNumber @bind-Value="draft.NoticePeriodDays" min="0" />
+                    </label>
+                    <label class="field">Annual value (USD)
+                        <InputNumber @bind-Value="draft.AnnualValue" min="0" step="1000" />
+                    </label>
+                    <label class="check" style="align-self:end">
+                        <InputCheckbox @bind-Value="draft.AutoRenews" /> Renews automatically
+                    </label>
+                </div>
+                @if (PortfolioRules.NoticeDeadline(draft.RenewalDate, draft.NoticePeriodDays) is { } deadline && draft.NoticePeriodDays > 0)
+                {
+                    <div class="small">Notice deadline: <b>@PortfolioUi.Date(deadline)</b></div>
+                }
+                <label class="field">Notes
+                    <InputTextArea @bind-Value="draft.Notes" placeholder="Price escalators, termination terms, SLAs…" />
+                </label>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Applications on this contract keep their vendor but lose the renewal date.</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ContractDraft Draft { get; set; } = default!;
+    /// <summary>Called with true when anything was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private ContractDraft draft = default!;
+    private string original = "";
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        draft = Draft;
+        original = Draft.Name;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveContractAsync(draft);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteContractAsync(draft.Id);
+        await OnClose.InvokeAsync(true);
+    }
+}

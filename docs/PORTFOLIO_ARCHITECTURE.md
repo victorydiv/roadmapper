@@ -32,9 +32,9 @@ The user is an **IT Product Manager at a 3PL** who manages *purchased* SaaS (WMS
 └──────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────── Roadmapper.Data ────────────────────────────┐
 │ Portfolio/PortfolioService.*.cs  (partial, one file per aggregate)      │
-│ Portfolio/PortfolioModel.cs      (IEntityTypeConfiguration<> classes)   │
+│ Portfolio/PortfolioModel.cs      (ConfigurePortfolio() EF mapping)      │
 │ Portfolio/PortfolioAuditTrail.cs (field-level history for portfolio)    │
-│ RoadmapDbContext  (+ DbSets, ApplyConfigurationsFromAssembly)           │
+│ RoadmapDbContext  (+ DbSets, calls b.ConfigurePortfolio())              │
 │ Migrations/  AddPortfolioCatalog, AddIntegrations, AddProcesses, …      │
 └──────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────── Roadmapper.Core ────────────────────────────┐
@@ -269,7 +269,7 @@ public class Application
     public DateOnly? RenewalDate => Contract?.RenewalDate;   // derived, [NotMapped]
 }
 ```
-Mapping in `Roadmapper.Data/Portfolio/PortfolioModel.cs` as `IEntityTypeConfiguration<T>` classes; `RoadmapDbContext.OnModelCreating` adds `b.ApplyConfigurationsFromAssembly(typeof(RoadmapDbContext).Assembly)` so the existing file doesn't balloon. Drafts (`ApplicationDraft`, `IntegrationDraft`, …) with `Validate()` mirror [ItemDraft.cs](../src/Roadmapper.Core/ItemDraft.cs).
+Mapping lives in `Roadmapper.Data/Portfolio/PortfolioModel.cs` as one `ModelBuilder.ConfigurePortfolio()` extension (same inline style as the roadmap mapping); `RoadmapDbContext.OnModelCreating` calls it, so the existing file doesn't balloon. Drafts (`ApplicationDraft`, `IntegrationDraft`, …) with `Validate()` mirror [ItemDraft.cs](../src/Roadmapper.Core/ItemDraft.cs).
 
 ## 4. Migrations (one per phase, generated with `dotnet ef migrations add`)
 | Phase | Migration | Tables |

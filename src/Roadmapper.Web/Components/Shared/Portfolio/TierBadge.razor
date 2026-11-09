@@ -1,0 +1,12 @@
+<span class="badge tier-@((int)Tier)" title="@Title">@PortfolioText.Label(Tier)</span>
+
+@code {
+    [Parameter, EditorRequired] public Criticality Tier { get; set; }
+
+    private string Title => Tier switch
+    {
+        Criticality.Tier1 => "Tier 1: operations stop without it",
+        Criticality.Tier2 => "Tier 2: important, with workarounds",
+        _ => "Tier 3: low impact if unavailable",
+    };
+}

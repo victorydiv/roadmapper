@@ -1,0 +1,202 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Roadmapper.Core;
+using Roadmapper.Core.Portfolio;
+
+namespace Roadmapper.Data.Portfolio;
+
+/// <summary>
+/// Field-level history for portfolio records, the same way <see cref="AuditTrail"/> works for roadmap items:
+/// capture before saving (original values are still known), resolve after (new rows have ids) and store
+/// names instead of foreign keys so history stays readable after renames and deletes.
+/// </summary>
+internal static class PortfolioAuditTrail
+{
+    internal sealed record Pending(object Entity, AuditAction Action, string? Property, object? Old, object? New);
+
+    private static readonly Dictionary<Type, Dictionary<string, string>> Fields = new()
+    {
+        [typeof(Application)] = new()
+        {
+            [nameof(Application.Name)] = "Name",
+            [nameof(Application.Description)] = "Description",
+            [nameof(Application.Category)] = "Category",
+            [nameof(Application.VendorId)] = "Vendor",
+            [nameof(Application.ContractId)] = "Contract",
+            [nameof(Application.ProductId)] = "Roadmap",
+            [nameof(Application.BusinessOwnerId)] = "Business owner",
+            [nameof(Application.TechnicalOwnerId)] = "Technical owner",
+            [nameof(Application.Criticality)] = "Criticality",
+            [nameof(Application.Status)] = "Status",
+            [nameof(Application.Hosting)] = "Hosting",
+            [nameof(Application.AnnualCost)] = "Annual cost",
+            [nameof(Application.BusinessFit)] = "Business fit",
+            [nameof(Application.TechnicalFit)] = "Technical fit",
+            [nameof(Application.GoLiveDate)] = "Go-live date",
+            [nameof(Application.RetireDate)] = "Retire date",
+            [nameof(Application.Notes)] = "Notes",
+        },
+        [typeof(Vendor)] = new()
+        {
+            [nameof(Vendor.Name)] = "Name",
+            [nameof(Vendor.Website)] = "Website",
+            [nameof(Vendor.AccountManagerId)] = "Account manager",
+            [nameof(Vendor.TechnicalContactId)] = "Technical contact",
+            [nameof(Vendor.SupportPortalUrl)] = "Support portal",
+            [nameof(Vendor.SupportPhone)] = "Support phone",
+            [nameof(Vendor.Notes)] = "Notes",
+        },
+        [typeof(Contact)] = new()
+        {
+            [nameof(Contact.Name)] = "Name",
+            [nameof(Contact.Title)] = "Title",
+            [nameof(Contact.Email)] = "Email",
+            [nameof(Contact.Phone)] = "Phone",
+            [nameof(Contact.VendorId)] = "Company",
+            [nameof(Contact.Department)] = "Department",
+            [nameof(Contact.IsActive)] = "Active",
+            [nameof(Contact.Notes)] = "Notes",
+        },
+        [typeof(Contract)] = new()
+        {
+            [nameof(Contract.Name)] = "Name",
+            [nameof(Contract.ContractNumber)] = "Number",
+            [nameof(Contract.StartDate)] = "Start date",
+            [nameof(Contract.EndDate)] = "End date",
+            [nameof(Contract.RenewalDate)] = "Renewal date",
+            [nameof(Contract.NoticePeriodDays)] = "Notice period (days)",
+            [nameof(Contract.AutoRenews)] = "Auto-renews",
+            [nameof(Contract.AnnualValue)] = "Annual value",
+            [nameof(Contract.Notes)] = "Notes",
+        },
+        [typeof(ApplicationInitiative)] = new() { [nameof(ApplicationInitiative.ImpactType)] = "Impact" },
+    };
+
+    public static List<Pending> Capture(ChangeTracker tracker)
+    {
+        var pending = new List<Pending>();
+        foreach (var entry in tracker.Entries())
+        {
+            var entity = entry.Entity;
+            if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
+                or ApplicationSupportContact or VendorEscalationContact)) continue;
+
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    pending.Add(new(entity, AuditAction.Created, null, null, null));
+                    break;
+                case EntityState.Deleted:
+                    pending.Add(new(entity, AuditAction.Deleted, null, null, null));
+                    break;
+                case EntityState.Modified when Fields.TryGetValue(entity.GetType(), out var fields):
+                    pending.AddRange(entry.Properties
+                        .Where(p => p.IsModified && fields.ContainsKey(p.Metadata.Name) && !Equals(p.OriginalValue, p.CurrentValue))
+                        .Select(p => new Pending(entity, AuditAction.Updated, p.Metadata.Name, p.OriginalValue, p.CurrentValue)));
+                    break;
+            }
+        }
+        return pending;
+    }
+
+    public static async Task<List<PortfolioAuditEntry>> ResolveAsync(RoadmapDbContext db, List<Pending> pending, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var entries = new List<PortfolioAuditEntry>();
+        foreach (var p in pending)
+        {
+            var entry = new PortfolioAuditEntry { Action = p.Action, ChangedAt = now };
+            var field = p.Property is null ? null : Fields[p.Entity.GetType()][p.Property];
+            switch (p.Entity)
+            {
+                case Application a:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Application, a.Id, a.Name, field);
+                    break;
+                case Vendor v:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Vendor, v.Id, v.Name, field);
+                    break;
+                case Contact c:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Contact, c.Id, c.Name, field);
+                    break;
+                case Contract k:
+                    // Contracts are filed under their vendor.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Vendor, k.VendorId, await VendorNameAsync(db, k.VendorId, ct));
+                    entry.Field = field is null ? "Contract" : $"Contract “{k.Name}” · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = k.Name;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = k.Name;
+                    break;
+                case ApplicationInitiative ai:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Application, ai.ApplicationId, await AppNameAsync(db, ai.ApplicationId, ct));
+                    var title = await ItemTitleAsync(db, ai.RoadmapItemId, ct);
+                    entry.Field = field is null ? "Roadmap item" : $"Impact on “{title}”";
+                    if (p.Action == AuditAction.Created) entry.NewValue = title;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = title;
+                    break;
+                }
+                case ApplicationSupportContact s:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Application, s.ApplicationId, await AppNameAsync(db, s.ApplicationId, ct));
+                    entry.Field = "Support contact";
+                    var who = $"{await ContactNameAsync(db, s.ContactId, ct)} ({PortfolioText.Label(s.Role)})";
+                    if (p.Action == AuditAction.Created) entry.NewValue = who; else entry.OldValue = who;
+                    break;
+                }
+                case VendorEscalationContact x:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Vendor, x.VendorId, await VendorNameAsync(db, x.VendorId, ct));
+                    entry.Field = "Escalation contact";
+                    var who = await ContactNameAsync(db, x.ContactId, ct);
+                    if (p.Action == AuditAction.Created) entry.NewValue = who; else entry.OldValue = who;
+                    break;
+                }
+                default:
+                    continue;
+            }
+            if (p.Action == AuditAction.Updated)
+            {
+                entry.OldValue = await FormatAsync(db, p.Property!, p.Old, ct);
+                entry.NewValue = await FormatAsync(db, p.Property!, p.New, ct);
+            }
+            entry.EntityName = Truncate(entry.EntityName);
+            entries.Add(entry);
+        }
+        return entries;
+    }
+
+    private static async Task<string?> FormatAsync(RoadmapDbContext db, string property, object? value, CancellationToken ct)
+    {
+        if (value is null) return null;
+        var text = property switch
+        {
+            nameof(Application.VendorId) => await VendorNameAsync(db, (int)value, ct),
+            nameof(Application.ContractId) => db.Contracts.Local.FirstOrDefault(c => c.Id == (int)value)?.Name
+                ?? await db.Contracts.AsNoTracking().Where(c => c.Id == (int)value).Select(c => c.Name).FirstOrDefaultAsync(ct),
+            nameof(Application.ProductId) => await db.Products.AsNoTracking().Where(p => p.Id == (int)value).Select(p => p.Name).FirstOrDefaultAsync(ct),
+            nameof(Application.BusinessOwnerId) or nameof(Application.TechnicalOwnerId)
+                or nameof(Vendor.AccountManagerId) or nameof(Vendor.TechnicalContactId) => await ContactNameAsync(db, (int)value, ct),
+            _ => PortfolioText.Format(value),
+        };
+        return Truncate(text ?? $"#{value}");
+    }
+
+    private static string? Truncate(string? text) => text is { Length: > 300 } ? text[..297] + "…" : text;
+
+    private static async Task<string> AppNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.Applications.Local.FirstOrDefault(a => a.Id == id)?.Name
+        ?? await db.Applications.AsNoTracking().Where(a => a.Id == id).Select(a => a.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> VendorNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.Vendors.Local.FirstOrDefault(v => v.Id == id)?.Name
+        ?? await db.Vendors.AsNoTracking().Where(v => v.Id == id).Select(v => v.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> ContactNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.Contacts.Local.FirstOrDefault(c => c.Id == id)?.Name
+        ?? await db.Contacts.AsNoTracking().Where(c => c.Id == id).Select(c => c.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> ItemTitleAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        await db.Items.AsNoTracking().Where(i => i.Id == id).Select(i => i.Title).FirstOrDefaultAsync(ct) ?? $"#{id}";
+}

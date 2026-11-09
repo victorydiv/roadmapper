@@ -1,0 +1,102 @@
+@page "/portfolio/contacts"
+@inject PortfolioService Svc
+
+<PortfolioHeader Title="Contacts" Subtitle="Everyone named in the portfolio: owners, vendor account managers, support and escalation contacts.">
+    <button class="btn primary" @onclick="() => editing = new ContactDraft()">+ New contact</button>
+</PortfolioHeader>
+
+@if (contacts is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search name, title or email" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="company">
+            <option value="all">Everyone</option>
+            <option value="internal">Internal</option>
+            @foreach (var v in vendors)
+            {
+                <option value="@v.Id">@v.Name</option>
+            }
+        </select>
+        <label class="check"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
+    </div>
+
+    @if (contacts.Count == 0)
+    {
+        <div class="card empty">No contacts yet. People are also added from the owner and contact pickers.</div>
+    }
+    else
+    {
+        <div class="card table-wrap">
+            <table class="tree">
+                <thead>
+                    <tr><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th>Phone</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Filtered)
+                    {
+                        <tr class="@(c.IsActive ? "" : "muted")">
+                            <td class="title-cell">@c.Name @if (!c.IsActive) { <span class="badge tag">inactive</span> }</td>
+                            <td>@(c.Title ?? "–")</td>
+                            <td>
+                                @if (c.Vendor is { } v) { <a href="/portfolio/vendors/@v.Id">@v.Name</a> }
+                                else { <span>Internal@(c.Department is { } d ? $" · {d}" : "")</span> }
+                            </td>
+                            <td>@if (c.Email is { } e) { <a href="mailto:@e">@e</a> } else { <span class="muted">–</span> }</td>
+                            <td>@(c.Phone ?? "–")</td>
+                            <td><button class="btn sm" @onclick="() => editing = ContactDraft.From(c)">Edit</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (!Filtered.Any())
+            {
+                <div class="empty muted">No contacts match.</div>
+            }
+        </div>
+    }
+}
+
+@if (editing is not null)
+{
+    <ContactEditor Draft="editing" Vendors="vendors" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<Contact>? contacts;
+    private List<Vendor> vendors = [];
+    private ContactDraft? editing;
+    private string search = "";
+    private string company = "all";
+    private bool showInactive;
+
+    private IEnumerable<Contact> Filtered => contacts!
+        .Where(c => showInactive || c.IsActive)
+        .Where(c => company switch
+        {
+            "all" => true,
+            "internal" => c.VendorId is null,
+            var id => c.VendorId?.ToString() == id,
+        })
+        .Where(c => string.IsNullOrWhiteSpace(search)
+            || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (c.Title?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (c.Email?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+    }
+
+    private async Task OnEditorClosed(bool changed)
+    {
+        editing = null;
+        if (changed) await ReloadAsync();
+    }
+}

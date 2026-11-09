@@ -1,13 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Roadmapper.Core;
+using Roadmapper.Data.Portfolio;
 
 namespace Roadmapper.Data;
 
 public static class DbInitializer
 {
     /// <summary>
-    /// Applies pending migrations and, on a brand-new database, adds a sample product to explore. Otherwise
+    /// Applies pending migrations and, on a brand-new database, adds a sample product and portfolio to explore. Otherwise
     /// re-scores products with a WSJF rubric, so start-date criteria keep up with the calendar.
     /// </summary>
     public static async Task InitializeAsync(IServiceProvider services)
@@ -22,7 +23,12 @@ public static class DbInitializer
         }
 
         if (hasProducts) await svc.RecalculateAllAsync();
-        else await SeedSampleAsync(svc);
+        else
+        {
+            await SeedSampleAsync(svc);
+            var portfolio = new PortfolioService(factory);
+            if (await portfolio.IsEmptyAsync()) await portfolio.SeedSampleAsync();
+        }
     }
 
     public static async Task SeedSampleAsync(RoadmapService svc)

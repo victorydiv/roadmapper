@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Roadmapper.Data;
+using Roadmapper.Data.Portfolio;
 using Roadmapper.Web;
+using Roadmapper.Web.Api;
 using Roadmapper.Web.Components;
 using Roadmapper.Web.Exports;
 
@@ -27,6 +29,9 @@ builder.Services.AddDbContextFactory<RoadmapDbContext>(o => o.UseSqlite($"Data S
     // Roadmaps are small, so loading several collections in one query is fine; don't fill the console with this advice.
     .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning)));
 builder.Services.AddScoped<RoadmapService>();
+builder.Services.AddScoped<PortfolioService>();
+// The JSON API writes enums by name ("Tier1", "Active"), matching the database and .rmp files.
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 // Unless an address was given (--urls or ASPNETCORE_URLS), listen on localhost only.
 string? url = null;
@@ -63,6 +68,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapGet(Launcher.ProbePath, () => Launcher.ProbeReply);
 app.MapExportEndpoints();
+app.MapPortfolioApi();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

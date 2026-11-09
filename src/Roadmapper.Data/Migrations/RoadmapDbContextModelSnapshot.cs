@@ -169,6 +169,402 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("ItemScores");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Application", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("AnnualCost")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BusinessFit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("BusinessOwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ContractId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Criticality")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("GoLiveDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hosting")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("RetireDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TechnicalFit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TechnicalOwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessOwnerId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("Criticality");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasFilter("\"ProductId\" IS NOT NULL");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TechnicalOwnerId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("Applications");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ApplicationInitiative", b =>
+                {
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RoadmapItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImpactType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ApplicationId", "RoadmapItemId");
+
+                    b.HasIndex("RoadmapItemId");
+
+                    b.ToTable("ApplicationInitiatives", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ApplicationSupportContact", b =>
+                {
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ContactId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ApplicationId", "ContactId", "Role");
+
+                    b.HasIndex("ContactId");
+
+                    b.ToTable("ApplicationSupportContacts", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("Contacts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Contract", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("AnnualValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoRenews")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContractNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("NoticePeriodDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("RenewalDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RenewalDate");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("Contracts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioAuditEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntityName")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NewValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OldValue")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("PortfolioAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DefaultReviewIntervalMonths")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("LaborRate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RenewalWarningDays")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PortfolioSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            DefaultReviewIntervalMonths = 12,
+                            RenewalWarningDays = 120
+                        });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AccountManagerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SupportPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SupportPortalUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TechnicalContactId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountManagerId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("TechnicalContactId");
+
+                    b.ToTable("Vendors");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.VendorEscalationContact", b =>
+                {
+                    b.Property<int>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ContactId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("VendorId", "ContactId");
+
+                    b.HasIndex("ContactId");
+
+                    b.ToTable("VendorEscalationContacts", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -604,6 +1000,135 @@ namespace Roadmapper.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Application", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "BusinessOwner")
+                        .WithMany()
+                        .HasForeignKey("BusinessOwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contract", "Contract")
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "TechnicalOwner")
+                        .WithMany()
+                        .HasForeignKey("TechnicalOwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany("Applications")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("BusinessOwner");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("TechnicalOwner");
+
+                    b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ApplicationInitiative", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany("Initiatives")
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "RoadmapItem")
+                        .WithMany()
+                        .HasForeignKey("RoadmapItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+
+                    b.Navigation("RoadmapItem");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ApplicationSupportContact", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", null)
+                        .WithMany("SupportContacts")
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "Contact")
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany("Staff")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Contract", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany("Contracts")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "AccountManager")
+                        .WithMany()
+                        .HasForeignKey("AccountManagerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "TechnicalContact")
+                        .WithMany()
+                        .HasForeignKey("TechnicalContactId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AccountManager");
+
+                    b.Navigation("TechnicalContact");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.VendorEscalationContact", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "Contact")
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", null)
+                        .WithMany("EscalationContacts")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.RoadmapItem", b =>
                 {
                     b.HasOne("Roadmapper.Core.RoadmapItem", "Parent")
@@ -705,6 +1230,24 @@ namespace Roadmapper.Data.Migrations
                         .HasForeignKey("TaskTemplateLineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Application", b =>
+                {
+                    b.Navigation("Initiatives");
+
+                    b.Navigation("SupportContacts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
+                {
+                    b.Navigation("Applications");
+
+                    b.Navigation("Contracts");
+
+                    b.Navigation("EscalationContacts");
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Product", b =>

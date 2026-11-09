@@ -1,4 +1,5 @@
 @inject RoadmapService Svc
+@inject PortfolioService Portfolio
 
 <div class="modal-backdrop">
     <div class="modal">
@@ -354,6 +355,55 @@
                     </fieldset>
 
                     <fieldset>
+                        <legend>Applications</legend>
+                        @if (appLinks is null)
+                        {
+                            <span class="muted small">Loading…</span>
+                        }
+                        else
+                        {
+                            @if (appLinks.Count == 0)
+                            {
+                                <span class="muted small">Not linked to any application. Link the systems this @draft.ItemType.ToString().ToLower() changes, so impact and value show up in the portfolio.</span>
+                            }
+                            <ul class="dep-list">
+                                @foreach (var l in appLinks)
+                                {
+                                    <li>
+                                        <span class="badge tag">@PortfolioText.Label(l.ImpactType)</span>
+                                        <a href="/portfolio/applications/@l.ApplicationId">@l.Application?.Name</a>
+                                        <span class="spacer"></span>
+                                        <button type="button" class="btn sm" @onclick="() => UnlinkAppAsync(l.ApplicationId)">Remove</button>
+                                    </li>
+                                }
+                            </ul>
+                            @if (allApps.Count > 0)
+                            {
+                                <div class="row">
+                                    <select @bind="newAppImpact" style="width:auto">
+                                        @foreach (var i in Enum.GetValues<InitiativeImpact>())
+                                        {
+                                            <option value="@i">@PortfolioText.Label(i)</option>
+                                        }
+                                    </select>
+                                    <select @bind="newAppId" style="flex:1;width:auto">
+                                        <option value="0">— choose an application —</option>
+                                        @foreach (var a in allApps.Where(a => appLinks.All(l => l.ApplicationId != a.Id)))
+                                        {
+                                            <option value="@a.Id">@a.Name</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="btn" disabled="@(newAppId == 0)" @onclick="LinkAppAsync">Add</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="muted small">Add applications under <a href="/portfolio/applications">Portfolio</a> to link them here.</span>
+                            }
+                        }
+                    </fieldset>
+
+                    <fieldset>
                         <legend>History</legend>
                         @if (history is null)
                         {
@@ -469,10 +519,42 @@
         else draft.Score.ManualFactors &= ~flag;
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         roadmap = Roadmap;
         draft = Draft;
+        await LoadAppLinksAsync();
+    }
+
+    // ---- Application links (portfolio) ----
+    private List<ApplicationInitiative>? appLinks;
+    private List<Application> allApps = [];
+    private int newAppId;
+    private InitiativeImpact newAppImpact = InitiativeImpact.Enhances;
+
+    private async Task LoadAppLinksAsync()
+    {
+        if (draft.IsNew) { appLinks = []; return; }
+        appLinks = await Portfolio.GetLinksForItemAsync(draft.Id);
+        if (allApps.Count == 0) allApps = await Portfolio.GetApplicationsAsync();
+    }
+
+    private async Task LinkAppAsync()
+    {
+        error = null;
+        try
+        {
+            await Portfolio.LinkItemAsync(newAppId, draft.Id, newAppImpact);
+            newAppId = 0;
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await LoadAppLinksAsync();
+    }
+
+    private async Task UnlinkAppAsync(int applicationId)
+    {
+        await Portfolio.UnlinkItemAsync(applicationId, draft.Id);
+        await LoadAppLinksAsync();
     }
 
     /// <summary>Switches this editor to a new task under the Feature being edited (unsaved Feature edits are dropped).</summary>
@@ -480,6 +562,7 @@
     {
         draft = ItemDraft.New(draft.ProductId, ItemType.Task, draft.Id);
         history = null;
+        appLinks = [];
         error = notice = null;
         confirmingDelete = false;
     }

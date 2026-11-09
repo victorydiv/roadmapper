@@ -1,0 +1,110 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New vendor" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <label class="field">Name
+                    <InputText @bind-Value="draft.Name" autofocus />
+                </label>
+                <div class="grid-2">
+                    <label class="field">Website
+                        <InputText @bind-Value="draft.Website" placeholder="https://" />
+                    </label>
+                    <label class="field">Support portal
+                        <InputText @bind-Value="draft.SupportPortalUrl" placeholder="https://" />
+                    </label>
+                    <label class="field">Support phone
+                        <InputText @bind-Value="draft.SupportPhone" />
+                    </label>
+                </div>
+                @if (!draft.IsNew)
+                {
+                    <div class="grid-2">
+                        <label class="field">Account manager
+                            <ContactSelect Contacts="contacts" Vendors="vendors" PreferVendorId="draft.Id" @bind-Value="draft.AccountManagerId" />
+                        </label>
+                        <label class="field">Technical contact
+                            <ContactSelect Contacts="contacts" Vendors="vendors" PreferVendorId="draft.Id" @bind-Value="draft.TechnicalContactId" />
+                        </label>
+                    </div>
+                }
+                else
+                {
+                    <div class="muted small">Add the account manager, contracts and escalation path after creating the vendor.</div>
+                }
+                <label class="field">Notes
+                    <InputTextArea @bind-Value="draft.Notes" />
+                </label>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete @original with its contracts and people? Its applications are kept.</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VendorDraft Draft { get; set; } = default!;
+    /// <summary>Called with the saved vendor's id, 0 when it was deleted, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private VendorDraft draft = default!;
+    private string original = "";
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        original = Draft.Name;
+        if (!draft.IsNew)
+        {
+            contacts = await Svc.GetContactsAsync();
+            vendors = await Svc.GetVendorsAsync();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try { await OnClose.InvokeAsync(await Svc.SaveVendorAsync(draft)); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteVendorAsync(draft.Id);
+        await OnClose.InvokeAsync(0);
+    }
+}

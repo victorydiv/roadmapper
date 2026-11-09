@@ -1,0 +1,278 @@
+@page "/portfolio/applications/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (app is null)
+{
+    <PageTitle>Application not found</PageTitle>
+    <div class="card empty">
+        <h2>Application not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/applications">Back to applications</a></p>
+    </div>
+}
+else
+{
+    <PortfolioHeader Title="@app.Name" Subtitle="@app.Description" Parent="@(("Applications", "/portfolio/applications"))">
+        <TierBadge Tier="app.Criticality" />
+        <LifecycleBadge Status="app.Status" />
+        <span class="badge tag">@PortfolioText.Label(app.Category)</span>
+        <span class="badge tag">@PortfolioText.Label(app.Hosting)</span>
+        <button class="btn" @onclick="() => editing = ApplicationDraft.From(app)">Edit</button>
+    </PortfolioHeader>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Overview</h2>
+            <dl class="facts">
+                <dt>Vendor</dt>
+                <dd>@if (app.Vendor is { } v) { <a href="/portfolio/vendors/@v.Id">@v.Name</a> } else { <span class="muted">None (in-house or external party)</span> }</dd>
+                <dt>Contract</dt>
+                <dd>@(app.Contract?.Name ?? "–")</dd>
+                <dt>Renewal</dt>
+                <dd>
+                    @if (app.RenewalDate is { } r)
+                    {
+                        @PortfolioUi.Date(r) <span class="muted small">(@PortfolioUi.Relative(r, today))</span>
+                        @if (app.Contract!.AutoRenews) { <span class="badge tag">auto-renews</span> }
+                    }
+                    else { <span class="muted">–</span> }
+                </dd>
+                <dt>Notice deadline</dt>
+                <dd class="@PortfolioUi.NoticeClass(app.Contract, today, warningDays)">
+                    @if (app.NoticeDeadline is { } d && app.Contract?.NoticePeriodDays > 0)
+                    {
+                        @PortfolioUi.Date(d) <span class="small">(@PortfolioUi.Relative(d, today))</span>
+                    }
+                    else { <span class="muted">–</span> }
+                </dd>
+                <dt>Annual cost</dt>
+                <dd>@PortfolioUi.Money(app.AnnualCost)</dd>
+                <dt>Business owner</dt>
+                <dd>@ContactText(app.BusinessOwner)</dd>
+                <dt>Technical owner</dt>
+                <dd>@ContactText(app.TechnicalOwner)</dd>
+                <dt>Go-live / retire</dt>
+                <dd>@PortfolioUi.Date(app.GoLiveDate) / @PortfolioUi.Date(app.RetireDate)</dd>
+                <dt>TIME</dt>
+                <dd>
+                    <TimeBadge Quadrant="app.TimeQuadrant" />
+                    <span class="muted small">business fit @PortfolioUi.Fit(app.BusinessFit), technical fit @PortfolioUi.Fit(app.TechnicalFit)</span>
+                </dd>
+                <dt>Own roadmap</dt>
+                <dd>@if (app.Product is { } p) { <a href="/products/@p.Id">@p.Name →</a> } else { <span class="muted">None</span> }</dd>
+            </dl>
+            @if (app.Notes is { } notes)
+            {
+                <div class="small notes">@notes</div>
+            }
+        </div>
+
+        <div class="card stack">
+            <h2>Support contacts</h2>
+            @if (app.SupportContacts.Count == 0)
+            {
+                <div class="muted small">No support contacts yet.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var s in app.SupportContacts.OrderBy(s => s.Role).ThenBy(s => s.Contact?.Name))
+                {
+                    <li>
+                        <span class="badge tag">@PortfolioText.Label(s.Role)</span>
+                        <span class="inline-gap">
+                            <b>@s.Contact?.Name</b>
+                            @if (s.Contact?.Email is { } email) { <a class="small" href="mailto:@email">@email</a> }
+                            @if (s.Contact?.Phone is { } phone) { <span class="muted small">@phone</span> }
+                            @if (s.Note is { } note) { <span class="muted small">· @note</span> }
+                        </span>
+                        <span class="spacer"></span>
+                        <button class="btn sm" @onclick="() => RunAsync(() => Svc.RemoveSupportContactAsync(app.Id, s.ContactId, s.Role))">Remove</button>
+                    </li>
+                }
+            </ul>
+            <div class="stack add-row">
+                <ContactSelect Contacts="contacts" Vendors="vendors" PreferVendorId="app.VendorId" @bind-Value="newContactId" />
+                <div class="row nowrap">
+                    <select @bind="newRole" style="width:auto">
+                        @foreach (var role in Enum.GetValues<SupportRole>())
+                        {
+                            <option value="@role">@PortfolioText.Label(role)</option>
+                        }
+                    </select>
+                    <input placeholder="Note (optional)" @bind="newNote" />
+                    <button class="btn" disabled="@(newContactId is null)" @onclick="AddSupportAsync">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Roadmap items</h2>
+            <span class="muted small">Initiatives and features from any roadmap that change this application. Status and progress come from the roadmap.</span>
+        </div>
+        @if (linked.Count == 0)
+        {
+            <div class="muted small">Nothing linked yet.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead>
+                        <tr><th>Item</th><th>Roadmap</th><th>Impact</th><th>Status</th><th>Progress</th><th>Dates</th><th>Owner</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in linked)
+                        {
+                            <tr>
+                                <td class="title-cell"><TypeBadge Type="l.ItemType" /> <a href="/products/@l.ProductId">@l.Title</a></td>
+                                <td>@l.ProductName</td>
+                                <td>
+                                    <select value="@l.Impact" @onchange="e => RelinkAsync(l, e)" style="width:auto">
+                                        @foreach (var i in Enum.GetValues<InitiativeImpact>())
+                                        {
+                                            <option value="@i">@PortfolioText.Label(i)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><StatusBadge Status="l.Status" /></td>
+                                <td class="progress-cell"><div class="progress"><span style="width:@(l.ProgressPct)%"></span></div> <span class="small muted">@l.ProgressPct%</span></td>
+                                <td class="small">@Ui.DateRange(l.StartDate, l.EndDate)</td>
+                                <td>@(l.Owner ?? "–")</td>
+                                <td><button class="btn sm" @onclick="() => RunAsync(() => Svc.UnlinkItemAsync(app.Id, l.ItemId))">Unlink</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="row add-row">
+            <select @bind="linkProductId" @bind:after="LoadLinkableAsync" style="width:auto">
+                <option value="0">— roadmap —</option>
+                @foreach (var product in products)
+                {
+                    <option value="@product.Id">@product.Name</option>
+                }
+            </select>
+            <select @bind="linkItemId" style="flex:1;width:auto" disabled="@(linkProductId == 0)">
+                <option value="0">— item —</option>
+                @foreach (var i in linkable.Where(i => linked.All(l => l.ItemId != i.Id)))
+                {
+                    <option value="@i.Id">@i.ItemType: @(i.Path.Length > 0 ? $"{i.Path} › " : "")@i.Title</option>
+                }
+            </select>
+            <select @bind="linkImpact" style="width:auto">
+                @foreach (var i in Enum.GetValues<InitiativeImpact>())
+                {
+                    <option value="@i">@PortfolioText.Label(i)</option>
+                }
+            </select>
+            <button class="btn" disabled="@(linkItemId == 0)" @onclick="LinkAsync">Link</button>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>History</h2>
+        <PortfolioActivityList Entries="history" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <ApplicationEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Application? app;
+    private bool loaded;
+    private string? error;
+    private DateOnly today;
+    private int warningDays = 120;
+    private ApplicationDraft? editing;
+    private List<LinkedItem> linked = [];
+    private List<PortfolioAuditEntry> history = [];
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private List<(int Id, string Name)> products = [];
+
+    private int? newContactId;
+    private SupportRole newRole = SupportRole.L1Support;
+    private string? newNote;
+
+    private int linkProductId, linkItemId;
+    private InitiativeImpact linkImpact = InitiativeImpact.Enhances;
+    private List<ItemOption> linkable = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        warningDays = (await Svc.GetSettingsAsync()).RenewalWarningDays;
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+        products = await Svc.GetProductOptionsAsync();
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        app = await Svc.GetApplicationAsync(Id);
+        if (app is null) return;
+        linked = await Svc.GetLinkedItemsAsync(Id);
+        history = await Svc.GetActivityAsync(PortfolioEntityType.Application, Id);
+    }
+
+    private static RenderFragment ContactText(Contact? c) => c is null
+        ? @<span class="muted">–</span>
+        : @<span class="inline-gap">@c.Name @if (c.Title is { } t) { <span class="muted small">· @t</span> }</span>;
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task AddSupportAsync()
+    {
+        if (newContactId is not { } contactId) return;
+        await RunAsync(() => Svc.AddSupportContactAsync(Id, contactId, newRole, newNote));
+        if (error is null) { newContactId = null; newNote = null; }
+    }
+
+    private async Task LoadLinkableAsync()
+    {
+        linkItemId = 0;
+        linkable = linkProductId == 0 ? [] : await Svc.GetLinkableItemsAsync(linkProductId);
+    }
+
+    private async Task LinkAsync()
+    {
+        await RunAsync(() => Svc.LinkItemAsync(Id, linkItemId, linkImpact));
+        linkItemId = 0;
+    }
+
+    private Task RelinkAsync(LinkedItem item, ChangeEventArgs e) =>
+        Enum.TryParse<InitiativeImpact>(e.Value as string, out var impact)
+            ? RunAsync(() => Svc.LinkItemAsync(Id, item.ItemId, impact))
+            : Task.CompletedTask;
+
+    private async Task OnEditorClosed(int? result)
+    {
+        editing = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/applications"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+}

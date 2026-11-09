@@ -1,0 +1,116 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New contact" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <div class="grid-2">
+                    <label class="field">Name
+                        <InputText @bind-Value="draft.Name" autofocus />
+                    </label>
+                    <label class="field">Title
+                        <InputText @bind-Value="draft.Title" />
+                    </label>
+                    <label class="field">Email
+                        <InputText @bind-Value="draft.Email" />
+                    </label>
+                    <label class="field">Phone
+                        <InputText @bind-Value="draft.Phone" />
+                    </label>
+                    <label class="field">Company
+                        <InputSelect @bind-Value="draft.VendorId">
+                            <option value="">Internal (our company)</option>
+                            @foreach (var v in Vendors)
+                            {
+                                <option value="@v.Id">@v.Name</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    @if (draft.VendorId is null)
+                    {
+                        <label class="field">Department
+                            <InputText @bind-Value="draft.Department" placeholder="e.g. Operations – Memphis DC" />
+                        </label>
+                    }
+                </div>
+                <label class="check">
+                    <InputCheckbox @bind-Value="draft.IsActive" /> Active (clear when someone leaves; they stay in history)
+                </label>
+                <label class="field">Notes
+                    <InputTextArea @bind-Value="draft.Notes" />
+                </label>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (roles is not null)
+                    {
+                        <span class="small">
+                            @(roles.Count == 0 ? "Not named anywhere." : $"Also removes them as: {string.Join("; ", roles)}.")
+                        </span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => roles = null">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="ConfirmDeleteAsync">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ContactDraft Draft { get; set; } = default!;
+    [Parameter] public IReadOnlyList<Vendor> Vendors { get; set; } = [];
+    /// <summary>Called with true when anything was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private ContactDraft draft = default!;
+    private string original = "";
+    private bool saving;
+    private List<string>? roles;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        draft = Draft;
+        original = Draft.Name;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveContactAsync(draft);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task ConfirmDeleteAsync() => roles = await Svc.GetContactRolesAsync(draft.Id);
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteContactAsync(draft.Id);
+        await OnClose.InvokeAsync(true);
+    }
+}

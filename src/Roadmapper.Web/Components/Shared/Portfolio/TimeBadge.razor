@@ -1,0 +1,12 @@
+@if (Quadrant is { } q)
+{
+    <span class="badge time-@q" title="@PortfolioText.Describe(q)">@PortfolioText.Label(q)</span>
+}
+else
+{
+    <span class="muted small" title="Set business and technical fit to place it">–</span>
+}
+
+@code {
+    [Parameter] public TimeQuadrant? Quadrant { get; set; }
+}

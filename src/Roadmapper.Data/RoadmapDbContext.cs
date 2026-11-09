@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Roadmapper.Core;
+using Roadmapper.Core.Portfolio;
+using Roadmapper.Data.Portfolio;
 
 namespace Roadmapper.Data;
 
@@ -19,6 +21,17 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<ScoringCriterionOption> ScoringCriterionOptions => Set<ScoringCriterionOption>();
     public DbSet<ItemRubricAnswer> ItemRubricAnswers => Set<ItemRubricAnswer>();
 
+    // Application Portfolio & Integration Management
+    public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<Vendor> Vendors => Set<Vendor>();
+    public DbSet<VendorEscalationContact> VendorEscalationContacts => Set<VendorEscalationContact>();
+    public DbSet<Contract> Contracts => Set<Contract>();
+    public DbSet<Application> Applications => Set<Application>();
+    public DbSet<ApplicationSupportContact> ApplicationSupportContacts => Set<ApplicationSupportContact>();
+    public DbSet<ApplicationInitiative> ApplicationInitiatives => Set<ApplicationInitiative>();
+    public DbSet<PortfolioSettings> PortfolioSettings => Set<PortfolioSettings>();
+    public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
+
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>
     public bool AuditEnabled { get; set; } = true;
 
@@ -29,12 +42,14 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
 
         ChangeTracker.DetectChanges();
         var pending = AuditTrail.Capture(ChangeTracker);
+        var portfolio = PortfolioAuditTrail.Capture(ChangeTracker);
         var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         if (pending.Count > 0)
-        {
             AuditEntries.AddRange(await AuditTrail.ResolveAsync(this, pending, cancellationToken));
+        if (portfolio.Count > 0)
+            PortfolioAuditEntries.AddRange(await PortfolioAuditTrail.ResolveAsync(this, portfolio, cancellationToken));
+        if (pending.Count + portfolio.Count > 0)
             await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
-        }
         return result;
     }
 
@@ -163,5 +178,7 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
             // Removing a choice from a pick-list removes the answers that picked it.
             e.HasOne<ScoringCriterionOption>().WithMany().HasForeignKey(a => a.OptionId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        b.ConfigurePortfolio();
     }
 }

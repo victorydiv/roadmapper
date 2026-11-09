@@ -1,0 +1,39 @@
+@inject NavigationManager Nav
+<PageTitle>@Title · Portfolio</PageTitle>
+
+<div class="product-header">
+    <div>
+        <div class="small">
+            <a href="/portfolio">Portfolio</a> /
+            @if (Parent is { } parent)
+            {
+                <a href="@parent.Href">@parent.Label</a> <text>/</text>
+            }
+        </div>
+        <h1>@Title</h1>
+        @if (Subtitle is not null)
+        {
+            <div class="muted small">@Subtitle</div>
+        }
+    </div>
+    <span class="spacer"></span>
+    @ChildContent
+</div>
+
+<nav class="tabs">
+    <NavLink href="/portfolio/applications" class="@(AtPortfolioRoot ? "active" : null)">Applications</NavLink>
+    <NavLink href="/portfolio/vendors">Vendors &amp; contracts</NavLink>
+    <NavLink href="/portfolio/contacts">Contacts</NavLink>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    /// <summary>A breadcrumb between "Portfolio" and the title, e.g. Applications on an application's page.</summary>
+    [Parameter] public (string Label, string Href)? Parent { get; set; }
+    /// <summary>Page actions shown at the right of the header.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>"/portfolio" shows the applications list, so its tab should read as current there too.</summary>
+    private bool AtPortfolioRoot => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/') == "portfolio";
+}
