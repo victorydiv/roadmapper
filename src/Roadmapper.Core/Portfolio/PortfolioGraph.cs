@@ -41,7 +41,9 @@ public sealed record Reach(NodeRef Node, int Distance, IReadOnlyList<int> Integr
 /// node (upstream) and what it feeds (downstream). Each integration is one step. An integration that runs through
 /// a middle hop links source → via, via → target and source → target, so the source's direct dependents are
 /// both the hop and the target. Bidirectional integrations count in both directions. Cycles are fine. Trading
-/// partners are end points: walks stop at them, and a partner's dependencies never include other partners.
+/// partners are end points: walks stop at them. Walking from a partner uses only that partner's own integrations and
+/// integrations between your applications, never another partner's: Synapse sending one customer's data to Cleo is
+/// not a dependency of a different customer that also uses Synapse.
 /// </summary>
 public sealed class PortfolioGraph
 {
@@ -51,6 +53,8 @@ public sealed class PortfolioGraph
     // The same steps without the source → target shortcut of a routed integration: the path as drawn.
     private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathForward = new();
     private readonly Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> _pathBackward = new();
+    // The trading partners at either end of each integration (none for application-to-application flows).
+    private readonly Dictionary<int, NodeRef[]> _partnersOf = new();
 
     public PortfolioGraph(IEnumerable<GraphEdge> edges)
     {
@@ -60,6 +64,7 @@ public sealed class PortfolioGraph
                 Link(_forward, _backward, from, to, e);
             foreach (var (from, to) in PathHops(e))
                 Link(_pathForward, _pathBackward, from, to, e);
+            _partnersOf[e.IntegrationId] = new[] { e.Source, e.Target }.Where(n => n.IsPartner).ToArray();
             var ends = new List<NodeRef> { e.Source, e.Target };
             if (e.Via is { } v) ends.Add(v);
             foreach (var node in ends)
@@ -118,9 +123,9 @@ public sealed class PortfolioGraph
         {
             if (from.IsPartner && from != start) continue;
             if (!adjacency.TryGetValue(from, out var next)) continue;
-            foreach (var (to, _) in next.OrderBy(n => n.To))
+            foreach (var (to, integrationId) in next.OrderBy(n => n.To))
             {
-                if (distances.ContainsKey(to) || !within.Contains(to) || (start.IsPartner && to.IsPartner)) continue;
+                if (distances.ContainsKey(to) || !within.Contains(to) || !Usable(start, to, integrationId)) continue;
                 distances[to] = distances[from] + 1;
                 queue.Enqueue(to);
             }
@@ -143,7 +148,7 @@ public sealed class PortfolioGraph
     /// through one, and a walk that starts at a partner never reports other partners. Two customers that use the
     /// same WMS depend on the WMS, not on each other.
     /// </summary>
-    private static IReadOnlyList<Reach> Walk(Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> adjacency, NodeRef start, int maxDepth)
+    private IReadOnlyList<Reach> Walk(Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> adjacency, NodeRef start, int maxDepth)
     {
         var result = new List<Reach>();
         var seen = new HashSet<NodeRef> { start };
@@ -157,7 +162,7 @@ public sealed class PortfolioGraph
                 if (!adjacency.TryGetValue(from, out var next)) continue;
                 foreach (var (to, integrationId) in next)
                 {
-                    if (seen.Contains(to) || (start.IsPartner && to.IsPartner)) continue;
+                    if (seen.Contains(to) || !Usable(start, to, integrationId)) continue;
                     (reached.TryGetValue(to, out var ids) ? ids : reached[to] = new()).Add(integrationId);
                 }
             }
@@ -170,6 +175,13 @@ public sealed class PortfolioGraph
         }
         return result;
     }
+
+    /// <summary>
+    /// Whether a walk from <paramref name="start"/> may take this step: from a partner, never onto another partner and
+    /// never along an integration that belongs to another partner.
+    /// </summary>
+    private bool Usable(NodeRef start, NodeRef to, int integrationId) =>
+        !start.IsPartner || (!to.IsPartner && _partnersOf.GetValueOrDefault(integrationId, []).All(p => p == start));
 
     private static void Add(Dictionary<NodeRef, List<(NodeRef, int)>> map, NodeRef from, NodeRef to, int integrationId)
     {

@@ -104,6 +104,25 @@ public class PortfolioGraphTests
     }
 
     [Fact]
+    public void A_partner_ignores_other_partners_flows_through_a_shared_app()
+    {
+        // Morton (partner 3) ⇄ Synapse (app 1) via Boomi (app 5); PCP (partner 2) ⇄ Synapse via Cleo (app 2);
+        // Synapse → TMS (app 4) is an application-to-application flow.
+        var g = new PortfolioGraph([
+            new GraphEdge(5, P(3), A(1), Via: A(5), Bidirectional: true),
+            new GraphEdge(3, P(2), A(1), Via: A(2), Bidirectional: true),
+            new GraphEdge(6, A(1), A(4)),
+        ]);
+        var down = g.Downstream(P(3), 5).Select(r => r.Node).Order();
+        Assert.Equal([A(1), A(4), A(5)], down);   // Synapse, TMS, Boomi; not Cleo (PCP's flow)
+        Assert.Equal([A(1), A(5)], g.Upstream(P(3), 5).Select(r => r.Node).Order());
+        Assert.DoesNotContain(A(2), MapLayout.FocusColumns(g, P(3), 5).Keys);
+
+        // From Synapse itself, everything it exchanges data with still counts.
+        Assert.Equal([A(2), A(4), A(5), P(2), P(3)], g.Downstream(A(1), 2).Select(r => r.Node).Order());
+    }
+
+    [Fact]
     public void Walks_stop_at_partners_instead_of_passing_through_them()
     {
         // TMS → carrier and carrier → reporting: the carrier doesn't relay TMS data onward.
