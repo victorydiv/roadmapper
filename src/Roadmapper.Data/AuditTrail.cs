@@ -24,6 +24,8 @@ internal static class AuditTrail
         [nameof(RoadmapItem.EndDate)] = "End date",
         [nameof(RoadmapItem.Horizon)] = "Horizon",
         [nameof(RoadmapItem.Owner)] = "Owner",
+        [nameof(RoadmapItem.JiraKey)] = "Jira key",
+        [nameof(RoadmapItem.ExternalUrl)] = "Link",
         [nameof(RoadmapItem.ThemeId)] = "Theme",
         [nameof(RoadmapItem.ParentId)] = "Parent",
         [nameof(RoadmapItem.ManualRank)] = "Manual rank",

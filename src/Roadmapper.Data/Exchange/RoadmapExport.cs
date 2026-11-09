@@ -30,6 +30,8 @@ public static class RoadmapExport
                 [RoadmapColumns.Owner] = i.Owner,
                 [RoadmapColumns.Theme] = i.Theme?.Name,
                 [RoadmapColumns.Tags] = i.Tags.Count == 0 ? null : string.Join("; ", i.Tags.Select(t => t.Name).Order()),
+                [RoadmapColumns.JiraKey] = i.JiraKey,
+                [RoadmapColumns.Link] = i.ExternalUrl,
                 [RoadmapColumns.Reach] = s.Reach,
                 [RoadmapColumns.Impact] = s.Impact,
                 [RoadmapColumns.Confidence] = s.Confidence,

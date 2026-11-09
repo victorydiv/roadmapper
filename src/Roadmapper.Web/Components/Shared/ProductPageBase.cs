@@ -9,6 +9,9 @@ public abstract class ProductPageBase : ComponentBase
 {
     [Parameter] public int ProductId { get; set; }
     [Inject] protected RoadmapService Svc { get; set; } = default!;
+    [Inject] protected Roadmapper.Data.Portfolio.PortfolioService PortfolioSvc { get; set; } = default!;
+    /// <summary>The Jira site from Portfolio › Settings, so Jira keys become links.</summary>
+    protected string? JiraBaseUrl { get; private set; }
 
     protected ProductRoadmap? Roadmap { get; private set; }
     protected bool Loaded { get; private set; }
@@ -20,6 +23,7 @@ public abstract class ProductPageBase : ComponentBase
     protected async Task ReloadAsync()
     {
         Roadmap = await Svc.GetRoadmapAsync(ProductId);
+        JiraBaseUrl = (await PortfolioSvc.GetSettingsAsync()).JiraBaseUrl;
         Loaded = true;
     }
 

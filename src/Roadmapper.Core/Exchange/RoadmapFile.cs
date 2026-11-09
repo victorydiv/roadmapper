@@ -204,6 +204,9 @@ public sealed class FileItem
     public DateOnly? EndDate { get; set; }
     public Horizon? Horizon { get; set; }
     public string? Owner { get; set; }
+    /// <summary>Absent in files from before 1.2.</summary>
+    public string? JiraKey { get; set; }
+    public string? ExternalUrl { get; set; }
     public int? ThemeId { get; set; }
     public List<int>? TagIds { get; set; }
     /// <summary>Position among siblings; items are re-numbered in this order on import.</summary>

@@ -112,6 +112,7 @@ else
                                     }
                                     <TypeBadge Type="item.ItemType" />
                                     <span class="title-link" @onclick="() => OpenEdit(item)">@item.Title</span>
+                                    <ItemLink Item="item" JiraBaseUrl="@JiraBaseUrl" />
                                     @if (Roadmap.IsBlocked(item.Id))
                                     {
                                         <span class="badge blocked" title="Has unfinished predecessors">blocked</span>

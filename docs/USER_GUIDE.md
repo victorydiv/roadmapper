@@ -2,10 +2,12 @@
 
 Roadmapper is a product roadmap app. You use it to plan your work as a hierarchy, schedule it on a timeline, prioritize it with a scoring model, and track progress against saved baselines. You can also export reports and exchange data with Excel.
 
+Above the roadmaps, the **application portfolio** records the systems you run, their vendors and contracts, the trading partners you exchange data with, the integrations between them, the business processes that depend on them, the value roadmap work delivers and the decisions behind it, so you can see what a change will touch before you make it.
+
 This guide is for two audiences:
 
-- **People using the app.** Sections 1–9 explain each screen and how to get common jobs done. Section 12 introduces the three scoring models for anyone who hasn't used them before.
-- **AI assistants and developers.** Section 10 gives exact rules, the data model, and where each behavior lives in the code. The rules there are written so they can be relied on when answering questions or changing the app.
+- **People using the app.** Sections 1–9 explain the roadmap screens and how to get common jobs done. Section 10 covers the application portfolio. Section 13 introduces the three scoring models for anyone who hasn't used them before.
+- **AI assistants and developers.** Section 11 gives exact rules, the data model, and where each behavior lives in the code. The rules there are written so they can be relied on when answering questions or changing the app.
 
 ---
 
@@ -20,9 +22,10 @@ This guide is for two audiences:
 7. [Snapshots and baselines](#7-snapshots-and-baselines)
 8. [Import and export](#8-import-and-export)
 9. [Settings](#9-settings)
-10. [Reference for AI assistants and developers](#10-reference-for-ai-assistants-and-developers)
-11. [FAQ and troubleshooting](#11-faq-and-troubleshooting)
-12. [Scoring models explained: RICE, WSJF, MoSCoW](#12-scoring-models-explained)
+10. [Application portfolio: applications, partners, integrations, processes, impact, benefits, decisions](#10-application-portfolio)
+11. [Reference for AI assistants and developers](#11-reference-for-ai-assistants-and-developers)
+12. [FAQ and troubleshooting](#12-faq-and-troubleshooting)
+13. [Scoring models explained: RICE, WSJF, MoSCoW](#13-scoring-models-explained)
 
 ---
 
@@ -58,7 +61,7 @@ You can change the location with the `Database:Path` setting in `appsettings.jso
 
 On a brand-new database, Roadmapper creates a demo product, **Sample: Customer Portal**, for you to explore. Delete it from its Settings tab when you're done.
 
-**Backups:** the easiest way to back up one product is to export a [Roadmapper file (.rmp)](#roadmapper-files-rmp), which holds the complete product. To back up everything at once, stop the app and copy `roadmapper.db`.
+**Backups:** the easiest way to back up one product is to export a [Roadmapper file (.rmp)](#roadmapper-files-rmp), which holds the complete product. Back up the application portfolio as a [portfolio file (.rpf)](#portfolio-settings-backup-and-export) from Portfolio › Settings. To back up everything at once, stop the app and copy `roadmapper.db`.
 
 ### Moving around
 
@@ -67,6 +70,7 @@ On a brand-new database, Roadmapper creates a demo product, **Sample: Customer P
 - **Open .rmp file…** opens a [Roadmapper file](#roadmapper-files-rmp) as a new product.
 - Opening a product shows its tabs: **Dashboard · Tree · Timeline · Now / Next / Later · Kanban · Priorities · Scoring · Snapshots · Import / Export · Settings**.
 - Clicking any item title, bar or card anywhere in the app opens the [item editor](#4-editing-an-item).
+- **Portfolio** at the top of every page opens the [application portfolio](#10-application-portfolio).
 
 ---
 
@@ -98,6 +102,7 @@ Each item sits exactly one level below its parent; you can't skip a level. An it
 | Start / End | Dates; End can't be before Start. Either can be blank. |
 | Horizon | Now, Next, Later, or unassigned. A loose time bucket for the Now/Next/Later board. |
 | Owner | Free text (a person or team). |
+| Jira key, Link | Optional. A Jira issue key such as `WMS-123`, or any web address. See [Linking roadmap items to Jira](#linking-roadmap-items-to-jira). |
 | Theme | One per item; colors the item's bars and cards. |
 | Tags | Any number, from the product's tag list. |
 | Scoring inputs | Depend on the product's model (see below). |
@@ -126,7 +131,7 @@ Each product uses one scoring model, chosen in Settings:
 | **WSJF** ([what it is](#wsjf-explained)) | Business value, Time criticality, Risk reduction, Job size | (BV + TC + RR) ÷ Job size |
 | **MoSCoW** ([what it is](#moscow-explained)) | Must / Should / Could / Won't; optional Effort (only used to place it on the matrix) | Must = 4, Should = 3, Could = 2, Won't = 1 |
 
-New to these models? [Section 12](#12-scoring-models-explained) explains each one and [how to choose](#choosing-a-model).
+New to these models? [Section 13](#13-scoring-models-explained) explains each one and [how to choose](#choosing-a-model).
 
 - An item with missing inputs (or an Effort/Job size of 0) has no score and shows **–**.
 - **Ranking order:** items with a manual rank come first (by rank), then by score from highest to lowest, then unscored items.
@@ -193,10 +198,13 @@ The editor opens as a pop-up. Its sections are:
 - **Type** (new items only) and **Parent**. The parent list only offers items of the level directly above.
 - **Status & schedule:** status, horizon, progress, start, end and owner. For a parent, this section also has the manual roll-up checkbox (see [Roll-up](#roll-up-how-parents-get-their-dates-and-progress)). Progress is locked at 100% while the status is Done.
 - **Priority:** the inputs for the product's scoring model, a live score preview, and **Manual rank**. Under WSJF with a [scoring rubric](#scoring-wsjf-rubric), each factor shows its criteria to answer, the calculated value and how it was worked out, plus **Enter by hand** / **Use rubric** to switch between typing the value and calculating it.
+- **Links:** the item's Jira key and/or a web link, with **Open ↗**.
 - **Classification:** theme and tags.
 - **Tasks** (Features only): **+ Add task**, **Add from template…** and **Save tasks as template…**. It also lists each template batch added to this feature with an **Undo** button. If any task in a batch was edited since it was added, Undo asks you to confirm first.
 - **Created from template X on date** (Tasks made from a template). This is a reference only; editing or deleting the template never changes the task.
 - **Dependencies:** the items this one is *blocked by* and the items it *blocks*, with schedule-overlap warnings. Add one with **This is blocked by / This blocks**, choose the other item, then **Add**.
+- **Applications** (existing items): the portfolio applications this item changes, with the kind of impact (Enhances, Implements, Replaces, Retires, Integrates, Upgrades). Linked items show on the application's page, in impact analysis and on the portfolio dashboard.
+- **Benefits** (existing items): what the item is expected to deliver and how much is realized, with **+ Add benefit**. See [Benefits](#benefits).
 - **History:** **Show change history** lists this item's changes.
 - **Delete:** asks you to confirm and tells you how many child items will be deleted with it. Deleting an item also deletes everything below it, along with its dependencies.
 
@@ -442,7 +450,7 @@ A `.rmp` is plain JSON, so it can be opened in any text editor. See [the file fo
 
 **Spreadsheet columns** (the same on export and import):
 
-`Type, Title, Parent, Description, Status, Progress, Start, End, Horizon, Owner, Theme, Tags, Reach, Impact, Confidence, Effort, Business value, Time criticality, Risk reduction, Job size, MoSCoW, Manual rank, From template, Template applied, Score, Id`
+`Type, Title, Parent, Description, Status, Progress, Start, End, Horizon, Owner, Theme, Tags, Jira key, Link, Reach, Impact, Confidence, Effort, Business value, Time criticality, Risk reduction, Job size, MoSCoW, Manual rank, From template, Template applied, Score, Id`
 
 - **Parent** is the path of the item's ancestors joined with " › ", for example `Grow revenue › Checkout redesign`.
 - **Tags** are separated by `;`.
@@ -490,7 +498,235 @@ Import is a three-step wizard:
 
 ---
 
-## 10. Reference for AI assistants and developers
+## 10. Application portfolio
+
+The portfolio sits above your roadmaps. It records the systems you own and run (applications), the companies behind them (vendors and contracts), the customers and carriers you exchange data with (trading partners), how data moves between all of them (integrations), the business processes that depend on them, what roadmap work is expected to deliver (benefits), and why things were decided (the decision log). It links back into your roadmaps instead of copying them, so status, dates and progress always come from the roadmap.
+
+Open it with **Portfolio** at the top of any page. Its tabs are **Dashboard · Applications · Trading partners · Integrations · Map · Processes · Impact analysis · Benefits · Decisions · Vendors & contracts · Contacts · Settings**.
+
+On a brand-new database, Roadmapper adds a made-up 3PL sample portfolio (a WMS, TMS, ERP, EDI provider, customer portal and more) linked to the sample roadmap. In an existing portfolio, the Integrations, Processes, Benefits and Decisions pages offer **Add sample …** buttons while they're empty and the sample applications are present.
+
+### Where to start
+
+A good order for entering your own portfolio:
+
+1. **Contacts and vendors:** the people (yours and the vendors') and each vendor's contracts with renewal dates and notice periods.
+2. **Applications:** each system, its vendor and contract, owners, tier and fit scores.
+3. **Trading partners:** your customers and carriers, with their account codes and EDI identifiers.
+4. **Integrations:** every flow between applications and partners, with a business purpose, tier and any known risks.
+5. **Business processes:** the work the operation does, which applications each step uses and which integrations it relies on.
+6. **Benefits** on your roadmap initiatives, and **decisions** as you make them.
+
+You don't need everything before it's useful: the integration map and impact analysis work as soon as applications and integrations are in.
+
+### Dashboard
+
+The first page of the portfolio, for a one-page status update.
+
+- **Tiles:** application health (how many are Green, Amber, Red), annual run cost (the sum of applications' annual cost), live integrations and how many are high risk, value realized per year against expected, renewals due, and open pain points.
+- **Application health:** the least healthy applications first, each with its score and main issue. Hover a health badge to see everything that took points off. Below it: how many applications fall in each TIME quadrant.
+- **Upcoming renewals:** contracts whose notice deadline falls within the renewal warning window (120 days unless changed in [Settings](#portfolio-settings-backup-and-export)), including deadlines already missed.
+- **Integrations needing attention:** live integrations at high or medium risk, worst first, with overdue reviews flagged.
+- **Value by category:** expected and realized dollars per year for each benefit category.
+- **Strategic roadmap work:** roadmap items linked to an application or carrying benefits, in progress first, with progress from the roadmap.
+- **Recent decisions.**
+- **Export to Excel** downloads the whole portfolio (one sheet per kind of record); **Print** prints the page.
+
+### Applications
+
+**Applications** lists every system with filters, tiles for cost and renewals, and a TIME view. Click one to open its page.
+
+| Field | Notes |
+|---|---|
+| Name | Required and unique. |
+| Category | WMS, TMS, ERP, EDI, Customer portal, Reporting, Integration platform, Finance, Other. Customers and carriers are [trading partners](#trading-partners), not applications. |
+| Tier | How critical the system is to operations. **Tier 1:** operations stop without it (you can't receive, ship or bill). **Tier 2:** important, but there's a workaround for a while. **Tier 3:** inconvenient if it's down. Tier raises the weight of problems in [health](#application-health) and the severity of [impact analysis](#impact-analysis). |
+| Status | Planned, Active, Retiring, Retired. Retiring means you're moving off it; Retired applications aren't health-rated. |
+| Hosting | SaaS, Hosted, On-premises. |
+| Vendor and contract | The contract must be one of the vendor's. The application's renewal and notice dates come from the contract. |
+| Own roadmap | The product whose roadmap is this application's. One application per roadmap. |
+| Business and technical owner | People from Contacts. |
+| Annual cost | This application's share per year (one contract can cover several applications). Accepts cents. |
+| Business fit, technical fit | 1–5 each. Together they place the application in a **TIME** quadrant: **Invest** (both 3+), **Migrate** (business 3+, technical below 3), **Tolerate** (technical 3+, business below 3), **Eliminate** (both below 3). |
+| Go-live, retire date, description, notes | Free. |
+
+An application's page also shows its **health**, support contacts (with roles such as L1 support or key user), its **integrations**, a **dependencies** list and map, the **business processes** that use it, the **roadmap items** linked to it (from any roadmap, with the kind of impact: Enhances, Implements, Replaces, Retires, Integrates, Upgrades), its **benefits**, its **decisions** and its history. **Impact analysis** opens the [impact report](#impact-analysis) for it.
+
+You can't delete an application that integrations still use; set it to Retired instead, or delete the integrations first.
+
+#### Application health
+
+Each application that isn't retired gets a score from 0 to 100. It starts at 100 and loses points for:
+
+| Problem | Points |
+|---|---|
+| Part of a high-risk integration | 25 |
+| Otherwise, part of an integration with an open risk scoring 6+ | 10 |
+| Integration reviews overdue | 5 each, at most 15 |
+| Contract notice deadline missed (it will renew as is) | 20 |
+| Contract notice deadline within the renewal warning window | 10 |
+| Retiring but still in live integrations | 15 |
+| TIME: Eliminate / Migrate / Tolerate | 20 / 15 / 5 |
+
+Tier 1 applications lose 50% more points and Tier 3 applications 25% fewer. **Green** is 80 and up, **Amber** 60–79, **Red** below 60.
+
+### Vendors, contracts and contacts
+
+- **Vendors & contracts:** each vendor has contracts (number, start, end, renewal date, notice period in days, auto-renews, annual value), its people, an account manager and technical contact, support phone and portal, and an ordered **escalation path** (level 1 is called first). The **notice deadline** is the renewal date minus the notice period: the last day to cancel or renegotiate. It shows amber when it's within the renewal warning window and red once missed.
+- **Contacts:** every person, internal or at a vendor or trading partner. When you delete someone, the editor first lists every role they hold (owner of, account manager for, escalation level, risk owner…), so it's never a surprise. Clear **Active** when someone leaves to keep their history.
+
+### Trading partners
+
+Customers, carriers, suppliers and other outside companies that exchange data with your applications. You track who they are and how to reach them, not their systems.
+
+- **Type:** Customer, Carrier, Supplier, Other. **Status:** Onboarding (being set up and tested), Active, Inactive.
+- **Importance:** **Key** partners are flagged everywhere and make impact analysis High severity when their flows are affected.
+- **Identifiers:** account/customer code (your ID for them in the WMS or ERP), EDI qualifier and ID (ISA, shown as `01:123456789`), and GS ID if different.
+- **Relationship owner** and the partner's own people (EDI coordinator, IT contact).
+
+A partner's page shows its integrations, the applications its flows pass through (dependencies and map), decisions and history. A partner with integrations can't be deleted; set it to Inactive instead.
+
+### Integrations
+
+One integration is one flow of data, from a **source** to a **target**, optionally through a middle hop (**via**: an EDI provider, VAN or integration platform such as Cleo or Boomi). Each end is one of your applications or a trading partner; at least one end must be an application, and the via is always an application.
+
+| Field | Notes |
+|---|---|
+| Source, via, target | Choose from applications and partners. A blank name becomes "Source → Target". |
+| Type | API, SFTP, EDI, Manual, Batch file. |
+| Direction | **One-way** (source → target) or **Bidirectional** (data also comes back, e.g. orders in and ship confirmations out on one connection). |
+| Frequency | Real-time, Near real-time, Hourly, Daily, Weekly, On demand. |
+| Message format | E.g. `X12 940`, `JSON`, `CSV`. |
+| Business purpose | Required: what the flow is for. |
+| Tier | Business criticality of the flow, same scale as applications. |
+| Owner, status | Status: Planned, Active, Retiring, Retired. Retired flows are ignored by the map, dependencies, health and impact analysis. |
+| Last review, review interval | When it was last reviewed and how often it should be (months). **Mark reviewed** on the integration's page sets today. A live integration that was never reviewed, or whose interval has passed, is **review overdue**. |
+
+**Risks:** each integration has a risk register. A risk has a description, **likelihood** and **impact** (1–5 each), a **score** (likelihood × impact, 1–25), mitigation, owner and status (Open, Mitigated, Accepted, Closed). Open and Accepted risks count; Mitigated and Closed don't.
+
+**Risk level** of an integration:
+
+- **High:** an open or accepted risk scores 15+, or 8+ on a Tier 1 integration.
+- **Medium:** a risk scores 6+, or the review is overdue.
+- **Low:** otherwise. Retired integrations are always Low.
+
+**Tip:** for a customer's two-way EDI flow, enter the **customer as the source** (their orders start the flow). The map draws flows in the direction you record them, so customers then sit on the left, feeding your systems.
+
+### The integration map and dependencies
+
+**Map** draws applications as boxes (the colored stripe on the left is the tier) and trading partners as rounded pills (a purple dot marks key partners). Integrations are arrows colored by type, dashed when manual or planned and faded when retiring, with a dot on each colored by its risk level. Click a box, pill or line to open it.
+
+- **Whole portfolio:** columns run Trading partners · EDI & integration · Portals · Warehouse & transport · ERP & finance · Reporting & other. Filter by type or tier, show retired flows, or hide trading partners.
+- **Focus on** one application or partner, with a **depth** of 1–5 steps, to see what feeds it and what it feeds. The same view appears on application and partner pages as **Dependencies**.
+
+How dependencies are worked out:
+
+- **Each integration is one step.** A flow routed through a via counts as source → via, via → target and also source → target.
+- **Bidirectional** flows count both ways.
+- **Partners are end points.** A walk reaches a partner but never continues through it, so one customer isn't a "dependency" of another just because both send to your WMS.
+- **A partner's data stays on its own flows.** A flow with a partner at one end carries only that partner's data, so once the walk has followed one partner's flow it won't continue along another partner's. Flows between your own applications carry everyone's data and are always followed. That's why Boomi's map shows only the customers Boomi carries, not Cleo's.
+- **Layout:** each integration is drawn source → via → target as you recorded it, starting with the focus's own flows. A routed path stays in a straight line; a direct flow between the same two systems arcs around it.
+
+### Business processes
+
+**Processes** is a tree of what the operation does, e.g. **Order to Cash** with steps **Order intake**, **Pick, pack and ship** and **Customer invoicing**. Each process has a domain (Inbound, Inventory, Outbound, Transportation, Billing, Customer service, Reporting, Other), an owner and a description. A process can't sit under itself or one of its own steps, and a process with steps can't be deleted until they're moved or deleted.
+
+On a process's page:
+
+- **Applications used:** what it uses each for, and which is the **primary** system. This is how a change to an application reaches the process in impact analysis.
+- **Integrations relied on:** flows the process stops or degrades without. Integrations touching the process's applications are listed first.
+- **Pain points:** what slows the process down or causes errors, with severity (Low to Critical), the application where it hurts, and status (Open, Addressed, Won't fix). Link each to the roadmap item that fixes it, or choose **Create an initiative**: pick a roadmap and a goal, give it a title, and the pain point's editor creates the initiative (as an Idea, with the pain point as its description) and links it.
+- **KPIs:** name, unit, direction (higher or lower is better), baseline, target and current value. The bar shows how far current has moved from baseline toward target; a KPI is **on target** when current reaches the target in the right direction.
+
+The Processes list flags steps with no applications or integrations: impact analysis can't reach them.
+
+### Impact analysis
+
+Choose an application or trading partner that's about to change (an upgrade, an outage, a replacement, a new partner mapping) and a depth. The report lists everything it touches:
+
+- **Integrations:** **direct** ones (the subject is the source, target or via) and **indirect** ones (they carry the subject's data further downstream, up to the depth), with type, tier and risk. The dependency rules above apply.
+- **Trading partners** and **applications** at the other ends, key partners first, with their owners.
+- **Business processes** that use the application or rely on an affected integration, plus the processes above them ("a sub-process is affected"), with open pain points.
+- **Roadmap items** linked to the subject or to an application it exchanges data with directly. **In flight** (Planned or In progress) items come first: they could collide with the change.
+- **Vendors to coordinate with:** of the subject and of the applications it exchanges data with directly, with their first escalation contact, support phone and next notice deadline.
+- **Past decisions** about the subject, its direct integrations, its vendor or contract, or the affected processes.
+- **Open risks** on the affected integrations and **open pain points** on the affected processes.
+
+**Severity:**
+
+- **High:** the subject is a Tier 1 application or a key partner, a directly affected integration is Tier 1 or already high risk, or any key partner's flows are affected.
+- **Medium:** any Tier 1–2 integration, process or in-flight roadmap item is affected.
+- **Low:** otherwise.
+
+**Copy as text** copies the report as plain text for an email or ticket; **Print** prints it.
+
+### Benefits
+
+A benefit is value a roadmap item (usually an initiative) is expected to deliver. Add one with **+ New benefit** on the Benefits page, or **+ Add benefit** in a roadmap item's editor.
+
+| Field | Notes |
+|---|---|
+| Delivered by | The roadmap item. Deleting the item deletes its benefits. |
+| Category | Cost savings, Labor savings, Revenue impact, Adoption, Risk reduction, Other. |
+| Unit | US dollars, Hours, Percent, Count. |
+| Application | Where the benefit lands, for context (shown on that application's page). |
+| Baseline | The starting level, for benefits measured as a level (adoption %, error rate, a run-rate cost). Leave empty for savings counted from zero. |
+| Expected | Per year once fully realized, or the target level when there's a baseline. |
+| Expected by | When it should be fully realized. |
+| Measured by KPI | Optional process KPI. Its current value is used until the benefit has its own measurements, and its baseline when the benefit has none. |
+
+**Measurements** (in the benefit's editor) record what the benefit is running at on a date: an annual figure for savings (e.g. "running at 520 hours a year") or the current level. One reading per day; the **latest** one is the actual.
+
+How the numbers work:
+
+- **Gain:** with no baseline, the actual itself. With a baseline, how far the actual has moved from the baseline toward the expected value. A baseline above the expected value means lower is better: a drop counts as gain.
+- **Realized %** = gain ÷ (expected − baseline).
+- **Dollars:** US dollars as they are; Hours × the **labor rate** (set on the Benefits page or in Settings); percentages and counts have no dollar value. Until a labor rate is set, hour-based benefits are left out of dollar totals and the page says so. A setback counts as $0 realized, not negative.
+- **Status:** **Not measured** (nothing yet), **Realizing**, **At risk** (the expected-by date has passed and less than 50% is realized), **Realized** (100% or more).
+
+The Benefits page groups benefits by roadmap item with totals; the product's Dashboard tab has a Benefits card; the item editor lists the item's benefits.
+
+**Example: retiring a system to save run cost.** Attach the benefit to the "Retire Synapse" goal, category Cost savings, unit US dollars, application Synapse. Enter Synapse's current yearly cost as the **baseline** and its expected yearly cost after the last customer moves as **expected**. Each time a customer moves or the invoice changes, record the new yearly cost as a measurement. If the replacement costs more than the old system, don't record a negative saving: record what the move buys you (for example a Risk reduction benefit, percent of customers moved, baseline 0, expected 100), put each system's annual cost on its application, and record the trade-off in the [decision log](#decision-log).
+
+### Decision log
+
+**Decisions** records the calls that shape the portfolio so the reasoning isn't lost.
+
+- **Fields:** title, decided on, status (**Proposed**, **Decided**, **Superseded**, **Reversed**), decided by, context, the decision, the outcome (fill it in later), and **alternatives considered** (option, pros, cons, why not chosen).
+- **Superseded by:** when status is Superseded, choose the later decision that replaced it. The later decision's page lists what it replaced. Chains can't loop.
+- **Linked to:** link a decision to any number of applications, integrations, vendors, contracts, processes, roadmap goals or initiatives, and trading partners. It then shows in the **Decisions** section of each of those pages and in impact analysis. **+ Record decision** on any of those pages creates a decision already linked to it.
+- Filter the log by status, by what decisions are linked to, or to those **missing an outcome**. Deleting a linked record removes the link but keeps the decision; prefer **Reversed** to deleting a decision.
+
+### Portfolio settings, backup and export
+
+**Settings:**
+
+- **Labor rate ($ per hour):** values labor-hour benefits.
+- **Renewal warning (days):** how far ahead notice deadlines count as upcoming (default 120). Affects the dashboard, renewal lists and health.
+- **Integration review interval (months):** the starting interval for new integrations (default 12).
+- **Jira site:** e.g. `https://yourcompany.atlassian.net`. Roadmap items with a [Jira key](#linking-roadmap-items-to-jira) link to `{site}/browse/{key}`.
+
+**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, the settings and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
+
+**Import a portfolio file:**
+
+- **Restore** (only into an empty portfolio): brings everything back, including settings and history. Use it to move to a new computer: open your .rmp files first, then restore the .rpf.
+- **Merge:** adds to what's here. A record that already exists is skipped and listed, and what belongs to it (a vendor's contracts, an integration's risks, a process's pain points) comes with it only when the record is new. References point at the existing record, so integrations in the file connect to applications you already have. Settings and history aren't changed.
+- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date.
+- Roadmap links with no matching roadmap or item are listed after the import instead of failing it. Import the missing roadmaps' .rmp files, then merge again, or link them by hand.
+- The import runs in one transaction: if anything fails, nothing is added.
+
+**Export to Excel** (Dashboard) writes one sheet each for Applications (with health), Vendors, Contracts, Trading partners, Integrations, Risks, Processes, Pain points, KPIs, Benefits, Decisions and Contacts.
+
+**Read-only API:** everything is also available as JSON under `/api/portfolio/` (for Power BI or Excel's **Get Data › From Web**). See [Portfolio API](#portfolio-api).
+
+### Linking roadmap items to Jira
+
+Roadmapper isn't a replacement for Jira; Jira stays the system of record for stories and sprints. To jump across, give a roadmap item a **Jira key** (e.g. `WMS-123`; it's upper-cased) or a **Link** (any `https://` address) in the editor's **Links** section. With the Jira site set in Portfolio › Settings, the key becomes a link; a Link, when set, is used instead. The Tree shows a small **↗ WMS-123** next to linked items. Jira key and Link are also columns in spreadsheet export and import, and travel in .rmp files.
+
+---
+
+## 11. Reference for AI assistants and developers
 
 ### Architecture
 
@@ -503,14 +739,17 @@ Import is a three-step wizard:
 | `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `ScoringRubric` (`RubricCalculator`, `RubricScale`, `RubricRules`, `StarterRubric`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
 | `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations and `RoadmapService.Rubric.cs` the scoring rubric. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
 | `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. `Launcher.cs` handles start-up for the packaged exe (port choice, opening the browser). `UserGuide.cs` renders this guide (embedded from `docs/USER_GUIDE.md`) for `/guide`. The assembly, and so the packaged exe, is named `Roadmapper`. |
-| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`). |
+| `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`. `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
+| `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook. |
+| `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
+| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`). |
 
 ### Data model
 
 - `Product`: owns everything below; deleting it cascades.
 - `RoadmapItem`: **one table for all four levels**.
   - Linked by `ParentId` and `ItemType` (Goal=0, Initiative=1, Feature=2, Task=3).
-  - Fields: `Title, Description, Status, ProgressPct, StartDate, EndDate (DateOnly), Horizon, Owner, ThemeId, SortOrder, ManualRank, IsRollupOverridden, CreatedAt, UpdatedAt`.
+  - Fields: `Title, Description, Status, ProgressPct, StartDate, EndDate (DateOnly), Horizon, Owner, JiraKey, ExternalUrl, ThemeId, SortOrder, ManualRank, IsRollupOverridden, CreatedAt, UpdatedAt`.
   - Template reference fields: `SourceTemplateName, SourceTemplateAppliedAt, TemplateBatchId`.
   - Deleting an item cascades to its children, score, tag links and dependencies.
 - `ItemScore`: 1:1 with an item. Holds the inputs for all three models plus `ComputedScore`, and `ManualFactors` (a `[Flags] WsjfFactors` stored as an int: BusinessValue 1, TimeCriticality 2, RiskReduction 4, JobSize 8) marking WSJF factors typed by hand.
@@ -522,6 +761,21 @@ Import is a three-step wizard:
 - `AuditEntry`: change history. It deliberately has no foreign key to the item, so history survives deletion.
 - `Snapshot`: name, note and time, plus `PayloadJson`, a list of `SnapshotItem` records (id, parent, type, title, status, progress, dates, horizon, owner, score).
 - `TaskTemplate` (unique, case-insensitive name per product) has ordered `TaskTemplateLine`s: `SortOrder, Title, Description, Owner, StartOffsetDays` (shown in the UI as **Gap**), `DurationDays`, and Tags.
+
+### Portfolio data model
+
+All portfolio tables live in the same database; enums are stored as text; names marked unique compare case-insensitively (`NOCASE`). Every table has `CreatedAt`/`UpdatedAt` unless noted.
+
+- `Contact`: `Name, Title, Email, Phone, Department, Notes, IsActive`; `VendorId` or `TradingPartnerId` (cascade with the company), or neither for internal staff.
+- `Vendor` (unique name): `Website, AccountManagerId, TechnicalContactId, SupportPortalUrl, SupportPhone, Notes`. `Contract` (cascade): `Name, ContractNumber, StartDate, EndDate, RenewalDate, NoticePeriodDays, AutoRenews, AnnualValue (decimal), Notes`; *NoticeDeadline = RenewalDate − NoticePeriodDays*. `VendorEscalationContact` (key `VendorId, ContactId`): `Level, Note`.
+- `Application` (unique name): `Category, Criticality (Tier1–3), Status (Planned, Active, Retiring, Retired), Hosting, VendorId, ContractId (must be the vendor's), ProductId (unique when set: its own roadmap), BusinessOwnerId, TechnicalOwnerId, AnnualCost, BusinessFit, TechnicalFit (1–5), GoLiveDate, RetireDate, Description, Notes`. `ApplicationSupportContact` (key `ApplicationId, ContactId, Role`). `ApplicationInitiative` (key `ApplicationId, RoadmapItemId`, cascade both ways): `ImpactType`.
+- `TradingPartner` (unique name): `Type, Status (Onboarding, Active, Inactive), Importance (Key, Standard), AccountCode, EdiQualifier (2), EdiId (35), GsId (35), RelationshipOwnerId, Notes`.
+- `Integration`: `Name`; `SourceApplicationId` xor `SourcePartnerId`; `TargetApplicationId` xor `TargetPartnerId` (CHECK constraints); `ViaApplicationId`; all endpoint FKs are Restrict. `Type, Direction, Frequency, MessageFormat, BusinessPurpose (required), Criticality, OwnerId, Status, LastReviewDate, ReviewIntervalMonths, Notes`. `IntegrationRisk` (cascade): `Description, Likelihood, Impact (1–5, CHECK), Mitigation, Status, OwnerId, RaisedOn`.
+- `BusinessProcess` (unique name): `Description, Domain, ProcessOwnerId, ParentProcessId (Restrict), SortOrder`. `ProcessApplication` (key `ProcessId, ApplicationId`): `Usage, IsPrimary`. `ProcessIntegration` (key `ProcessId, IntegrationId`). `ProcessPainPoint`: `Description, Severity, ApplicationId (SetNull), AddressedByItemId (SetNull), Status`. `ProcessKpi`: `Name, Unit, Direction, Baseline, Target, Current, MeasuredOn`.
+- `Benefit`: `RoadmapItemId (cascade), ApplicationId (SetNull), KpiId (SetNull), Category, Description, Unit, ExpectedValue, ExpectedBy, Baseline, Notes`. `BenefitMeasurement` (unique `BenefitId, MeasuredOn`): `Value, Source, Note`.
+- `Decision`: `Title, DecidedOn, Status, Context, DecisionText (column "Decision"), Outcome, DecidedBy, SupersededById (SetNull)`. `DecisionAlternative`: `Option, Pros, Cons, WhyRejected, SortOrder`. `DecisionLink`: exactly one of `ApplicationId, IntegrationId, VendorId, ContractId, ProcessId, RoadmapItemId, TradingPartnerId` (CHECK `CK_DecisionLinks_OneTarget`); each cascades with its target.
+- `PortfolioSettings` (one row, Id 1): `LaborRate, RenewalWarningDays (120), DefaultReviewIntervalMonths (12), JiraBaseUrl`.
+- `PortfolioAuditEntry`: `EntityType, EntityId, EntityName (snapshot), Action, Field, OldValue, NewValue, ChangedAt`; no foreign keys. Contracts and escalation are filed under the vendor; support contacts and initiative links under the application; risks under the integration; process links, pain points and KPIs under the process; measurements under the benefit; links under the decision.
 
 ### Invariants (rules the code enforces)
 
@@ -541,6 +795,18 @@ Import is a three-step wizard:
 14. **Rubric validation** (`RubricRules.Validate`): a name; at least one option (max 20); choices need unique labels; bands need unique `From` values; Base values must be on the scale; Adjuster values are whole steps from −6 to +6. The scale (`RubricScale.TryParse`) is 2–15 increasing positive numbers.
 15. **Changing a criterion's kind** deletes its answers; removing an option deletes the answers that picked it. `RecalculateAllAsync` runs at startup and doesn't touch `UpdatedAt` or the history.
 
+### Portfolio rules
+
+16. **Integration ends:** each end is an application or a partner (CHECK); at least one is an application; source ≠ target; via ≠ either end; no duplicate (source, target, type, name). Applications and partners still used by integrations can't be deleted.
+17. **Risk level** (`PortfolioRules.RiskLevel`): retired → Low; top active risk score ≥ 15, or ≥ 8 on Tier 1 → High; ≥ 6 or review overdue → Medium; else Low. Review overdue = Active or Retiring and (never reviewed or `LastReviewDate + ReviewIntervalMonths < today`).
+18. **Dependency walk** (`PortfolioGraph`): retired integrations excluded; one step per integration (a via adds source→via and via→target as well as source→target); bidirectional both ways; partner nodes other than the start are end points; breadth-first over (node, carrying partner) states, where following a partner's integration sets the carried partner and an integration of a different partner is never followed. Each node is reported at its shortest distance with the integrations that reach it.
+19. **Focus map layout** (`MapLayout.FocusColumns`): members come from the walk; placement lays out whole integrations in recorded direction (source, via, target), starting from the focus's own integrations (routed first, then by id), breadth-first, first placement wins; anything unplaced goes downstream by distance, else upstream.
+20. **Impact** (`ImpactAnalyzer`): integrations = touching the subject (direct) ∪ the downstream walk's integration ids (indirect, at their distance); nodes = the other ends; processes = using the subject application or linking an affected integration, plus ancestors as "sub-process affected"; roadmap items and vendors = subject + applications at distance 1; decisions = linked to the subject, a direct integration, the subject's vendor or contract, or an affected (non-roll-up) process. Severity rules as in [Impact analysis](#impact-analysis).
+21. **Health** (`PortfolioHealth.Assess`): as in [Application health](#application-health); points × 1.5 for Tier 1, × 0.75 for Tier 3, rounded half away from zero; score floored at 0.
+22. **Benefits** (`BenefitMath`): actual = latest measurement, else the KPI's current; baseline = own, else the KPI's; gain and realization as in [Benefits](#benefits); realized $ = max(0, gain) in dollars; at risk below 50% after `ExpectedBy`. Measurements can't be in the future.
+23. **Processes:** no parent loops (`PortfolioRules.ParentError`); a process with sub-processes can't be deleted. KPI drafts reject a target on the wrong side of the baseline.
+24. **Decisions:** `SupersededById` only with status Superseded; no loops; deleting a decision clears "superseded by" on those it replaced.
+
 ### HTTP endpoints (file downloads)
 
 | Route | Returns |
@@ -551,6 +817,26 @@ Import is a three-step wizard:
 | `GET /export/{productId}/roadmap.xlsx` | Excel export (Roadmap, Dependencies, Templates) |
 | `GET /export/{productId}/roadmap.pdf?depth={Goal\|Initiative\|Feature\|Task}&baseline={snapshotId}` | PDF report, shown in the browser (`inline`) |
 | `GET /export/{productId}/timeline.svg?scale=quarter&depth=…&baseline=…&download=true` | Timeline SVG |
+| `GET /export/portfolio.xlsx` | Portfolio workbook (12 sheets) |
+| `GET /export/portfolio.rpf` | Portfolio file (whole portfolio as JSON) |
+
+### Portfolio API
+
+Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing changes data, so it's safe on localhost. Unknown filter values are ignored.
+
+| Route | Returns |
+|---|---|
+| `/dashboard` | Health counts and per-application health, run cost, TIME counts, renewals, high/medium-risk integrations, benefit totals and value by category, strategic items, recent decisions |
+| `/applications?status=&category=&tier=` · `/applications/{id}` | Applications; detail adds support contacts and linked roadmap items |
+| `/applications/{id}/dependencies?depth=` · `/partners/{id}/dependencies?depth=` | Upstream and downstream (depth 1–5, default 2) |
+| `/applications/{id}/impact?depth=&format=text` · `/partners/{id}/impact?…` | Impact report (JSON, or the plain-text report with `format=text`) |
+| `/vendors` · `/vendors/{id}` · `/contracts?renewingWithinDays=` · `/contacts` | Vendors (detail with contracts and escalation), upcoming renewals, people |
+| `/partners?type=&status=` · `/partners/{id}` | Trading partners; detail adds people and integrations |
+| `/integrations?risk=&type=&applicationId=` · `/integrations/{id}` | Integrations with risk level; detail adds risks |
+| `/processes?domain=&applicationId=` · `/processes/{id}` | Processes in tree order; detail adds pain points, KPIs, integrations |
+| `/benefits?productId=&itemId=&applicationId=&status=` | Labor rate, totals and benefits with actual, realization, status and dollars |
+| `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
+| `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
 
 ### Roadmapper file format
 
@@ -570,9 +856,20 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
   - Then creates a new product in one transaction with change history recording turned off, assigning new ids and new template-batch ids, then recalculates roll-ups and scores.
 - **Version rule:** files with a higher `version` than the app supports are refused. If the format changes, bump `CurrentVersion` and keep reading older versions.
 
+### Portfolio file format
+
+A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and import are in `Data/Portfolio/PortfolioService.Files.cs` (`ExportPortfolioAsync` / `ImportPortfolioAsync`). Same JSON conventions as `.rmp`.
+
+- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `history`. Missing lists are treated as empty.
+- **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`.
+- **Validation** (before anything is written): format and version, unique ids per kind, names present, every id reference present in the file, exactly one source and target per integration. A `.rmp` is recognized and refused with a pointer to the Products page.
+- **Import:** one transaction, staged saves with old→new id maps. Restore requires `IsEmptyAsync()`, imports settings and history (history re-pointed to new ids; unmapped ids become 0) with audit capture off. Merge keeps audit on, keeps settings, skips existing records by the matching rule in [Portfolio settings, backup and export](#portfolio-settings-backup-and-export) and maps references to them; children of skipped records are skipped, except that contracts and KPIs of existing parents are matched by name for references. Unmatched roadmap references are dropped and listed (`PortfolioImportResult.Unmatched`); a benefit whose item doesn't match is skipped.
+
 ### Page routes
 
-`/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
+Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
+
+Roadmaps: `/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
 
 ### Colors (shared by the UI and every export)
 
@@ -610,6 +907,13 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 | Batch | All tasks created by one "apply template" action. |
 | Blocked | Has an unfinished predecessor. |
 | Gap | Days of wait before a template task starts, after the previous task (or the Feature start). |
+| Health | An application's 0–100 score and Green/Amber/Red rating. |
+| Key partner | A trading partner whose flows make impact analysis High severity. |
+| Notice deadline | A contract's renewal date minus its notice period: the last day to cancel or renegotiate. |
+| Realized % | How much of a benefit's expected gain has been achieved. |
+| Tier | Business criticality: Tier 1 = operations stop without it. |
+| TIME | Tolerate / Invest / Migrate / Eliminate, from business × technical fit. |
+| Via | The middle hop of an integration (EDI provider, VAN, integration platform). |
 | Horizon | Now / Next / Later bucket. |
 | Open | Status not Done or Cancelled. |
 | Overdue | Open, with an End date in the past. |
@@ -619,7 +923,7 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 
 ---
 
-## 11. FAQ and troubleshooting
+## 12. FAQ and troubleshooting
 
 **I can't edit a Feature's dates or progress.**
 They're rolled up from its tasks. Tick "Set dates and progress manually…" in the editor.
@@ -660,9 +964,27 @@ Run it from the repository root, not from `src`.
 **The app won't build because a file is locked.**
 A copy of the app is still running. Stop it (Ctrl+C in its terminal) and try again.
 
+**A customer doesn't show on another customer's dependency map, even though both send to the same WMS. Is that right?**
+Yes. Each partner's flows carry only that partner's data, and a dependency walk never passes from one partner's flows to another's. Flows between your own applications are always followed.
+
+**Why is a two-way customer flow drawn with the customer on the right?**
+The map draws each integration in the direction it was recorded. Edit the integration and make the customer the source.
+
+**My labor-hour benefits don't add to the dollar totals.**
+Set a labor rate on the Benefits page or in Portfolio › Settings.
+
+**I can't delete an application (or trading partner).**
+Integrations still use it. Set it to Retired (Inactive for a partner) to keep the history, or delete those integrations first.
+
+**After restoring a portfolio file, some roadmap links are missing.**
+The import lists links whose roadmap or item path didn't match. Open those roadmaps' .rmp files first (titles must match), then import the .rpf again with Merge, or link the items by hand.
+
+**A Jira key shows but isn't clickable.**
+Set the Jira site in Portfolio › Settings.
+
 ---
 
-## 12. Scoring models explained
+## 13. Scoring models explained
 
 All three models answer the same question: **with more good ideas than time, what should we do first?** They make the reasoning behind an order visible, so a team can argue about the inputs ("is this really high impact?") instead of about gut feelings. A score is a conversation starter, not a verdict. If the top of the list looks wrong, that usually means an input is wrong or something important isn't being measured, so fix that, or use **Manual rank** for the exceptions.
 

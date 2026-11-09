@@ -19,6 +19,11 @@ public static class ExportEndpoints
             Results.File(await Roadmapper.Data.Portfolio.PortfolioExport.ToXlsxAsync(svc),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"portfolio-{svc.Today:yyyy-MM-dd}.xlsx"));
 
+        // The whole portfolio as a portfolio file (.rpf), for backups and moving to another computer.
+        app.MapGet("/export/portfolio.rpf", async (Roadmapper.Data.Portfolio.PortfolioService svc) =>
+            Results.File((await svc.ExportPortfolioAsync(typeof(ExportEndpoints).Assembly.GetName().Version?.ToString(3))).ToBytes(),
+                PortfolioFile.ContentType, $"portfolio-{svc.Today:yyyy-MM-dd}{PortfolioFile.Extension}"));
+
         var export = app.MapGroup("/export/{productId:int}");
 
         export.MapGet("/roadmap.csv", async (int productId, RoadmapService svc) =>

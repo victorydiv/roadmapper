@@ -513,6 +513,8 @@ public class PortfolioSettings
     /// <summary>Notice deadlines this close (in days) show as upcoming renewals.</summary>
     public int RenewalWarningDays { get; set; } = 120;
     public int DefaultReviewIntervalMonths { get; set; } = 12;
+    /// <summary>The Jira site, e.g. "https://acme.atlassian.net". Roadmap items with a Jira key link to {this}/browse/{key}.</summary>
+    public string? JiraBaseUrl { get; set; }
 }
 
 /// <summary>

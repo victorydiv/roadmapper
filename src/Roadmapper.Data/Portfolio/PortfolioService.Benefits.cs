@@ -129,4 +129,27 @@ public partial class PortfolioService
         settings.LaborRate = rate;
         await db.SaveChangesAsync();
     }
+
+    /// <summary>Saves the portfolio-wide settings (Portfolio › Settings).</summary>
+    public async Task SaveSettingsAsync(decimal? laborRate, int renewalWarningDays, int defaultReviewIntervalMonths, string? jiraBaseUrl)
+    {
+        if (laborRate is <= 0) throw new InvalidOperationException("The labor rate must be more than zero, or empty.");
+        if (renewalWarningDays is < 1 or > 730) throw new InvalidOperationException("The renewal warning window must be between 1 and 730 days.");
+        if (defaultReviewIntervalMonths is < 1 or > 60) throw new InvalidOperationException("The review interval must be between 1 and 60 months.");
+        var jira = Clean(jiraBaseUrl)?.TrimEnd('/');
+        if (jira is not null && (jira.Length > ExternalLinks.MaxUrlLength || !ExternalLinks.IsWebUrl(jira)))
+            throw new InvalidOperationException("The Jira site must be a web address like https://yourcompany.atlassian.net.");
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var settings = await db.PortfolioSettings.FirstOrDefaultAsync();
+        if (settings is null)
+        {
+            settings = new PortfolioSettings();
+            db.PortfolioSettings.Add(settings);
+        }
+        settings.LaborRate = laborRate;
+        settings.RenewalWarningDays = renewalWarningDays;
+        settings.DefaultReviewIntervalMonths = defaultReviewIntervalMonths;
+        settings.JiraBaseUrl = jira;
+        await db.SaveChangesAsync();
+    }
 }

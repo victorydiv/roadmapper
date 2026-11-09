@@ -27,4 +27,4 @@ Requirements: Windows 10 or 11 (64-bit) and a modern browser. Nothing else needs
 - Run: `dotnet run --project src/Roadmapper.Web --launch-profile http` from this folder.
 - Test: `dotnet test`.
 - Package: `./publish.ps1` runs the tests and writes `artifacts/Roadmapper-<version>-win-x64.zip`. Raise `<Version>` in `src/Roadmapper.Web/Roadmapper.Web.csproj` for each release.
-- How everything works, including the rules the code enforces: [docs/USER_GUIDE.md](docs/USER_GUIDE.md), section 10.
+- How everything works, including the rules the code enforces: [docs/USER_GUIDE.md](docs/USER_GUIDE.md), section 11. The application portfolio is section 10; its design is in [docs/PORTFOLIO_ARCHITECTURE.md](docs/PORTFOLIO_ARCHITECTURE.md).

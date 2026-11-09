@@ -126,6 +126,8 @@ public static class ImportPlanner
         if (d.Title.Length == 0) plan.Errors.Add("Title is required.");
         d.Description = NullIfEmpty(row.Get(RoadmapColumns.Description));
         d.Owner = NullIfEmpty(row.Get(RoadmapColumns.Owner));
+        d.JiraKey = NullIfEmpty(row.Get(RoadmapColumns.JiraKey));
+        d.ExternalUrl = NullIfEmpty(row.Get(RoadmapColumns.Link));
         plan.ThemeName = NullIfEmpty(row.Get(RoadmapColumns.Theme));
         plan.TagNames.AddRange(row.Get(RoadmapColumns.Tags).Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 

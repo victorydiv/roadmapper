@@ -923,6 +923,10 @@ namespace Roadmapper.Data.Migrations
                     b.Property<int>("DefaultReviewIntervalMonths")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("JiraBaseUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal?>("LaborRate")
                         .HasColumnType("TEXT");
 
@@ -1263,6 +1267,10 @@ namespace Roadmapper.Data.Migrations
                     b.Property<DateOnly?>("EndDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Horizon")
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
@@ -1273,6 +1281,10 @@ namespace Roadmapper.Data.Migrations
                     b.Property<string>("ItemType")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JiraKey")
+                        .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("ManualRank")

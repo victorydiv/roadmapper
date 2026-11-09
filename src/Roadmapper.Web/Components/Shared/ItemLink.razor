@@ -1,0 +1,16 @@
+@* A roadmap item's Jira key or external link, opening in a new tab. *@
+@if (Url is { } url)
+{
+    <a class="item-link" href="@url" target="_blank" rel="noopener" title="@(Item.JiraKey is { } k ? $"Open {k}" : url)" @onclick:stopPropagation="true">↗ @(Item.JiraKey ?? "Link")</a>
+}
+else if (Item.JiraKey is { } key)
+{
+    <span class="item-link muted" title="Set the Jira site under Portfolio › Settings to make keys clickable">@key</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public RoadmapItem Item { get; set; } = default!;
+    [Parameter] public string? JiraBaseUrl { get; set; }
+
+    private string? Url => ExternalLinks.Url(Item.JiraKey, Item.ExternalUrl, JiraBaseUrl);
+}

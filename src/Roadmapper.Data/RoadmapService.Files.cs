@@ -30,7 +30,7 @@ public partial class RoadmapService
             {
                 Id = i.Id, ParentId = i.ParentId, Type = i.ItemType, Title = i.Title, Description = i.Description,
                 Status = i.Status, ProgressPct = i.ProgressPct, StartDate = i.StartDate, EndDate = i.EndDate,
-                Horizon = i.Horizon, Owner = i.Owner, ThemeId = i.ThemeId,
+                Horizon = i.Horizon, Owner = i.Owner, JiraKey = i.JiraKey, ExternalUrl = i.ExternalUrl, ThemeId = i.ThemeId,
                 TagIds = i.Tags.Count == 0 ? null : i.Tags.Select(t => t.Id).Order().ToList(),
                 SortOrder = i.SortOrder, ManualRank = i.ManualRank, IsRollupOverridden = i.IsRollupOverridden,
                 Score = i.Score is { } s && HasInputs(s)
@@ -121,6 +121,7 @@ public partial class RoadmapService
                         ItemType = f.Type, Title = f.Title.Trim(), Description = Clean(f.Description),
                         Status = f.Status, ProgressPct = f.Status == ItemStatus.Done ? 100 : f.ProgressPct,
                         StartDate = f.StartDate, EndDate = f.EndDate, Horizon = f.Horizon, Owner = Clean(f.Owner),
+                        JiraKey = Clean(f.JiraKey), ExternalUrl = Clean(f.ExternalUrl),
                         ThemeId = f.ThemeId is { } th ? themes[th].Id : null,
                         SortOrder = sort++, ManualRank = f.ManualRank, IsRollupOverridden = f.IsRollupOverridden,
                         SourceTemplateName = Clean(f.SourceTemplateName), SourceTemplateAppliedAt = f.SourceTemplateAppliedAt,

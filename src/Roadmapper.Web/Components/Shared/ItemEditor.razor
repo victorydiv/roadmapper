@@ -221,6 +221,22 @@
                 </fieldset>
 
                 <fieldset>
+                    <legend>Links</legend>
+                    <div class="grid-2">
+                        <label class="field" title="The matching Jira issue. Set the Jira site under Portfolio › Settings to make it a link.">Jira key
+                            <InputText @bind-Value="draft.JiraKey" placeholder="e.g. WMS-123" maxlength="50" />
+                        </label>
+                        <label class="field" title="Any web address for this item: a Jira issue, Confluence page or ticket. Used instead of the Jira key's link.">Link
+                            <InputText @bind-Value="draft.ExternalUrl" placeholder="https://…" />
+                        </label>
+                    </div>
+                    @if (ExternalLinks.Url(draft.JiraKey?.Trim().ToUpperInvariant(), draft.ExternalUrl?.Trim(), jiraBaseUrl) is { } openUrl && (draft.ExternalUrl is not { Length: > 0 } || ExternalLinks.IsWebUrl(draft.ExternalUrl.Trim())))
+                    {
+                        <div><a class="small" href="@openUrl" target="_blank" rel="noopener">Open ↗</a></div>
+                    }
+                </fieldset>
+
+                <fieldset>
                     <legend>Classification</legend>
                     <label class="field">Theme
                         <InputSelect @bind-Value="draft.ThemeId">
@@ -567,8 +583,11 @@
     private List<Benefit>? benefits;
     private DateOnly benefitsToday;
 
+    private string? jiraBaseUrl;
+
     private async Task LoadAppLinksAsync()
     {
+        jiraBaseUrl = (await Portfolio.GetSettingsAsync()).JiraBaseUrl;
         if (draft.IsNew) { appLinks = []; benefits = []; return; }
         benefitsToday = Portfolio.Today;
         benefits = await Portfolio.GetBenefitsAsync(itemId: draft.Id);

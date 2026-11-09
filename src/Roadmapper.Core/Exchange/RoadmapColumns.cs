@@ -8,7 +8,7 @@ public static class RoadmapColumns
 {
     public const string Type = "Type", Title = "Title", Parent = "Parent", Description = "Description",
         Status = "Status", Progress = "Progress", Start = "Start", End = "End", Horizon = "Horizon",
-        Owner = "Owner", Theme = "Theme", Tags = "Tags",
+        Owner = "Owner", Theme = "Theme", Tags = "Tags", JiraKey = "Jira key", Link = "Link",
         Reach = "Reach", Impact = "Impact", Confidence = "Confidence", Effort = "Effort",
         BusinessValue = "Business value", TimeCriticality = "Time criticality", RiskReduction = "Risk reduction",
         JobSize = "Job size", Moscow = "MoSCoW", ManualRank = "Manual rank",
@@ -19,7 +19,7 @@ public static class RoadmapColumns
     /// <summary>Columns written on export. Score and Id are informational and ignored on import.</summary>
     public static readonly string[] Export =
     [
-        Type, Title, Parent, Description, Status, Progress, Start, End, Horizon, Owner, Theme, Tags,
+        Type, Title, Parent, Description, Status, Progress, Start, End, Horizon, Owner, Theme, Tags, JiraKey, Link,
         Reach, Impact, Confidence, Effort, BusinessValue, TimeCriticality, RiskReduction, JobSize, Moscow,
         ManualRank, FromTemplate, TemplateApplied, Score, Id,
     ];
@@ -41,6 +41,7 @@ public static class RoadmapColumns
         ["category"] = Theme, ["labels"] = Tags, ["tag"] = Tags,
         ["bv"] = BusinessValue, ["tc"] = TimeCriticality, ["rr"] = RiskReduction, ["size"] = JobSize,
         ["moscow priority"] = Moscow, ["priority"] = Moscow, ["rank"] = ManualRank,
+        ["jira"] = JiraKey, ["jira issue"] = JiraKey, ["issue key"] = JiraKey, ["key"] = JiraKey, ["url"] = Link, ["external link"] = Link,
     };
 
     /// <summary>The import field a spreadsheet header most likely means, or null.</summary>

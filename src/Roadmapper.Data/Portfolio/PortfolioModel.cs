@@ -300,6 +300,7 @@ internal static class PortfolioModel
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();
+            e.Property(s => s.JiraBaseUrl).HasMaxLength(ExternalLinks.MaxUrlLength);
             e.HasData(new PortfolioSettings());
         });
 

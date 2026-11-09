@@ -1,0 +1,132 @@
+@page "/portfolio/settings"
+@using Roadmapper.Core.Exchange
+@inject PortfolioService Svc
+
+<PortfolioHeader Title="Portfolio settings" Subtitle="Settings that apply across the portfolio, and backing up or moving the whole portfolio as a file." />
+
+<div class="settings">
+    <div class="card stack">
+        <h2>Settings</h2>
+        @if (settingsError is not null)
+        {
+            <div class="alert">@settingsError</div>
+        }
+        <label class="field" title="Dollars per hour, to value labor-hour benefits in dollar totals">Labor rate ($ per hour)
+            <input type="number" step="0.01" min="0" @bind="laborRate" />
+        </label>
+        <label class="field" title="Contracts whose notice deadline falls within this many days show as upcoming renewals and lower application health">Renewal warning (days)
+            <input type="number" min="1" max="730" @bind="warningDays" />
+        </label>
+        <label class="field" title="Starting review interval for new integrations">Integration review interval (months)
+            <input type="number" min="1" max="60" @bind="reviewMonths" />
+        </label>
+        <label class="field" title="Roadmap items with a Jira key link to this site's /browse/KEY page">Jira site
+            <input @bind="jiraBaseUrl" placeholder="https://yourcompany.atlassian.net" />
+        </label>
+        <div class="row">
+            <button class="btn primary" @onclick="SaveAsync">Save settings</button>
+            @if (saved) { <span class="muted small">Saved.</span> }
+        </div>
+    </div>
+
+    <div class="card stack">
+        <h2>Back up the portfolio</h2>
+        <div class="muted small">
+            Downloads a portfolio file (.rpf) with every application, vendor, contract, contact, trading partner, integration,
+            risk, process, pain point, KPI, benefit, decision, these settings and the change history. Roadmaps aren't included:
+            back those up as .rmp files from each product. Links to roadmap items are saved by roadmap name and item path,
+            and reconnect when those roadmaps exist.
+        </div>
+        <div><a class="btn" href="/export/portfolio.rpf" download>Download portfolio file</a></div>
+    </div>
+
+    <div class="card stack">
+        <h2>Import a portfolio file</h2>
+        @if (importError is not null)
+        {
+            <div class="alert">@importError</div>
+        }
+        <label class="check">
+            <input type="radio" name="mode" checked="@(mode == PortfolioImportMode.Restore)" @onchange="() => mode = PortfolioImportMode.Restore" disabled="@(!empty)" />
+            <span><b>Restore</b>: into an empty portfolio, with its settings and history.@if (!empty) { <span class="muted small"> (This portfolio isn't empty.)</span> }</span>
+        </label>
+        <label class="check">
+            <input type="radio" name="mode" checked="@(mode == PortfolioImportMode.Merge)" @onchange="() => mode = PortfolioImportMode.Merge" />
+            <span><b>Merge</b>: add to what's here. Records that already exist (same name) are skipped and listed.</span>
+        </label>
+        <div>
+            <label class="btn @(importing ? "disabled" : "")">
+                @(importing ? "Importing…" : "Choose .rpf file…")
+                <InputFile OnChange="ImportAsync" accept=".rpf,.json" disabled="@importing" style="display:none" />
+            </label>
+        </div>
+        @if (result is { } r)
+        {
+            <div class="card notice stack">
+                <b>@(r.Mode == PortfolioImportMode.Restore ? "Restored." : "Merged.") @r.Summary</b>
+                @if (r.Skipped.Count > 0)
+                {
+                    <div class="small">Skipped, already here (@r.Skipped.Count):</div>
+                    <ul class="small">@foreach (var s in r.Skipped.Take(30)) { <li>@s</li> }</ul>
+                }
+                @if (r.Unmatched.Count > 0)
+                {
+                    <div class="small">Roadmap links that didn't match a roadmap here (@r.Unmatched.Count). Import those roadmaps' .rmp files first, then import again with Merge, or link them by hand:</div>
+                    <ul class="small">@foreach (var u in r.Unmatched.Take(30)) { <li>@u</li> }</ul>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private const long MaxFileBytes = 50 * 1024 * 1024;
+
+    private decimal? laborRate;
+    private int warningDays, reviewMonths;
+    private string? jiraBaseUrl, settingsError, importError;
+    private bool saved, importing, empty;
+    private PortfolioImportMode mode = PortfolioImportMode.Merge;
+    private PortfolioImportResult? result;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var s = await Svc.GetSettingsAsync();
+        (laborRate, warningDays, reviewMonths, jiraBaseUrl) = (s.LaborRate, s.RenewalWarningDays, s.DefaultReviewIntervalMonths, s.JiraBaseUrl);
+        empty = await Svc.IsEmptyAsync();
+        mode = empty ? PortfolioImportMode.Restore : PortfolioImportMode.Merge;
+    }
+
+    private async Task SaveAsync()
+    {
+        settingsError = null;
+        saved = false;
+        try
+        {
+            await Svc.SaveSettingsAsync(laborRate, warningDays, reviewMonths, jiraBaseUrl);
+            saved = true;
+        }
+        catch (InvalidOperationException ex) { settingsError = ex.Message; }
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        importError = null;
+        result = null;
+        importing = true;
+        try
+        {
+            if (e.File.Size > MaxFileBytes) throw new InvalidOperationException("That file is larger than 50 MB.");
+            using var buffer = new MemoryStream();
+            await using (var upload = e.File.OpenReadStream(MaxFileBytes)) await upload.CopyToAsync(buffer);
+            buffer.Position = 0;
+            result = await Svc.ImportPortfolioAsync(PortfolioFile.Read(buffer), mode);
+            await LoadAsync();
+        }
+        catch (InvalidOperationException ex) { importError = $"Couldn't import {e.File.Name}: {ex.Message}"; }
+        catch (IOException ex) { importError = $"Couldn't read {e.File.Name}: {ex.Message}"; }
+        finally { importing = false; }
+    }
+}

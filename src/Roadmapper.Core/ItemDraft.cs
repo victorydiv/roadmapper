@@ -15,6 +15,8 @@ public class ItemDraft
     public DateOnly? EndDate { get; set; }
     public Horizon? Horizon { get; set; }
     public string? Owner { get; set; }
+    public string? JiraKey { get; set; }
+    public string? ExternalUrl { get; set; }
     public int? ThemeId { get; set; }
     public int? ManualRank { get; set; }
     public bool IsRollupOverridden { get; set; }
@@ -45,6 +47,8 @@ public class ItemDraft
         EndDate = i.EndDate,
         Horizon = i.Horizon,
         Owner = i.Owner,
+        JiraKey = i.JiraKey,
+        ExternalUrl = i.ExternalUrl,
         ThemeId = i.ThemeId,
         ManualRank = i.ManualRank,
         IsRollupOverridden = i.IsRollupOverridden,
@@ -62,6 +66,10 @@ public class ItemDraft
         if (StartDate is { } s && EndDate is { } e && e < s) return "End date can't be before the start date.";
         if (ProgressPct is < 0 or > 100) return "Progress must be between 0 and 100.";
         if (ManualRank is < 1) return "Manual rank must be 1 or higher.";
+        if (JiraKey?.Trim().ToUpperInvariant() is { Length: > 0 } key && (key.Length > ExternalLinks.MaxKeyLength || !ExternalLinks.IsJiraKey(key)))
+            return "A Jira key looks like WMS-123: the project key, a dash and the issue number.";
+        if (ExternalUrl?.Trim() is { Length: > 0 } url && (url.Length > ExternalLinks.MaxUrlLength || !ExternalLinks.IsWebUrl(url)))
+            return "The link must be a full web address starting with https:// or http://.";
         return null;
     }
 
@@ -77,6 +85,8 @@ public class ItemDraft
         item.EndDate = EndDate;
         item.Horizon = Horizon;
         item.Owner = string.IsNullOrWhiteSpace(Owner) ? null : Owner.Trim();
+        item.JiraKey = string.IsNullOrWhiteSpace(JiraKey) ? null : JiraKey.Trim().ToUpperInvariant();
+        item.ExternalUrl = string.IsNullOrWhiteSpace(ExternalUrl) ? null : ExternalUrl.Trim();
         item.ThemeId = ThemeId;
         item.ManualRank = ManualRank;
         item.IsRollupOverridden = IsRollupOverridden;

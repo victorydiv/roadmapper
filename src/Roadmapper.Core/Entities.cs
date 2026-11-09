@@ -36,6 +36,10 @@ public class RoadmapItem
     public DateOnly? EndDate { get; set; }
     public Horizon? Horizon { get; set; }
     public string? Owner { get; set; }
+    /// <summary>The matching Jira issue, e.g. "WMS-123". Jira stays the system of record for the work itself.</summary>
+    public string? JiraKey { get; set; }
+    /// <summary>A link to the item elsewhere (a Jira issue, Confluence page, ticket). Overrides the link built from <see cref="JiraKey"/>.</summary>
+    public string? ExternalUrl { get; set; }
 
     public int? ThemeId { get; set; }
     public Theme? Theme { get; set; }

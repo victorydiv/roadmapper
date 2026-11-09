@@ -81,6 +81,8 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
             e.ToTable("Items");
             e.Property(i => i.Title).IsRequired().HasMaxLength(300);
             e.Property(i => i.Owner).HasMaxLength(100);
+            e.Property(i => i.JiraKey).HasMaxLength(ExternalLinks.MaxKeyLength);
+            e.Property(i => i.ExternalUrl).HasMaxLength(ExternalLinks.MaxUrlLength);
             e.Property(i => i.ItemType).HasConversion<string>().HasMaxLength(20);
             e.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(i => i.Horizon).HasConversion<string>().HasMaxLength(20);
