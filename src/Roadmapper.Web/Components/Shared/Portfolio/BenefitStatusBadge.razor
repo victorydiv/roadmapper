@@ -1,0 +1,13 @@
+<span class="badge benefit-@Status" title="@Title">@PortfolioText.Label(Status)</span>
+
+@code {
+    [Parameter, EditorRequired] public BenefitStatus Status { get; set; }
+
+    private string Title => Status switch
+    {
+        BenefitStatus.Realized => "At or past the expected value",
+        BenefitStatus.AtRisk => $"The expected-by date has passed and less than {BenefitMath.AtRiskBelowPct}% is realized",
+        BenefitStatus.NotMeasured => "No measurement yet",
+        _ => "Measured, not yet at the expected value",
+    };
+}

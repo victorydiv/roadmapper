@@ -102,6 +102,17 @@ public static class PortfolioApi
         api.MapGet("/partners/{id:int}/impact", async (int id, PortfolioService svc, int? depth, string? format) =>
             Impact(await svc.GetImpactAsync(NodeRef.Partner(id), depth ?? ImpactAnalyzer.DefaultDepth), format));
 
+        // Benefits with expected, actual, realization and dollar values. ?productId=&itemId=&applicationId=&status=AtRisk
+        api.MapGet("/benefits", async (PortfolioService svc, int? productId, int? itemId, int? applicationId, string? status) =>
+        {
+            var today = svc.Today;
+            var rate = (await svc.GetSettingsAsync()).LaborRate;
+            IEnumerable<Benefit> list = await svc.GetBenefitsAsync(productId, itemId, applicationId);
+            if (Parse<BenefitStatus>(status) is { } s) list = list.Where(b => BenefitMath.Status(b, today) == s);
+            var rows = list.ToList();
+            return new BenefitsDto(rate, BenefitMath.Totals(rows, rate, today), rows.Select(b => BenefitDto.From(b, rate, today)).ToList());
+        });
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -326,3 +337,19 @@ public record ImpactDto(EndpointDto Subject, int Depth, DateOnly AsOf, ImpactSev
 
     private static ImpactNodeDto Node(ImpactedNode n) => new(EndpointDto.Of(n.Node, n.Name), n.Distance, n.Application?.Criticality, n.Partner?.Importance);
 }
+
+public record MeasurementDto(DateOnly MeasuredOn, decimal Value, string? Source, string? Note);
+
+public record BenefitDto(int Id, string Description, BenefitCategory Category, BenefitUnit Unit, Ref RoadmapItem, Ref Product, Ref? Application,
+    Ref? Kpi, decimal? Baseline, decimal? ExpectedValue, DateOnly? ExpectedBy, decimal? ActualValue, DateOnly? ActualOn, int? RealizationPct,
+    BenefitStatus Status, decimal? ExpectedUsd, decimal? RealizedUsd, string? Notes, IReadOnlyList<MeasurementDto> Measurements)
+{
+    public static BenefitDto From(Benefit b, decimal? laborRate, DateOnly today) => new(b.Id, b.Description, b.Category, b.Unit,
+        new Ref(b.RoadmapItemId, b.RoadmapItem?.Title ?? ""), new Ref(b.RoadmapItem?.ProductId ?? 0, b.RoadmapItem?.Product?.Name ?? ""),
+        b.Application is { } a ? new Ref(a.Id, a.Name) : null, b.Kpi is { } k ? new Ref(k.Id, k.Name) : null,
+        BenefitMath.Baseline(b), b.ExpectedValue, b.ExpectedBy, BenefitMath.Actual(b), BenefitMath.ActualOn(b), BenefitMath.RealizationPct(b),
+        BenefitMath.Status(b, today), BenefitMath.ExpectedUsd(b, laborRate), BenefitMath.RealizedUsd(b, laborRate), b.Notes,
+        b.Measurements.OrderBy(m => m.MeasuredOn).Select(m => new MeasurementDto(m.MeasuredOn, m.Value, m.Source, m.Note)).ToList());
+}
+
+public record BenefitsDto(decimal? LaborRate, BenefitTotals Totals, IReadOnlyList<BenefitDto> Benefits);

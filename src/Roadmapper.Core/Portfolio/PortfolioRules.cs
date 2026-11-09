@@ -184,6 +184,24 @@ public static class PortfolioText
 
     public static string Label(ImpactSeverity s) => $"{s} impact";
 
+    public static string Label(BenefitCategory c) => c switch
+    {
+        BenefitCategory.CostSavings => "Cost savings",
+        BenefitCategory.LaborSavings => "Labor savings",
+        BenefitCategory.RevenueImpact => "Revenue impact",
+        BenefitCategory.RiskReduction => "Risk reduction",
+        _ => c.ToString(),
+    };
+
+    public static string Label(BenefitUnit u) => u switch { BenefitUnit.USD => "US dollars", _ => u.ToString() };
+
+    public static string Label(BenefitStatus s) => s switch
+    {
+        BenefitStatus.NotMeasured => "Not measured",
+        BenefitStatus.AtRisk => "At risk",
+        _ => s.ToString(),
+    };
+
     public static string Label(ProcessImpactKind k) => k switch
     {
         ProcessImpactKind.UsesApplication => "Uses it",
@@ -205,6 +223,8 @@ public static class PortfolioText
         ProcessDomain d => Label(d),
         PainPointStatus s => Label(s),
         KpiDirection d => Label(d),
+        BenefitCategory c => Label(c),
+        BenefitUnit u => Label(u),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

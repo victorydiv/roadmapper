@@ -340,6 +340,51 @@ public class ProcessKpi
     public bool? OnTarget => PortfolioRules.KpiOnTarget(this);
 }
 
+/// <summary>
+/// Value a roadmap item is expected to deliver, e.g. "Save 1,040 labor hours a year" on the initiative that automates
+/// billing. Expected values are annual; measurements record what it's actually running at.
+/// </summary>
+public class Benefit
+{
+    public int Id { get; set; }
+    /// <summary>The roadmap item (usually an Initiative) that should deliver it.</summary>
+    public int RoadmapItemId { get; set; }
+    public RoadmapItem? RoadmapItem { get; set; }
+    /// <summary>Where the benefit lands, if in one application.</summary>
+    public int? ApplicationId { get; set; }
+    public Application? Application { get; set; }
+    /// <summary>A process KPI that measures it; its current value stands in when the benefit has no measurements.</summary>
+    public int? KpiId { get; set; }
+    public ProcessKpi? Kpi { get; set; }
+    public BenefitCategory Category { get; set; } = BenefitCategory.CostSavings;
+    public string Description { get; set; } = "";
+    public BenefitUnit Unit { get; set; } = BenefitUnit.USD;
+    /// <summary>The annual value once fully realized (or the target level, for adoption and percentages).</summary>
+    public decimal? ExpectedValue { get; set; }
+    public DateOnly? ExpectedBy { get; set; }
+    /// <summary>The starting level, for benefits measured as a level (adoption %, error rate). Empty for savings counted from zero.</summary>
+    public decimal? Baseline { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<BenefitMeasurement> Measurements { get; set; } = new();
+}
+
+/// <summary>One reading of a benefit: the annualized value (or level) it was running at on a date.</summary>
+public class BenefitMeasurement
+{
+    public int Id { get; set; }
+    public int BenefitId { get; set; }
+    public Benefit? Benefit { get; set; }
+    public DateOnly MeasuredOn { get; set; }
+    public decimal Value { get; set; }
+    /// <summary>Where the number came from, e.g. "Power BI ops dashboard".</summary>
+    public string? Source { get; set; }
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>Portfolio-wide settings; a single row with Id 1.</summary>
 public class PortfolioSettings
 {

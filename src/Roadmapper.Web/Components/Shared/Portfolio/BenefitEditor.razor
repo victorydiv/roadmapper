@@ -1,0 +1,261 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New benefit" : "Edit benefit")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="CloseAsync">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+
+                <div class="grid-2">
+                    <label class="field">Roadmap
+                        <select @bind="productId" @bind:after="LoadItemsAsync">
+                            <option value="0">— roadmap —</option>
+                            @foreach (var p in products)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field" title="The initiative (or feature, or goal) that should deliver it">Delivered by
+                        <InputSelect @bind-Value="draft.RoadmapItemId" disabled="@(productId == 0)">
+                            <option value="0">— roadmap item —</option>
+                            @foreach (var i in items)
+                            {
+                                <option value="@i.Id">@i.ItemType: @(i.Path.Length > 0 ? $"{i.Path} › " : "")@i.Title</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+
+                <label class="field">Benefit
+                    <InputTextArea @bind-Value="draft.Description" placeholder="What gets better, for whom, e.g. Billing clerks stop keying accessorial charges" />
+                </label>
+
+                <div class="grid-3">
+                    <label class="field">Category
+                        <InputSelect @bind-Value="draft.Category" @bind-Value:after="SuggestUnit">
+                            @foreach (var c in Enum.GetValues<BenefitCategory>())
+                            {
+                                <option value="@c">@PortfolioText.Label(c)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="Hours are valued at the portfolio labor rate in dollar totals">Unit
+                        <InputSelect @bind-Value="draft.Unit">
+                            @foreach (var u in Enum.GetValues<BenefitUnit>())
+                            {
+                                <option value="@u">@PortfolioText.Label(u)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="The application where the benefit lands">Application
+                        <InputSelect @bind-Value="draft.ApplicationId">
+                            <option value="">— none —</option>
+                            @foreach (var a in apps)
+                            {
+                                <option value="@a.Id">@a.Name</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+
+                <div class="grid-3">
+                    <label class="field" title="For levels (adoption %, error rate): where it started. Leave empty for savings counted from zero. A baseline above the expected value means lower is better.">Baseline
+                        <InputNumber @bind-Value="draft.Baseline" step="any" placeholder="@(LinkedKpi?.Baseline is { } kb ? $"KPI: {kb:0.##}" : "")" />
+                    </label>
+                    <label class="field" title="Per year once fully realized; or the target level">Expected @(draft.Baseline is null && draft.Unit is BenefitUnit.USD or BenefitUnit.Hours ? "per year" : "")
+                        <InputNumber @bind-Value="draft.ExpectedValue" step="any" />
+                    </label>
+                    <label class="field" title="When it should be fully realized. Past this date with under half realized, it's at risk.">Expected by
+                        <InputDate @bind-Value="draft.ExpectedBy" />
+                    </label>
+                </div>
+
+                <label class="field" title="A process KPI that tracks this benefit. Its current value is used until you record measurements here.">Measured by KPI
+                    <InputSelect @bind-Value="draft.KpiId">
+                        <option value="">— none —</option>
+                        @foreach (var g in kpis.GroupBy(k => k.ProcessName))
+                        {
+                            <optgroup label="@g.Key">
+                                @foreach (var k in g)
+                                {
+                                    <option value="@k.Id">@k.Name@(k.Unit is { } u ? $" ({u})" : "")</option>
+                                }
+                            </optgroup>
+                        }
+                    </InputSelect>
+                </label>
+
+                <label class="field">Notes
+                    <InputTextArea @bind-Value="draft.Notes" placeholder="How it's measured, assumptions behind the expected value" />
+                </label>
+
+                @if (!draft.IsNew && benefit is not null)
+                {
+                    <fieldset>
+                        <legend>Measurements</legend>
+                        <div class="muted small">
+                            Record what the benefit is running at, as an annual figure for savings (e.g. 520 hours a year) or the current level for
+                            percentages. The latest one is the actual.
+                        </div>
+                        @if (benefit.Measurements.Count == 0)
+                        {
+                            <div class="muted small">
+                                None yet.@if (benefit.Kpi?.Current is { } kc) { <text> Using the KPI's current value, @PortfolioUi.Amount(kc, benefit.Unit).</text> }
+                            </div>
+                        }
+                        else
+                        {
+                            <table class="tree compact">
+                                <thead><tr><th>Date</th><th class="num">Value</th><th>Source</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var m in benefit.Measurements.OrderByDescending(m => m.MeasuredOn))
+                                    {
+                                        <tr>
+                                            <td>@PortfolioUi.Date(m.MeasuredOn)</td>
+                                            <td class="num">@PortfolioUi.Amount(m.Value, benefit.Unit)</td>
+                                            <td class="small">@m.Source@(m.Note is { } n ? $" · {n}" : "")</td>
+                                            <td><button type="button" class="btn sm" @onclick="() => DeleteMeasurementAsync(m.Id)">Remove</button></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        <div class="row add-row">
+                            <input type="date" @bind="newOn" style="width:auto" />
+                            <input type="number" step="any" placeholder="Value" @bind="newValue" style="width:8rem" />
+                            <input placeholder="Source (optional)" @bind="newSource" style="flex:1" />
+                            <button type="button" class="btn" disabled="@(newValue is null)" @onclick="AddMeasurementAsync">Record</button>
+                        </div>
+                    </fieldset>
+                }
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete this benefit and its measurements?</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="CloseAsync">@(changed ? "Close" : "Cancel")</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BenefitDraft Draft { get; set; } = default!;
+    /// <summary>Called with true when anything was saved, recorded or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private BenefitDraft draft = default!;
+    private Benefit? benefit;
+    private List<(int Id, string Name)> products = [];
+    private List<ItemOption> items = [];
+    private List<Application> apps = [];
+    private List<KpiOption> kpis = [];
+    private int productId;
+    private DateOnly? newOn;
+    private decimal? newValue;
+    private string? newSource;
+    private bool saving, confirmingDelete, changed;
+    private string? error;
+
+    private ProcessKpi? LinkedKpi => benefit?.KpiId == draft.KpiId ? benefit?.Kpi : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        newOn = Svc.Today;
+        products = await Svc.GetProductOptionsAsync();
+        apps = (await Svc.GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired || a.Id == draft.ApplicationId).ToList();
+        kpis = await Svc.GetKpiOptionsAsync();
+        if (!draft.IsNew) benefit = await Svc.GetBenefitAsync(draft.Id);
+        if (draft.RoadmapItemId != 0)
+        {
+            productId = benefit?.RoadmapItem?.ProductId ?? await Svc.GetItemProductIdAsync(draft.RoadmapItemId) ?? 0;
+            items = productId == 0 ? [] : await Svc.GetLinkableItemsAsync(productId);
+        }
+    }
+
+    private async Task LoadItemsAsync()
+    {
+        draft.RoadmapItemId = 0;
+        items = productId == 0 ? [] : await Svc.GetLinkableItemsAsync(productId);
+    }
+
+    private void SuggestUnit()
+    {
+        if (!draft.IsNew) return;
+        draft.Unit = draft.Category switch
+        {
+            BenefitCategory.LaborSavings => BenefitUnit.Hours,
+            BenefitCategory.Adoption => BenefitUnit.Percent,
+            BenefitCategory.CostSavings or BenefitCategory.RevenueImpact => BenefitUnit.USD,
+            _ => draft.Unit,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveBenefitAsync(draft);
+            changed = true;
+            await CloseAsync();
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task AddMeasurementAsync()
+    {
+        if (newValue is not { } value || newOn is not { } on) return;
+        error = null;
+        try
+        {
+            await Svc.SaveMeasurementAsync(draft.Id, on, value, newSource);
+            changed = true;
+            newValue = null;
+            benefit = await Svc.GetBenefitAsync(draft.Id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteMeasurementAsync(int id)
+    {
+        await Svc.DeleteMeasurementAsync(id);
+        changed = true;
+        benefit = await Svc.GetBenefitAsync(draft.Id);
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteBenefitAsync(draft.Id);
+        changed = true;
+        await CloseAsync();
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync(changed);
+}

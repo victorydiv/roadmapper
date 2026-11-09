@@ -1,4 +1,5 @@
 @page "/products/{ProductId:int}/settings"
+@inject PortfolioService Portfolio
 @inherits ProductPageBase
 @inject NavigationManager Nav
 
@@ -211,7 +212,7 @@ else
 
         <div class="card stack">
             <h2>Danger zone</h2>
-            <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies.</div>
+            <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies@(benefitCount > 0 ? $", and the {benefitCount} benefit{(benefitCount == 1 ? "" : "s")} its items carry in the portfolio" : "").</div>
             @if (confirmingDelete)
             {
                 <label class="field">Type the product name to confirm
@@ -245,6 +246,7 @@ else
     private string? description;
     private ScoringModel model;
     private bool saved, confirmingDelete;
+    private int benefitCount;
     private string? newTheme, newTag, confirmName;
     private string newThemeColor = "#4f7cff";
     private List<TaskTemplate> templates = [];
@@ -258,6 +260,7 @@ else
     protected override async Task OnParametersSetAsync()
     {
         await base.OnParametersSetAsync();
+        benefitCount = await Portfolio.CountBenefitsForProductAsync(ProductId);
         templates = await Svc.GetTemplatesAsync(ProductId);
         LoadRubric();
         if (Roadmap is { Product: var p })

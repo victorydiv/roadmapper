@@ -222,6 +222,32 @@ internal static class PortfolioModel
             e.HasIndex(x => x.ProcessId);
         });
 
+        b.Entity<Benefit>(e =>
+        {
+            e.ToTable("Benefits");
+            e.Property(x => x.Description).IsRequired().HasMaxLength(1000);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.Category).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Unit).HasConversion<string>().HasMaxLength(20);
+            // Deleting the roadmap item (or its product) deletes the benefits it was to deliver.
+            e.HasOne(x => x.RoadmapItem).WithMany().HasForeignKey(x => x.RoadmapItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Kpi).WithMany().HasForeignKey(x => x.KpiId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.RoadmapItemId);
+            e.HasIndex(x => x.ApplicationId);
+            e.HasIndex(x => x.KpiId);
+        });
+
+        b.Entity<BenefitMeasurement>(e =>
+        {
+            e.ToTable("BenefitMeasurements");
+            e.Property(x => x.Source).HasMaxLength(200);
+            e.Property(x => x.Note).HasMaxLength(1000);
+            e.HasOne(x => x.Benefit).WithMany(x => x.Measurements).HasForeignKey(x => x.BenefitId).OnDelete(DeleteBehavior.Cascade);
+            // One reading per benefit per day.
+            e.HasIndex(x => new { x.BenefitId, x.MeasuredOn }).IsUnique();
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

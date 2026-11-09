@@ -312,6 +312,100 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("ApplicationSupportContacts", (string)null);
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Benefit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("Baseline")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExpectedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExpectedValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("KpiId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RoadmapItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("KpiId");
+
+                    b.HasIndex("RoadmapItemId");
+
+                    b.ToTable("Benefits", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.BenefitMeasurement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BenefitId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("MeasuredOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BenefitId", "MeasuredOn")
+                        .IsUnique();
+
+                    b.ToTable("BenefitMeasurements", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>
                 {
                     b.Property<int>("Id")
@@ -1484,6 +1578,42 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Contact");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Benefit", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.ProcessKpi", "Kpi")
+                        .WithMany()
+                        .HasForeignKey("KpiId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "RoadmapItem")
+                        .WithMany()
+                        .HasForeignKey("RoadmapItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Kpi");
+
+                    b.Navigation("RoadmapItem");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.BenefitMeasurement", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Benefit", "Benefit")
+                        .WithMany("Measurements")
+                        .HasForeignKey("BenefitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Benefit");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "ParentProcess")
@@ -1818,6 +1948,11 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Initiatives");
 
                     b.Navigation("SupportContacts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Benefit", b =>
+                {
+                    b.Navigation("Measurements");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>

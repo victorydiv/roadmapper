@@ -521,3 +521,51 @@ public class KpiDraft
         k.MeasuredOn = Current is null ? null : MeasuredOn;
     }
 }
+
+public class BenefitDraft
+{
+    public int Id { get; set; }
+    public int RoadmapItemId { get; set; }
+    public int? ApplicationId { get; set; }
+    public int? KpiId { get; set; }
+    public BenefitCategory Category { get; set; } = BenefitCategory.CostSavings;
+    public string Description { get; set; } = "";
+    public BenefitUnit Unit { get; set; } = BenefitUnit.USD;
+    public decimal? ExpectedValue { get; set; }
+    public DateOnly? ExpectedBy { get; set; }
+    public decimal? Baseline { get; set; }
+    public string? Notes { get; set; }
+
+    public bool IsNew => Id == 0;
+
+    public static BenefitDraft From(Benefit b) => new()
+    {
+        Id = b.Id, RoadmapItemId = b.RoadmapItemId, ApplicationId = b.ApplicationId, KpiId = b.KpiId, Category = b.Category,
+        Description = b.Description, Unit = b.Unit, ExpectedValue = b.ExpectedValue, ExpectedBy = b.ExpectedBy, Baseline = b.Baseline, Notes = b.Notes,
+    };
+
+    public string? Validate()
+    {
+        if (RoadmapItemId == 0) return "Choose the roadmap item that delivers this benefit.";
+        if (string.IsNullOrWhiteSpace(Description)) return "Describe the benefit.";
+        if (Description.Trim().Length > 1000) return "Description can be at most 1000 characters.";
+        if (Notes?.Trim().Length > 2000) return "Notes can be at most 2000 characters.";
+        if (Baseline is { } b && ExpectedValue is { } e && b == e) return "The expected value must differ from the baseline.";
+        if (Baseline is null && ExpectedValue is < 0) return "The expected value can't be negative. To track a reduction, enter a baseline.";
+        return null;
+    }
+
+    public void ApplyTo(Benefit b)
+    {
+        b.RoadmapItemId = RoadmapItemId;
+        b.ApplicationId = ApplicationId;
+        b.KpiId = KpiId;
+        b.Category = Category;
+        b.Description = Description.Trim();
+        b.Unit = Unit;
+        b.ExpectedValue = ExpectedValue;
+        b.ExpectedBy = ExpectedBy;
+        b.Baseline = Baseline;
+        b.Notes = DraftText.Clean(Notes);
+    }
+}

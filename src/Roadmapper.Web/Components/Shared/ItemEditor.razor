@@ -404,6 +404,37 @@
                     </fieldset>
 
                     <fieldset>
+                        <legend>Benefits</legend>
+                        @if (benefits is null)
+                        {
+                            <span class="muted small">Loading…</span>
+                        }
+                        else
+                        {
+                            @if (benefits.Count == 0)
+                            {
+                                <span class="muted small">No benefits recorded. Say what this @draft.ItemType.ToString().ToLower() should deliver (dollars, hours, adoption) so its value can be tracked.</span>
+                            }
+                            <ul class="dep-list">
+                                @foreach (var b in benefits)
+                                {
+                                    <li>
+                                        <BenefitStatusBadge Status="BenefitMath.Status(b, benefitsToday)" />
+                                        <span>@b.Description</span>
+                                        <span class="spacer"></span>
+                                        <span class="small nowrap">@PortfolioUi.Amount(BenefitMath.Actual(b), b.Unit) / @PortfolioUi.Amount(b.ExpectedValue, b.Unit)</span>
+                                        <Realization Pct="BenefitMath.RealizationPct(b)" />
+                                    </li>
+                                }
+                            </ul>
+                            <div class="row">
+                                <a class="btn sm" href="/portfolio/benefits?item=@draft.Id&new=true">+ Add benefit</a>
+                                @if (benefits.Count > 0) { <a class="small" href="/portfolio/benefits?item=@draft.Id">Record measurements →</a> }
+                            </div>
+                        }
+                    </fieldset>
+
+                    <fieldset>
                         <legend>History</legend>
                         @if (history is null)
                         {
@@ -532,9 +563,15 @@
     private int newAppId;
     private InitiativeImpact newAppImpact = InitiativeImpact.Enhances;
 
+    // ---- Benefits (portfolio) ----
+    private List<Benefit>? benefits;
+    private DateOnly benefitsToday;
+
     private async Task LoadAppLinksAsync()
     {
-        if (draft.IsNew) { appLinks = []; return; }
+        if (draft.IsNew) { appLinks = []; benefits = []; return; }
+        benefitsToday = Portfolio.Today;
+        benefits = await Portfolio.GetBenefitsAsync(itemId: draft.Id);
         appLinks = await Portfolio.GetLinksForItemAsync(draft.Id);
         if (allApps.Count == 0) allApps = await Portfolio.GetApplicationsAsync();
     }

@@ -1,0 +1,253 @@
+@page "/portfolio/benefits"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Benefits" Subtitle="The value roadmap work is expected to deliver, and how much it actually has. Expected values are per year; the latest measurement is the actual.">
+    <button class="btn primary" @onclick="() => editing = new BenefitDraft()">+ New benefit</button>
+</PortfolioHeader>
+
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (benefits is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    var shown = Filtered.ToList();
+    var totals = BenefitMath.Totals(shown, laborRate, today);
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Expected per year</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(totals.ExpectedUsd)</span>
+            <span class="muted small">across @totals.Count benefit@(totals.Count == 1 ? "" : "s")</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Realized per year</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(totals.RealizedUsd)</span>
+            <Realization Pct="totals.RealizationPct" />
+        </div>
+        <div class="card tile">
+            <span class="tile-label">At risk</span>
+            <span class="tile-value @(totals.AtRisk > 0 ? "overdue" : "")">@totals.AtRisk</span>
+            <span class="muted small">past due with under @BenefitMath.AtRiskBelowPct% realized</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Realized</span>
+            <span class="tile-value">@totals.Realized</span>
+            <span class="muted small">@totals.NotMeasured not measured yet</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Labor rate</span>
+            <span class="row nowrap">
+                <span>$</span>
+                <input type="number" step="0.01" min="0" style="width:6rem" value="@laborRate" @onchange="SetRateAsync" title="Dollars per hour, to value labor-hour savings" />
+                <span class="muted small">/ hr</span>
+            </span>
+            @if (totals.UnvaluedHours > 0)
+            {
+                <span class="due-soon small">Set a rate to count @totals.UnvaluedHours labor-hour benefit@(totals.UnvaluedHours == 1 ? "" : "s") in dollars</span>
+            }
+            else
+            {
+                <span class="muted small">values labor-hour savings</span>
+            }
+        </div>
+    </div>
+
+    @if (benefits.Count == 0)
+    {
+        <div class="card empty stack">
+            <div>
+                No benefits yet. Use “+ New benefit” (or the Benefits section of a roadmap item) to record what an initiative
+                should deliver: dollars saved, labor hours, adoption, fewer errors. Then record measurements as the numbers come in.
+            </div>
+            @if (canSeed)
+            {
+                <div><button class="btn" @onclick="SeedAsync">Add sample benefits</button></div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <select @bind="productId">
+                <option value="0">All roadmaps</option>
+                @foreach (var p in products)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+            <select @bind="category">
+                <option value="">All categories</option>
+                @foreach (var c in Enum.GetValues<BenefitCategory>())
+                {
+                    <option value="@c">@PortfolioText.Label(c)</option>
+                }
+            </select>
+            <select @bind="status">
+                <option value="">Any status</option>
+                @foreach (var s in Enum.GetValues<BenefitStatus>())
+                {
+                    <option value="@s">@PortfolioText.Label(s)</option>
+                }
+            </select>
+            @if (ItemFilter is not null)
+            {
+                <a class="small" href="/portfolio/benefits">Show all items</a>
+            }
+        </div>
+
+        <div class="card table-wrap">
+            <table class="tree">
+                <thead>
+                    <tr>
+                        <th>Benefit</th>
+                        <th>Category</th>
+                        <th>Application</th>
+                        <th class="num">Expected</th>
+                        <th class="num">Actual</th>
+                        <th>Realized</th>
+                        <th>Status</th>
+                        <th>Expected by</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var group in shown.GroupBy(b => b.RoadmapItemId))
+                    {
+                        var item = group.First().RoadmapItem!;
+                        var groupTotals = BenefitMath.Totals(group, laborRate, today);
+                        <tr class="group-row">
+                            <td colspan="3">
+                                <span class="inline-gap">
+                                    <TypeBadge Type="item.ItemType" />
+                                    <a class="strong" href="/products/@item.ProductId">@item.Title</a>
+                                    <StatusBadge Status="item.Status" />
+                                    <span class="muted small">@item.Product?.Name</span>
+                                </span>
+                            </td>
+                            <td class="num small">@(groupTotals.ExpectedUsd > 0 ? PortfolioUi.Money(groupTotals.ExpectedUsd) : "")</td>
+                            <td class="num small">@(groupTotals.ExpectedUsd > 0 ? PortfolioUi.Money(groupTotals.RealizedUsd) : "")</td>
+                            <td><Realization Pct="groupTotals.RealizationPct" /></td>
+                            <td colspan="2" style="text-align:right">
+                                <button class="btn sm" @onclick="() => editing = new BenefitDraft { RoadmapItemId = item.Id }">+ Benefit</button>
+                            </td>
+                        </tr>
+                        @foreach (var b in group)
+                        {
+                            var st = BenefitMath.Status(b, today);
+                            <tr>
+                                <td class="title-cell" style="padding-left:1.5rem">
+                                    <span class="title-link" @onclick="() => editing = BenefitDraft.From(b)">@b.Description</span>
+                                    @if (b.Kpi is { } k) { <div class="muted small">measured by <a href="/portfolio/processes/@k.ProcessId">@k.Name</a></div> }
+                                </td>
+                                <td class="small">@PortfolioText.Label(b.Category)</td>
+                                <td class="small">@if (b.Application is { } a) { <a href="/portfolio/applications/@a.Id">@a.Name</a> } else { <span class="muted">–</span> }</td>
+                                <td class="num">
+                                    @if (BenefitMath.Baseline(b) is { } baseline)
+                                    {
+                                        <span class="muted small">@PortfolioUi.Amount(baseline, b.Unit) → </span>
+                                    }
+                                    @PortfolioUi.Amount(b.ExpectedValue, b.Unit)
+                                    @if (b.Unit == BenefitUnit.Hours && BenefitMath.ExpectedUsd(b, laborRate) is { } usd)
+                                    {
+                                        <div class="muted small">@PortfolioUi.Money(usd)</div>
+                                    }
+                                </td>
+                                <td class="num">
+                                    @PortfolioUi.Amount(BenefitMath.Actual(b), b.Unit)
+                                    @if (BenefitMath.ActualOn(b) is { } on) { <div class="muted small">@PortfolioUi.Date(on)</div> }
+                                </td>
+                                <td><Realization Pct="BenefitMath.RealizationPct(b)" /></td>
+                                <td><BenefitStatusBadge Status="st" /></td>
+                                <td class="small @(st == BenefitStatus.AtRisk ? "overdue" : "")">@PortfolioUi.Date(b.ExpectedBy)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            @if (shown.Count == 0)
+            {
+                <div class="empty muted">No benefits match these filters.</div>
+            }
+        </div>
+        <div class="muted small" style="margin-top:.5rem">
+            Realized % is the move from baseline toward the expected value (or the actual against the expected, when there's no baseline).
+            Dollar totals count USD benefits and labor hours at the labor rate; percentages and counts have no dollar value.
+        </div>
+    }
+}
+
+@if (editing is not null)
+{
+    <BenefitEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    /// <summary>?item=12 shows that roadmap item's benefits; with ?new=true it opens a new benefit for it.</summary>
+    [SupplyParameterFromQuery(Name = "item")] public int? ItemFilter { get; set; }
+    [SupplyParameterFromQuery(Name = "new")] public bool New { get; set; }
+    [SupplyParameterFromQuery(Name = "product")] public int? ProductFilter { get; set; }
+
+    private List<Benefit>? benefits;
+    private List<(int Id, string Name)> products = [];
+    private BenefitDraft? editing;
+    private decimal? laborRate;
+    private DateOnly today;
+    private bool canSeed;
+    private string? error;
+    private int productId;
+    private BenefitCategory? category;
+    private BenefitStatus? status;
+
+    private IEnumerable<Benefit> Filtered => benefits!
+        .Where(b => ItemFilter is null || b.RoadmapItemId == ItemFilter)
+        .Where(b => productId == 0 || b.RoadmapItem?.ProductId == productId)
+        .Where(b => category is null || b.Category == category)
+        .Where(b => status is null || BenefitMath.Status(b, today) == status);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        productId = ProductFilter ?? 0;
+        products = await Svc.GetProductOptionsAsync();
+        await ReloadAsync();
+        if (New && ItemFilter is { } item) editing = new BenefitDraft { RoadmapItemId = item };
+    }
+
+    private async Task ReloadAsync()
+    {
+        laborRate = (await Svc.GetSettingsAsync()).LaborRate;
+        benefits = await Svc.GetBenefitsAsync();
+        canSeed = benefits.Count == 0 && await Svc.CanSeedSampleBenefitsAsync();
+    }
+
+    private async Task SetRateAsync(ChangeEventArgs e)
+    {
+        error = null;
+        var text = e.Value as string;
+        decimal? rate = string.IsNullOrWhiteSpace(text) ? null
+            : decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var r) ? r : -1;
+        try { await Svc.SetLaborRateAsync(rate); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task SeedAsync()
+    {
+        error = null;
+        try { await Svc.SeedSampleBenefitsAsync(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task OnEditorClosed(bool changed)
+    {
+        editing = null;
+        if (New) { Nav.NavigateTo(ItemFilter is { } i ? $"/portfolio/benefits?item={i}" : "/portfolio/benefits", replace: true); }
+        if (changed) await ReloadAsync();
+    }
+}

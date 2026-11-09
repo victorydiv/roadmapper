@@ -49,6 +49,15 @@ public static class PortfolioUi
         };
     }
 
+        /// <summary>A benefit amount in its unit: "$60,000", "1,040 hrs", "34%", "120"; "–" when unknown.</summary>
+    public static string Amount(decimal? value, BenefitUnit unit) => value is not { } v ? "–" : unit switch
+    {
+        BenefitUnit.USD => Money(v),
+        BenefitUnit.Hours => $"{v.ToString("#,0.##", Us)} hrs",
+        BenefitUnit.Percent => $"{v.ToString("#,0.##", Us)}%",
+        _ => v.ToString("#,0.##", Us),
+    };
+
         public static string Fit(int? score) => score is { } s ? $"{s}/5" : "–";
 
     /// <summary>The detail page of an application or trading partner.</summary>

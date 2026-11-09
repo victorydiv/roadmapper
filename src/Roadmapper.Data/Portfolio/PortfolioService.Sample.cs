@@ -13,7 +13,7 @@ public partial class PortfolioService
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
-            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync();
+            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync();
     }
 
     /// <summary>
@@ -112,6 +112,7 @@ public partial class PortfolioService
 
         await SeedSampleIntegrationsAsync();
         await SeedSampleProcessesAsync();
+        if (await CanSeedSampleBenefitsAsync()) await SeedSampleBenefitsAsync();
     }
 
     // The sample applications the sample integrations connect; they must all exist.
@@ -319,5 +320,61 @@ public partial class PortfolioService
             ["Load tenders (204)", "Shipment status (214)"]);
         await Pain(transport, "Carrier status messages arrive late, so customer service can't answer where-is-my-order calls.", PainSeverity.Medium, "Fabrikam TMS");
         await Kpi(transport, "Tender acceptance", "%", KpiDirection.HigherIsBetter, 85, 95, 88);
+    }
+
+    /// <summary>True when there are no benefits yet and the sample roadmap's initiatives are there to carry them.</summary>
+    public async Task<bool> CanSeedSampleBenefitsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.Benefits.AnyAsync()) return false;
+        return await db.Items.CountAsync(i => i.Product!.Name == SampleProductName
+            && (i.Title == "Billing self-service" || i.Title == "Frictionless onboarding")) == 2;
+    }
+
+    /// <summary>
+    /// Adds made-up benefits to the sample roadmap's initiatives, with a few months of measurements: labor hours saved
+    /// by billing self-service, portal adoption, and same-day order release measured by the sample process KPI.
+    /// Sets a labor rate when none is set. Only while there are no benefits.
+    /// </summary>
+    public async Task SeedSampleBenefitsAsync()
+    {
+        if (!await CanSeedSampleBenefitsAsync())
+            throw new InvalidOperationException("Sample benefits need the sample roadmap and no benefits yet.");
+        var today = Today;
+
+        int billing, onboarding;
+        int? erp, portal, sameDayKpi;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var items = await db.Items.Where(i => i.Product!.Name == SampleProductName).Select(i => new { i.Id, i.Title }).ToListAsync();
+            billing = items.First(i => i.Title == "Billing self-service").Id;
+            onboarding = items.First(i => i.Title == "Frictionless onboarding").Id;
+            erp = await db.Applications.Where(a => a.Name == "Litware ERP").Select(a => (int?)a.Id).FirstOrDefaultAsync();
+            portal = await db.Applications.Where(a => a.Name == "Customer Portal").Select(a => (int?)a.Id).FirstOrDefaultAsync();
+            sameDayKpi = await db.ProcessKpis.Where(k => k.Name == "Orders released same day").Select(k => (int?)k.Id).FirstOrDefaultAsync();
+            if (await db.PortfolioSettings.Select(s => s.LaborRate).FirstOrDefaultAsync() is null) await SetLaborRateAsync(32m);
+        }
+
+        async Task Benefit(int item, int? app, BenefitCategory category, string description, BenefitUnit unit, decimal expected,
+            int expectedInMonths, decimal? baseline = null, int? kpi = null, params (int MonthsAgo, decimal Value)[] readings)
+        {
+            var id = await SaveBenefitAsync(new BenefitDraft
+            {
+                RoadmapItemId = item, ApplicationId = app, Category = category, Description = description, Unit = unit,
+                ExpectedValue = expected, ExpectedBy = today.AddMonths(expectedInMonths), Baseline = baseline, KpiId = kpi,
+            });
+            foreach (var (monthsAgo, value) in readings)
+                await SaveMeasurementAsync(id, today.AddMonths(-monthsAgo), value, "Finance monthly close");
+        }
+
+        await Benefit(billing, erp, BenefitCategory.LaborSavings, "Billing clerks stop keying accessorial charges by hand.",
+            BenefitUnit.Hours, 1_040, 4, readings: [(3, 240), (2, 410), (1, 520)]);
+        await Benefit(billing, erp, BenefitCategory.CostSavings, "Fewer billing disputes and credit memos.",
+            BenefitUnit.USD, 60_000, -1, readings: [(2, 9_000), (1, 14_000)]);
+        await Benefit(onboarding, portal, BenefitCategory.Adoption, "Customers placing orders in the portal instead of by email.",
+            BenefitUnit.Percent, 60, 6, baseline: 20, readings: [(2, 28), (1, 34)]);
+        if (sameDayKpi is { } k)
+            await Benefit(onboarding, portal, BenefitCategory.Other, "More orders released to the warehouse the day they arrive.",
+                BenefitUnit.Percent, 98, 3, kpi: k);
     }
 }

@@ -37,6 +37,8 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<ProcessIntegration> ProcessIntegrations => Set<ProcessIntegration>();
     public DbSet<ProcessPainPoint> ProcessPainPoints => Set<ProcessPainPoint>();
     public DbSet<ProcessKpi> ProcessKpis => Set<ProcessKpi>();
+    public DbSet<Benefit> Benefits => Set<Benefit>();
+    public DbSet<BenefitMeasurement> BenefitMeasurements => Set<BenefitMeasurement>();
     public DbSet<PortfolioSettings> PortfolioSettings => Set<PortfolioSettings>();
     public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
 

@@ -135,6 +135,25 @@ internal static class PortfolioAuditTrail
             [nameof(ProcessKpi.Current)] = "Current",
             [nameof(ProcessKpi.MeasuredOn)] = "Measured on",
         },
+        [typeof(Benefit)] = new()
+        {
+            [nameof(Benefit.RoadmapItemId)] = "Roadmap item",
+            [nameof(Benefit.ApplicationId)] = "Application",
+            [nameof(Benefit.KpiId)] = "KPI",
+            [nameof(Benefit.Category)] = "Category",
+            [nameof(Benefit.Description)] = "Description",
+            [nameof(Benefit.Unit)] = "Unit",
+            [nameof(Benefit.ExpectedValue)] = "Expected value",
+            [nameof(Benefit.ExpectedBy)] = "Expected by",
+            [nameof(Benefit.Baseline)] = "Baseline",
+            [nameof(Benefit.Notes)] = "Notes",
+        },
+        [typeof(BenefitMeasurement)] = new()
+        {
+            [nameof(BenefitMeasurement.Value)] = "Value",
+            [nameof(BenefitMeasurement.Source)] = "Source",
+            [nameof(BenefitMeasurement.Note)] = "Note",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -154,7 +173,8 @@ internal static class PortfolioAuditTrail
             var entity = entry.Entity;
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
-                or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi)) continue;
+                or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
+                or Benefit or BenefitMeasurement)) continue;
 
             switch (entry.State)
             {
@@ -279,6 +299,19 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Deleted) entry.OldValue = k.Name;
                     break;
                 }
+                case Benefit bn:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Benefit, bn.Id, Short(bn.Description), field);
+                    break;
+                case BenefitMeasurement m:
+                {
+                    // Measurements are filed under their benefit.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Benefit, m.BenefitId, await BenefitNameAsync(db, m.BenefitId, ct));
+                    var when = PortfolioText.Format(m.MeasuredOn);
+                    entry.Field = field is null ? "Measurement" : $"Measurement {when} · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = $"{when}: {PortfolioText.Format(m.Value)}";
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = $"{when}: {PortfolioText.Format(m.Value)}";
+                    break;
+                }
                 default:
                     continue;
             }
@@ -307,7 +340,8 @@ internal static class PortfolioAuditTrail
                 or nameof(Integration.OwnerId) or nameof(TradingPartner.RelationshipOwnerId)
                 or nameof(BusinessProcess.ProcessOwnerId) => await ContactNameAsync(db, (int)value, ct),
             nameof(BusinessProcess.ParentProcessId) => await ProcessNameAsync(db, (int)value, ct),
-            nameof(ProcessPainPoint.AddressedByItemId) => await ItemTitleAsync(db, (int)value, ct),
+            nameof(ProcessPainPoint.AddressedByItemId) or nameof(Benefit.RoadmapItemId) => await ItemTitleAsync(db, (int)value, ct),
+            nameof(Benefit.KpiId) => await db.ProcessKpis.AsNoTracking().Where(k => k.Id == (int)value).Select(k => k.Name).FirstOrDefaultAsync(ct),
             nameof(Integration.SourcePartnerId) or nameof(Integration.TargetPartnerId)
                 or nameof(Contact.TradingPartnerId) => await PartnerNameAsync(db, (int)value, ct),
             nameof(Integration.SourceApplicationId) or nameof(Integration.TargetApplicationId)
@@ -343,6 +377,13 @@ internal static class PortfolioAuditTrail
         db.Integrations.Local.FirstOrDefault(i => i.Id == id)?.Name
         ?? await db.Integrations.AsNoTracking().Where(i => i.Id == id).Select(i => i.Name).FirstOrDefaultAsync(ct)
         ?? $"#{id}";
+
+    private static string Short(string text) => text.Length > 80 ? text[..77] + "…" : text;
+
+    private static async Task<string> BenefitNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        Short(db.Benefits.Local.FirstOrDefault(b => b.Id == id)?.Description
+            ?? await db.Benefits.AsNoTracking().Where(b => b.Id == id).Select(b => b.Description).FirstOrDefaultAsync(ct)
+            ?? $"#{id}");
 
     private static async Task<string> ProcessNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
         db.BusinessProcesses.Local.FirstOrDefault(p => p.Id == id)?.Name

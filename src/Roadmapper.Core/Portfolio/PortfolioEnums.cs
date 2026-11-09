@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -59,6 +59,15 @@ public enum KpiDirection { HigherIsBetter, LowerIsBetter }
 
 /// <summary>How a business process is touched by a change: through an application it uses, or an integration it depends on.</summary>
 public enum ProcessImpactKind { UsesApplication, DependsOnIntegration, SubProcessAffected }
+
+/// <summary>What kind of value a benefit delivers.</summary>
+public enum BenefitCategory { CostSavings, LaborSavings, RevenueImpact, Adoption, RiskReduction, Other }
+
+/// <summary>What a benefit's values are counted in. Hours are valued in dollars with the portfolio labor rate.</summary>
+public enum BenefitUnit { USD, Hours, Percent, Count }
+
+/// <summary>Where a benefit stands. See <see cref="BenefitMath.Status"/>.</summary>
+public enum BenefitStatus { NotMeasured, Realizing, AtRisk, Realized }
 
 /// <summary>Overall severity of a change impact. See <see cref="ImpactAnalyzer"/>.</summary>
 public enum ImpactSeverity { Low, Medium, High }

@@ -1,5 +1,6 @@
 @page "/products/{ProductId:int}/dashboard"
 @inherits ProductPageBase
+@inject PortfolioService Portfolio
 
 @if (Roadmap is null)
 {
@@ -206,6 +207,35 @@ else
                 </ul>
             </div>
 
+            @if (benefits.Count > 0)
+            {
+                var totals = BenefitMath.Totals(benefits, laborRate, today);
+                <div class="card stack">
+                    <div class="row">
+                        <h2 style="margin:0">Benefits</h2>
+                        <span class="spacer"></span>
+                        <a class="small" href="/portfolio/benefits?product=@ProductId">All benefits →</a>
+                    </div>
+                    <div class="row">
+                        <div class="tile-mini"><span class="tile-label">Expected / yr</span><span class="tile-value">@PortfolioUi.MoneyShort(totals.ExpectedUsd)</span></div>
+                        <div class="tile-mini"><span class="tile-label">Realized / yr</span><span class="tile-value">@PortfolioUi.MoneyShort(totals.RealizedUsd)</span></div>
+                        <div class="tile-mini"><span class="tile-label">At risk</span><span class="tile-value @(totals.AtRisk > 0 ? "overdue" : "")">@totals.AtRisk</span></div>
+                    </div>
+                    <Realization Pct="totals.RealizationPct" />
+                    <ul class="item-list">
+                        @foreach (var b in benefits.OrderByDescending(b => BenefitMath.Status(b, today) == BenefitStatus.AtRisk).ThenByDescending(b => BenefitMath.ExpectedUsd(b, laborRate) ?? 0).Take(5))
+                        {
+                            <li>
+                                <BenefitStatusBadge Status="BenefitMath.Status(b, today)" />
+                                <span class="small">@b.Description <span class="muted">· @b.RoadmapItem?.Title</span></span>
+                                <span class="spacer"></span>
+                                <Realization Pct="BenefitMath.RealizationPct(b)" />
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+
             <div class="card stack wide">
                 <h2>Recent activity</h2>
                 <ActivityList Entries="activity" ShowItem="true" />
@@ -223,11 +253,15 @@ else
     private int upcomingDays = 30;
     private bool statusAsTable;
     private List<AuditEntry> activity = [];
+    private List<Benefit> benefits = [];
+    private decimal? laborRate;
 
     protected override async Task OnParametersSetAsync()
     {
         await base.OnParametersSetAsync();
         await LoadActivityAsync();
+        benefits = await Portfolio.GetBenefitsAsync(productId: ProductId);
+        laborRate = (await Portfolio.GetSettingsAsync()).LaborRate;
     }
 
     protected override async Task OnEditorClosed(bool changed)

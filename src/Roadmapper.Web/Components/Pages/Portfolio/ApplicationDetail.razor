@@ -262,6 +262,30 @@ else
         </div>
     </div>
 
+    @if (benefits.Count > 0)
+    {
+        <div class="card stack" style="margin-top:1rem">
+            <div class="row">
+                <h2 style="margin:0">Benefits</h2>
+                <span class="muted small">Value roadmap work is expected to deliver through @app.Name.</span>
+                <span class="spacer"></span>
+                <a class="small" href="/portfolio/benefits">All benefits →</a>
+            </div>
+            <ul class="dep-list">
+                @foreach (var b in benefits)
+                {
+                    <li>
+                        <BenefitStatusBadge Status="BenefitMath.Status(b, today)" />
+                        <span class="small">@b.Description <span class="muted">· <a href="/products/@b.RoadmapItem?.ProductId">@b.RoadmapItem?.Title</a></span></span>
+                        <span class="spacer"></span>
+                        <span class="small nowrap">@PortfolioUi.Amount(BenefitMath.Actual(b), b.Unit) / @PortfolioUi.Amount(b.ExpectedValue, b.Unit)</span>
+                        <Realization Pct="BenefitMath.RealizationPct(b)" />
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
     <div class="card stack" style="margin-top:1rem">
         <h2>History</h2>
         <PortfolioActivityList Entries="history" />
@@ -297,6 +321,7 @@ else
     private string mapSvg = "";
     private IntegrationDraft? editingIntegration;
     private List<ProcessUse> processUses = [];
+    private List<Benefit> benefits = [];
 
     private int? newContactId;
     private SupportRole newRole = SupportRole.L1Support;
@@ -325,6 +350,7 @@ else
         history = await Svc.GetActivityAsync(PortfolioEntityType.Application, Id);
         integrations = await Svc.GetIntegrationsForApplicationAsync(Id);
         processUses = await Svc.GetProcessesForApplicationAsync(Id);
+        benefits = await Svc.GetBenefitsAsync(applicationId: Id);
         await LoadDependenciesAsync();
     }
 

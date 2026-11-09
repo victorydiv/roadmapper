@@ -1,0 +1,16 @@
+@* Realization % with a bar; past 100% the bar stays full. *@
+@if (Pct is { } pct)
+{
+    <span class="progress-cell" title="@pct% realized">
+        <span class="progress @(pct >= 100 ? "done" : "")"><span style="width:@Math.Clamp(pct, 0, 100)%"></span></span>
+        <span>@pct%</span>
+    </span>
+}
+else
+{
+    <span class="muted">–</span>
+}
+
+@code {
+    [Parameter] public int? Pct { get; set; }
+}
