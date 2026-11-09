@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -44,3 +44,21 @@ public enum PartnerStatus { Onboarding, Active, Inactive }
 
 /// <summary>How much it matters when a partner's flows break. Key partners raise the severity of impacts on them.</summary>
 public enum PartnerImportance { Key, Standard }
+
+/// <summary>The part of a 3PL's operation a business process belongs to.</summary>
+public enum ProcessDomain { Inbound, Inventory, Outbound, Transportation, Billing, CustomerService, Reporting, Other }
+
+/// <summary>How much a pain point hurts the process.</summary>
+public enum PainSeverity { Low, Medium, High, Critical }
+
+/// <summary>Addressed: fixed (usually by the linked roadmap item). Won't fix: accepted as it is.</summary>
+public enum PainPointStatus { Open, Addressed, WontFix }
+
+/// <summary>Which way a KPI should move.</summary>
+public enum KpiDirection { HigherIsBetter, LowerIsBetter }
+
+/// <summary>How a business process is touched by a change: through an application it uses, or an integration it depends on.</summary>
+public enum ProcessImpactKind { UsesApplication, DependsOnIntegration, SubProcessAffected }
+
+/// <summary>Overall severity of a change impact. See <see cref="ImpactAnalyzer"/>.</summary>
+public enum ImpactSeverity { Low, Medium, High }

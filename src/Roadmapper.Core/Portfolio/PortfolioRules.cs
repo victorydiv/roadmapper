@@ -71,6 +71,47 @@ public static class PortfolioRules
     /// <summary>Severity band of a single risk score, for the colored score chip: 1–5 low, 6–14 medium, 15–25 high.</summary>
     public static RiskLevel ScoreLevel(int score) =>
         score >= HighRiskScore ? Portfolio.RiskLevel.High : score >= MediumRiskScore ? Portfolio.RiskLevel.Medium : Portfolio.RiskLevel.Low;
+
+    // ---- Business processes ----
+
+    /// <summary>
+    /// The error to show when <paramref name="processId"/> can't sit under <paramref name="newParentId"/>: itself, or
+    /// one of its own sub-processes (that would make a loop). Null when the move is fine. <paramref name="parentOf"/>
+    /// maps each process to its parent.
+    /// </summary>
+    public static string? ParentError(int processId, int? newParentId, IReadOnlyDictionary<int, int?> parentOf)
+    {
+        if (newParentId is not { } parent) return null;
+        if (parent == processId) return "A process can't be its own parent.";
+        var seen = new HashSet<int>();
+        for (int? at = parent; at is { } id && seen.Add(id); at = parentOf.GetValueOrDefault(id))
+            if (id == processId) return "A process can't sit under one of its own sub-processes.";
+        return null;
+    }
+
+    /// <summary>The process and everything above it, nearest first.</summary>
+    public static IEnumerable<int> SelfAndAncestors(int processId, IReadOnlyDictionary<int, int?> parentOf)
+    {
+        var seen = new HashSet<int>();
+        for (int? at = processId; at is { } id && seen.Add(id); at = parentOf.GetValueOrDefault(id)) yield return id;
+    }
+
+    /// <summary>
+    /// How far a KPI has moved from baseline toward target, in percent: 0 at baseline, 100 at target, and it can go
+    /// past either end. Null when baseline, target or current is missing, or baseline equals target.
+    /// </summary>
+    public static int? KpiProgress(ProcessKpi k)
+    {
+        if (k is not { Baseline: { } b, Target: { } t, Current: { } c } || b == t) return null;
+        return (int)Math.Round((c - b) / (t - b) * 100m, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>Current is at or beyond target in the KPI's direction. Null when either is missing.</summary>
+    public static bool? KpiOnTarget(ProcessKpi k) => (k.Target, k.Current) switch
+    {
+        ({ } t, { } c) => k.Direction == KpiDirection.HigherIsBetter ? c >= t : c <= t,
+        _ => null,
+    };
 }
 
 /// <summary>Display names for portfolio enums, shared by the UI, exports and API.</summary>
@@ -133,6 +174,23 @@ public static class PortfolioText
 
     public static string Label(RiskLevel l) => $"{l} risk";
 
+    public static string Label(ProcessDomain d) => d == ProcessDomain.CustomerService ? "Customer service" : d.ToString();
+
+    public static string Label(PainSeverity s) => s.ToString();
+
+    public static string Label(PainPointStatus s) => s == PainPointStatus.WontFix ? "Won't fix" : s.ToString();
+
+    public static string Label(KpiDirection d) => d == KpiDirection.HigherIsBetter ? "Higher is better" : "Lower is better";
+
+    public static string Label(ImpactSeverity s) => $"{s} impact";
+
+    public static string Label(ProcessImpactKind k) => k switch
+    {
+        ProcessImpactKind.UsesApplication => "Uses it",
+        ProcessImpactKind.DependsOnIntegration => "Relies on an affected integration",
+        _ => "A sub-process is affected",
+    };
+
     /// <summary>Any portfolio enum (or other value) as display text, for history and exports.</summary>
     public static string Format(object value) => value switch
     {
@@ -144,6 +202,9 @@ public static class PortfolioText
         FlowDirection d => Label(d),
         IntegrationFrequency f => Label(f),
         PartnerImportance i => Label(i),
+        ProcessDomain d => Label(d),
+        PainPointStatus s => Label(s),
+        KpiDirection d => Label(d),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

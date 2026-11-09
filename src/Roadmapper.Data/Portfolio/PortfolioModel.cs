@@ -165,6 +165,63 @@ internal static class PortfolioModel
             e.HasIndex(r => r.IntegrationId);
         });
 
+        b.Entity<BusinessProcess>(e =>
+        {
+            e.ToTable("BusinessProcesses");
+            e.Property(p => p.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
+            e.Property(p => p.Description).HasMaxLength(Notes);
+            e.Property(p => p.Domain).HasConversion<string>().HasMaxLength(30);
+            e.HasIndex(p => p.Name).IsUnique();
+            e.HasIndex(p => p.ParentProcessId);
+            // A process with sub-processes can't be deleted until they're moved or deleted; the service explains.
+            e.HasOne(p => p.ParentProcess).WithMany(p => p.Children).HasForeignKey(p => p.ParentProcessId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.ProcessOwner).WithMany().HasForeignKey(p => p.ProcessOwnerId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<ProcessApplication>(e =>
+        {
+            e.ToTable("ProcessApplications");
+            e.HasKey(x => new { x.ProcessId, x.ApplicationId });
+            e.Property(x => x.Usage).HasMaxLength(500);
+            e.HasOne(x => x.Process).WithMany(p => p.Applications).HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.ApplicationId);
+        });
+
+        b.Entity<ProcessIntegration>(e =>
+        {
+            e.ToTable("ProcessIntegrations");
+            e.HasKey(x => new { x.ProcessId, x.IntegrationId });
+            e.HasOne(x => x.Process).WithMany(p => p.Integrations).HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Integration).WithMany().HasForeignKey(x => x.IntegrationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.IntegrationId);
+        });
+
+        b.Entity<ProcessPainPoint>(e =>
+        {
+            e.ToTable("ProcessPainPoints");
+            e.Property(x => x.Description).IsRequired().HasMaxLength(1000);
+            e.Property(x => x.Severity).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            e.HasOne(x => x.Process).WithMany(p => p.PainPoints).HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Application).WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.SetNull);
+            // Deleting the roadmap item (or its product) just unlinks it.
+            e.HasOne(x => x.AddressedBy).WithMany().HasForeignKey(x => x.AddressedByItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.ProcessId);
+            e.HasIndex(x => x.ApplicationId);
+            e.HasIndex(x => x.AddressedByItemId);
+        });
+
+        b.Entity<ProcessKpi>(e =>
+        {
+            e.ToTable("ProcessKpis");
+            e.Property(x => x.Name).IsRequired().HasMaxLength(Name);
+            e.Property(x => x.Unit).HasMaxLength(30);
+            e.Property(x => x.Direction).HasConversion<string>().HasMaxLength(20);
+            e.HasOne(x => x.Process).WithMany(p => p.Kpis).HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.ProcessId);
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

@@ -416,3 +416,33 @@ ul.risks li { align-items: flex-start; }
 .partner-Onboarding { background: var(--accent-soft); color: var(--accent); }
 .partner-Inactive { background: var(--surface-2); color: var(--muted); }
 .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+
+/* ---- Business processes & impact analysis ---- */
+.strong { font-weight: 600; }
+.pain-Critical { background: #fdecea; color: #a8281f; border-color: #f0c3bf; }
+.pain-High { background: #fff0e5; color: #a24a00; border-color: #f4ccaa; }
+.pain-Medium { background: #fff7e6; color: #8a5d00; border-color: #f2d9a0; }
+.pain-Low { background: #eef2f6; color: #4a5a6a; border-color: #d5dde6; }
+.kpi { display: inline-flex; align-items: center; gap: .4rem; }
+.kpi-bar { width: 70px; min-width: 70px; }
+.kpi-on b { color: #1d7a52; }
+.kpi-off b { color: #b06d00; }
+.kpi-list li { flex-wrap: wrap; }
+.kpi-name { min-width: 10rem; }
+.impact-High { background: #fdecea; color: #a8281f; border-color: #f0c3bf; }
+.impact-Medium { background: #fff7e6; color: #8a5d00; border-color: #f2d9a0; }
+.impact-Low { background: #e0f4ea; color: #1d7a52; border-color: #bfe3cf; }
+.impact-banner { border-left: 4px solid var(--border); display: flex; flex-direction: column; gap: .4rem; }
+.impact-banner-High { border-left-color: #d03b3b; }
+.impact-banner-Medium { border-left-color: #d99a00; }
+.impact-banner-Low { border-left-color: #2f9e6b; }
+.impact-reasons { margin: 0; padding-left: 1.2rem; }
+tr.in-flight td { background: var(--accent-soft); }
+.badge.in-flight-badge { background: var(--accent); color: #fff; }
+
+@media print {
+    .topbar, nav.tabs, .no-print, .btn, header, .sidebar { display: none !important; }
+    body, main, .card { background: #fff !important; box-shadow: none !important; }
+    .card { break-inside: avoid; border: 1px solid #ccc; }
+    a { color: inherit; text-decoration: none; }
+}

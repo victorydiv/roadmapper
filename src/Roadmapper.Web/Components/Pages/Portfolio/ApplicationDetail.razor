@@ -21,6 +21,7 @@ else
         <LifecycleBadge Status="app.Status" />
         <span class="badge tag">@PortfolioText.Label(app.Category)</span>
         <span class="badge tag">@PortfolioText.Label(app.Hosting)</span>
+        <a class="btn" href="/portfolio/impact?app=@app.Id" title="What a change to this application touches">Impact analysis</a>
         <button class="btn" @onclick="() => editing = ApplicationDraft.From(app)">Edit</button>
     </PortfolioHeader>
 
@@ -163,6 +164,40 @@ else
 
     <div class="card stack" style="margin-top:1rem">
         <div class="row">
+            <h2 style="margin:0">Business processes</h2>
+            <span class="muted small">Processes that use @app.Name, or rely on one of its integrations.</span>
+            <span class="spacer"></span>
+            <a class="small" href="/portfolio/processes">All processes →</a>
+        </div>
+        @if (processUses.Count == 0)
+        {
+            <div class="muted small">No processes are linked to @app.Name yet. Open a process and add it under “Applications used”.</div>
+        }
+        else
+        {
+            <ul class="dep-list">
+                @foreach (var u in processUses)
+                {
+                    <li>
+                        <span class="inline-gap">
+                            <a href="/portfolio/processes/@u.Process.Id"><b>@u.Process.Name</b></a>
+                            @if (u.Use is { IsPrimary: true }) { <span class="badge tag">primary system</span> }
+                            @if (u.Use?.Usage is { } usage) { <span class="muted small">@usage</span> }
+                            @if (u.Integrations.Count > 0)
+                            {
+                                <span class="muted small">relies on @string.Join(", ", u.Integrations.Select(i => i.Name))</span>
+                            }
+                            @{ var pains = u.Process.PainPoints.Count(pp => pp.Status == PainPointStatus.Open && pp.ApplicationId == app.Id); }
+                            @if (pains > 0) { <span class="due-soon small">@pains open pain point@(pains == 1 ? "" : "s") here</span> }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
             <h2 style="margin:0">Roadmap items</h2>
             <span class="muted small">Initiatives and features from any roadmap that change this application. Status and progress come from the roadmap.</span>
         </div>
@@ -261,6 +296,7 @@ else
     private int depth = 2;
     private string mapSvg = "";
     private IntegrationDraft? editingIntegration;
+    private List<ProcessUse> processUses = [];
 
     private int? newContactId;
     private SupportRole newRole = SupportRole.L1Support;
@@ -288,6 +324,7 @@ else
         linked = await Svc.GetLinkedItemsAsync(Id);
         history = await Svc.GetActivityAsync(PortfolioEntityType.Application, Id);
         integrations = await Svc.GetIntegrationsForApplicationAsync(Id);
+        processUses = await Svc.GetProcessesForApplicationAsync(Id);
         await LoadDependenciesAsync();
     }
 

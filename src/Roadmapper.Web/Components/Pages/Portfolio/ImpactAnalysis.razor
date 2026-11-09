@@ -1,0 +1,395 @@
+@page "/portfolio/impact"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PortfolioHeader Title="@(report is null ? "Change impact analysis" : $"Impact: {report.SubjectName}")"
+                 Subtitle="Pick an application or trading partner that's about to change (upgrade, outage, replacement, new mapping) to see the integrations, processes, roadmap work and vendors it touches.">
+    @if (report is not null)
+    {
+        <button class="btn" @onclick="CopyAsync" title="Copy the report as plain text for an email or ticket">@(copied ? "Copied ✓" : "Copy as text")</button>
+        <button class="btn" @onclick="PrintAsync">Print</button>
+    }
+</PortfolioHeader>
+
+@if (!ready)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar no-print">
+        <label class="inline-gap small">What's changing
+            <select @bind="SubjectValue">
+                <option value="">— choose —</option>
+                <optgroup label="Applications">
+                    @foreach (var a in apps)
+                    {
+                        <option value="@NodeRef.App(a.Id).Key">@a.Name</option>
+                    }
+                </optgroup>
+                @if (partners.Count > 0)
+                {
+                    <optgroup label="Trading partners">
+                        @foreach (var p in partners)
+                        {
+                            <option value="@NodeRef.Partner(p.Id).Key">@p.Name</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+        </label>
+        <label class="inline-gap small" title="How far downstream to follow the data">Depth
+            <select @bind="DepthValue">
+                @for (var d = 1; d <= PortfolioService.MaxDependencyDepth; d++)
+                {
+                    var n = d;
+                    <option value="@n">@n step@(n == 1 ? "" : "s")</option>
+                }
+            </select>
+        </label>
+        @if (subject is { } s)
+        {
+            <a class="small" href="@PortfolioUi.Href(s)">Open @(s.IsPartner ? "partner" : "application") →</a>
+            <a class="small" href="/portfolio/map?@(s.IsPartner ? "partner" : "focus")=@s.Id&depth=@depth">Open in map →</a>
+        }
+    </div>
+
+    @if (subject is null)
+    {
+        <div class="card empty">Choose an application or trading partner above.</div>
+    }
+    else if (report is null)
+    {
+        <div class="card empty">@(loading ? "Analyzing…" : "Not found. It may have been deleted.")</div>
+    }
+    else
+    {
+        var r = report;
+        <div class="card impact-banner impact-banner-@r.Severity">
+            <div class="row">
+                <ImpactBadge Severity="r.Severity" />
+                <b>@r.Summary</b>
+            </div>
+            <ul class="impact-reasons">
+                @foreach (var reason in r.SeverityReasons)
+                {
+                    <li>@reason</li>
+                }
+            </ul>
+            <div class="muted small">
+                Direct: @r.SubjectName is the source, target or middle hop. Indirect: the integration carries @(r.SubjectName)'s data further on,
+                up to @r.Depth step@(r.Depth == 1 ? "" : "s") away. Retired integrations are left out. As of @PortfolioUi.Date(r.AsOf).
+            </div>
+        </div>
+
+        <div class="card stack" style="margin-top:1rem">
+            <h2>Integrations <span class="muted small">(@r.Integrations.Count)</span></h2>
+            @if (r.Integrations.Count == 0)
+            {
+                <div class="muted small">No live integrations touch @r.SubjectName.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="tree">
+                        <thead><tr><th>Integration</th><th>How</th><th>Flow</th><th>Type</th><th>Tier</th><th>Risk</th></tr></thead>
+                        <tbody>
+                            @foreach (var ii in r.Integrations)
+                            {
+                                var i = ii.Integration;
+                                <tr>
+                                    <td class="title-cell"><a class="title-link" href="/portfolio/integrations/@i.Id">@i.Name</a></td>
+                                    <td class="small">@(ii.Direct ? "Direct" : $"Indirect · {ii.Distance} steps")</td>
+                                    <td class="small">
+                                        <span class="inline-gap">
+                                            <EndpointLink Node="i.SourceNode" Name="@i.SourceName" Current="subject" />
+                                            <span class="muted">@(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
+                                            @if (i.Via is { } via)
+                                            {
+                                                <EndpointLink Node="NodeRef.App(via.Id)" Name="@via.Name" Current="subject" />
+                                                <span class="muted">@(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
+                                            }
+                                            <EndpointLink Node="i.TargetNode" Name="@i.TargetName" Current="subject" />
+                                        </span>
+                                    </td>
+                                    <td><IntegrationTypeBadge Type="i.Type" /></td>
+                                    <td><TierBadge Tier="i.Criticality" /></td>
+                                    <td><RiskBadge Level="ii.Risk" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="settings" style="margin-top:1rem">
+            @if (r.Partners.Count > 0)
+            {
+                <div class="card stack">
+                    <h2>Trading partners <span class="muted small">(@r.Partners.Count)</span></h2>
+                    <ul class="dep-list">
+                        @foreach (var p in r.Partners)
+                        {
+                            <li>
+                                <span class="distance" title="@(p.Distance == 1 ? "Direct" : $"{p.Distance} integrations away")">@p.Distance</span>
+                                <span class="inline-gap">
+                                    <b><EndpointLink Node="p.Node" Name="@p.Name" /></b>
+                                    @if (p.Partner is { } partner) { <PartnerBadges Partner="partner" /> }
+                                    @if (p.Partner?.RelationshipOwner is { } owner) { <span class="muted small">owner @owner.Name</span> }
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+            <div class="card stack">
+                <h2>Applications <span class="muted small">(@r.Applications.Count)</span></h2>
+                @if (r.Applications.Count == 0)
+                {
+                    <div class="muted small">None.</div>
+                }
+                <ul class="dep-list">
+                    @foreach (var a in r.Applications)
+                    {
+                        <li>
+                            <span class="distance" title="@(a.Distance == 1 ? "Exchanges data with it directly" : $"{a.Distance} integrations away")">@a.Distance</span>
+                            <span class="inline-gap">
+                                <b><EndpointLink Node="a.Node" Name="@a.Name" /></b>
+                                @if (a.Application is { } app)
+                                {
+                                    <TierBadge Tier="app.Criticality" />
+                                    @if (app.Status != LifecycleStatus.Active) { <LifecycleBadge Status="app.Status" /> }
+                                    @if (app.TechnicalOwner is { } owner) { <span class="muted small">tech owner @owner.Name</span> }
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+
+        <div class="card stack" style="margin-top:1rem">
+            <h2>Business processes <span class="muted small">(@r.Processes.Count)</span></h2>
+            @if (r.Processes.Count == 0)
+            {
+                <div class="muted small">
+                    No processes are linked to @r.SubjectName or its integrations.
+                    <a href="/portfolio/processes">Link applications and integrations to processes</a> to see them here.
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="tree">
+                        <thead><tr><th>Process</th><th>Why</th><th>Owner</th><th>Open pain points</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in r.Processes)
+                            {
+                                <tr class="@(p.Kind == ProcessImpactKind.SubProcessAffected ? "muted" : "")">
+                                    <td class="title-cell">
+                                        <span class="inline-gap">
+                                            <a class="title-link" href="/portfolio/processes/@p.Process.Id">@p.Process.Name</a>
+                                            @if (p.IsTopLevel) { <span class="badge tag" title="Top-level process">L1</span> }
+                                            @if (!p.Direct && p.Kind != ProcessImpactKind.SubProcessAffected) { <span class="muted small">indirect</span> }
+                                        </span>
+                                    </td>
+                                    <td class="small">@string.Join("; ", p.Reasons)</td>
+                                    <td>@(p.Process.ProcessOwner?.Name ?? "–")</td>
+                                    <td>@(p.OpenPainPoints > 0 ? p.OpenPainPoints : "–")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card stack" style="margin-top:1rem">
+            <div class="row">
+                <h2 style="margin:0">Roadmap items <span class="muted small">(@r.Initiatives.Count)</span></h2>
+                <span class="muted small">Linked to @r.SubjectName or an application it exchanges data with directly. In-flight work (planned or in progress) could collide with the change.</span>
+            </div>
+            @if (r.Initiatives.Count == 0)
+            {
+                <div class="muted small">None linked.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="tree">
+                        <thead><tr><th>Item</th><th>Roadmap</th><th>On</th><th>Status</th><th>Progress</th><th>Dates</th><th>Owner</th></tr></thead>
+                        <tbody>
+                            @foreach (var ii in r.Initiatives)
+                            {
+                                var l = ii.Item;
+                                <tr class="@(l.InFlight ? "in-flight" : "")">
+                                    <td class="title-cell">
+                                        <span class="inline-gap">
+                                            <TypeBadge Type="l.ItemType" /> <a href="/products/@l.ProductId">@l.Title</a>
+                                            @if (l.InFlight) { <span class="badge in-flight-badge" title="Planned or in progress">In flight</span> }
+                                        </span>
+                                    </td>
+                                    <td>@l.ProductName</td>
+                                    <td class="small">@string.Join(", ", ii.Applications)</td>
+                                    <td><StatusBadge Status="l.Status" /></td>
+                                    <td class="progress-cell"><div class="progress"><span style="width:@(l.ProgressPct)%"></span></div> <span class="small muted">@l.ProgressPct%</span></td>
+                                    <td class="small">@Ui.DateRange(l.StartDate, l.EndDate)</td>
+                                    <td>@(l.Owner ?? "–")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card stack" style="margin-top:1rem">
+            <div class="row">
+                <h2 style="margin:0">Vendors to coordinate with <span class="muted small">(@r.Vendors.Count)</span></h2>
+                <span class="muted small">They supply @r.SubjectName or an application it exchanges data with directly, and may need to change or test.</span>
+            </div>
+            @if (r.Vendors.Count == 0)
+            {
+                <div class="muted small">None: no vendor applications are directly involved.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="tree">
+                        <thead><tr><th>Vendor</th><th>Applications</th><th>First call</th><th>Support</th><th>Next notice deadline</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in r.Vendors)
+                            {
+                                var first = v.Escalation.FirstOrDefault()?.Contact ?? v.Vendor.AccountManager;
+                                <tr>
+                                    <td class="title-cell">
+                                        <span class="inline-gap">
+                                            <a class="title-link" href="/portfolio/vendors/@v.Vendor.Id">@v.Vendor.Name</a>
+                                            @if (v.SuppliesSubject) { <span class="badge tag">supplies @r.SubjectName</span> }
+                                        </span>
+                                    </td>
+                                    <td class="small">@string.Join(", ", v.Applications.Select(a => a.Name))</td>
+                                    <td class="small">
+                                        @if (first is not null)
+                                        {
+                                            <span class="inline-gap">@first.Name @if (first.Email is { } e) { <a href="mailto:@e">@e</a> }</span>
+                                        }
+                                        else { <span class="muted">–</span> }
+                                        @if (v.Escalation.Count > 1) { <span class="muted"> · @(v.Escalation.Count - 1) more on the escalation path</span> }
+                                    </td>
+                                    <td class="small">@(v.Vendor.SupportPhone ?? "–")</td>
+                                    <td class="small @PortfolioUi.NoticeClass(v.NextRenewal, r.AsOf, warningDays)">
+                                        @if (v.NextRenewal?.NoticeDeadline is { } nd)
+                                        {
+                                            @PortfolioUi.Date(nd) <span>(@PortfolioUi.Relative(nd, r.AsOf))</span>
+                                        }
+                                        else { <span class="muted">–</span> }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @if (r.OpenRisks.Count + r.OpenPainPoints.Count > 0)
+        {
+            <div class="settings" style="margin-top:1rem">
+                @if (r.OpenRisks.Count > 0)
+                {
+                    <div class="card stack">
+                        <h2>Open risks <span class="muted small">(@r.OpenRisks.Count)</span></h2>
+                        <ul class="dep-list">
+                            @foreach (var x in r.OpenRisks)
+                            {
+                                <li>
+                                    <RiskScore Score="x.Risk.Score" />
+                                    <span>@x.Risk.Description <a class="small" href="/portfolio/integrations/@x.Integration.Id">@x.Integration.Name</a></span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+                @if (r.OpenPainPoints.Count > 0)
+                {
+                    <div class="card stack">
+                        <h2>Open pain points <span class="muted small">(@r.OpenPainPoints.Count)</span></h2>
+                        <ul class="dep-list">
+                            @foreach (var x in r.OpenPainPoints)
+                            {
+                                <li>
+                                    <PainBadge Severity="x.PainPoint.Severity" />
+                                    <span>@x.PainPoint.Description <a class="small" href="/portfolio/processes/@x.Process.Id">@x.Process.Name</a></span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "app")] public int? AppId { get; set; }
+    [SupplyParameterFromQuery(Name = "partner")] public int? PartnerId { get; set; }
+    [SupplyParameterFromQuery(Name = "depth")] public int? Depth { get; set; }
+
+    private List<Application> apps = [];
+    private List<TradingPartner> partners = [];
+    private bool ready;
+    private NodeRef? subject;
+    private int depth = ImpactAnalyzer.DefaultDepth;
+    private int warningDays = 120;
+    private ImpactReport? report;
+    private bool loading, copied;
+
+    private string SubjectValue
+    {
+        get => subject?.Key ?? "";
+        set => Go(NodeRef.Parse(value), depth);
+    }
+
+    private int DepthValue
+    {
+        get => depth;
+        set => Go(subject, value);
+    }
+
+    private void Go(NodeRef? node, int d)
+    {
+        var url = node is not { } n ? "/portfolio/impact" : $"/portfolio/impact?{(n.IsPartner ? "partner" : "app")}={n.Id}&depth={d}";
+        Nav.NavigateTo(url);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        apps = (await Svc.GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired).ToList();
+        partners = (await Svc.GetPartnersAsync()).Where(p => p.Status != PartnerStatus.Inactive).ToList();
+        warningDays = (await Svc.GetSettingsAsync()).RenewalWarningDays;
+        ready = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        subject = PartnerId is { } p ? NodeRef.Partner(p) : AppId is { } a ? NodeRef.App(a) : null;
+        depth = Math.Clamp(Depth ?? ImpactAnalyzer.DefaultDepth, 1, PortfolioService.MaxDependencyDepth);
+        copied = false;
+        report = null;
+        if (subject is not { } s) return;
+        loading = true;
+        report = await Svc.GetImpactAsync(s, depth);
+        loading = false;
+    }
+
+    private async Task CopyAsync()
+    {
+        if (report is null) return;
+        copied = await JS.InvokeAsync<bool>("roadmapper.copyText", ImpactAnalyzer.ToText(report));
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}

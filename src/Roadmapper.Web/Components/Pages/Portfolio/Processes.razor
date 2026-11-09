@@ -1,0 +1,201 @@
+@page "/portfolio/processes"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Business processes" Subtitle="What the operation does, the applications and integrations each process relies on, what hurts, and how it's measured.">
+    <button class="btn primary" @onclick="() => editing = new ProcessDraft()">+ New process</button>
+</PortfolioHeader>
+
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (processes is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (processes.Count == 0)
+{
+    <div class="card empty stack">
+        <div>
+            No business processes yet. Start with the top-level ones (Order to Cash, Inbound, Transportation), add their
+            steps under them, and say which applications and integrations each step relies on. Impact analysis then shows
+            which processes a change to an application or partner touches.
+        </div>
+        @if (canSeed)
+        {
+            <div><button class="btn" @onclick="SeedAsync">Add sample processes</button></div>
+        }
+    </div>
+}
+else
+{
+    var openPain = processes.SelectMany(p => p.PainPoints).Where(pp => pp.Status == PainPointStatus.Open).ToList();
+    var kpis = processes.SelectMany(p => p.Kpis).ToList();
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Processes</span>
+            <span class="tile-value">@processes.Count</span>
+            <span class="muted small">@processes.Count(p => p.ParentProcessId is null) top-level</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Open pain points</span>
+            <span class="tile-value @(openPain.Any(pp => pp.Severity >= PainSeverity.High) ? "overdue" : "")">@openPain.Count</span>
+            <span class="muted small">@openPain.Count(pp => pp.Severity >= PainSeverity.High) high or critical · @openPain.Count(pp => pp.AddressedByItemId is not null) on a roadmap</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">KPIs on target</span>
+            <span class="tile-value">@kpis.Count(k => k.OnTarget == true)<span class="muted small"> / @kpis.Count</span></span>
+            <span class="muted small">@kpis.Count(k => k.OnTarget == false) below target</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Without applications</span>
+            <span class="tile-value @(Unmapped > 0 ? "due-soon" : "")">@Unmapped</span>
+            <span class="muted small">steps not linked to any application, so impact analysis can't see them</span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input placeholder="Search processes" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="domain">
+            <option value="">All domains</option>
+            @foreach (var d in Enum.GetValues<ProcessDomain>())
+            {
+                <option value="@d">@PortfolioText.Label(d)</option>
+            }
+        </select>
+        <select @bind="applicationId">
+            <option value="0">Any application</option>
+            @foreach (var a in apps)
+            {
+                <option value="@a.Id">@a.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="card table-wrap">
+        <table class="tree">
+            <thead>
+                <tr>
+                    <th>Process</th>
+                    <th>Domain</th>
+                    <th>Owner</th>
+                    <th>Applications</th>
+                    <th class="num" title="Integrations the process relies on">Integrations</th>
+                    <th title="Open pain points">Pain points</th>
+                    <th>KPIs</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtered)
+                {
+                    var level = Level(p);
+                    var pains = p.PainPoints.Where(pp => pp.Status == PainPointStatus.Open).ToList();
+                    <tr>
+                        <td class="title-cell">
+                            <span class="inline-gap" style="padding-left:@(level * 1.25)rem">
+                                @if (level > 0) { <span class="muted">↳</span> }
+                                <a class="title-link @(level == 0 ? "strong" : "")" href="/portfolio/processes/@p.Id">@p.Name</a>
+                            </span>
+                        </td>
+                        <td>@PortfolioText.Label(p.Domain)</td>
+                        <td>@(p.ProcessOwner?.Name ?? "–")</td>
+                        <td class="small">
+                            @foreach (var (pa, n) in p.Applications.OrderByDescending(a => a.IsPrimary).ThenBy(a => a.Application?.Name).Select((pa, n) => (pa, n)))
+                            {
+                                @if (n > 0) { <text>, </text> }
+                                <a href="/portfolio/applications/@pa.ApplicationId" class="@(pa.IsPrimary ? "strong" : "")" title="@(pa.IsPrimary ? "Primary system" : null)">@pa.Application?.Name</a>
+                            }
+                            @if (p.Applications.Count == 0) { <span class="muted">–</span> }
+                        </td>
+                        <td class="num">@(p.Integrations.Count > 0 ? p.Integrations.Count : "–")</td>
+                        <td>
+                            @if (pains.Count > 0)
+                            {
+                                <span class="inline-gap"><PainBadge Severity="pains.Max(pp => pp.Severity)" /> <span class="small">@pains.Count open</span></span>
+                            }
+                            else { <span class="muted">–</span> }
+                        </td>
+                        <td class="small">
+                            @if (p.Kpis.Count > 0)
+                            {
+                                <span class="@(p.Kpis.Any(k => k.OnTarget == false) ? "due-soon" : "")">@p.Kpis.Count(k => k.OnTarget == true)/@p.Kpis.Count on target</span>
+                            }
+                            else { <span class="muted">–</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (!Filtered.Any())
+        {
+            <div class="empty muted">No processes match these filters.</div>
+        }
+    </div>
+}
+
+@if (editing is not null)
+{
+    <ProcessEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<BusinessProcess>? processes;
+    private List<Application> apps = [];
+    private Dictionary<int, int?> parentOf = [];
+    private ProcessDraft? editing;
+    private bool canSeed;
+    private string? error;
+    private string search = "";
+    private ProcessDomain? domain;
+    private int applicationId;
+
+    private int Level(BusinessProcess p) => PortfolioRules.SelfAndAncestors(p.Id, parentOf).Count() - 1;
+
+    /// <summary>Leaf processes (no sub-processes) with no application: impact analysis can only reach them through integrations.</summary>
+    private int Unmapped => processes!.Count(p => p.Applications.Count == 0 && p.Integrations.Count == 0 && processes!.All(c => c.ParentProcessId != p.Id));
+
+    // A filter keeps the matches and the processes above them, so the tree still reads.
+    private IEnumerable<BusinessProcess> Filtered
+    {
+        get
+        {
+            var matches = processes!.Where(p =>
+                    (domain is null || p.Domain == domain)
+                    && (applicationId == 0 || p.Applications.Any(a => a.ApplicationId == applicationId))
+                    && (string.IsNullOrWhiteSpace(search) || p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                        || (p.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)))
+                .Select(p => p.Id).ToHashSet();
+            var keep = matches.SelectMany(id => PortfolioRules.SelfAndAncestors(id, parentOf)).ToHashSet();
+            return processes!.Where(p => keep.Contains(p.Id));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        apps = (await Svc.GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired).ToList();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        processes = await Svc.GetProcessesAsync();
+        parentOf = processes.ToDictionary(p => p.Id, p => p.ParentProcessId);
+        canSeed = processes.Count == 0 && await Svc.CanSeedSampleProcessesAsync();
+    }
+
+    private async Task SeedAsync()
+    {
+        error = null;
+        try { await Svc.SeedSampleProcessesAsync(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private void OnEditorClosed(int? id)
+    {
+        editing = null;
+        if (id is > 0) Nav.NavigateTo($"/portfolio/processes/{id}");
+    }
+}

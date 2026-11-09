@@ -401,3 +401,123 @@ public class TradingPartnerDraft
         p.Notes = DraftText.Clean(Notes);
     }
 }
+
+public class ProcessDraft
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public ProcessDomain Domain { get; set; } = ProcessDomain.Other;
+    public int? ProcessOwnerId { get; set; }
+    public int? ParentProcessId { get; set; }
+
+    public bool IsNew => Id == 0;
+
+    public static ProcessDraft From(BusinessProcess p) => new()
+    {
+        Id = p.Id, Name = p.Name, Description = p.Description, Domain = p.Domain, ProcessOwnerId = p.ProcessOwnerId,
+        ParentProcessId = p.ParentProcessId,
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) return "Process name is required.";
+        if (Name.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
+        if (Description?.Trim().Length > PortfolioRules.MaxNotesLength) return $"Description can be at most {PortfolioRules.MaxNotesLength} characters.";
+        if (!IsNew && ParentProcessId == Id) return "A process can't be its own parent.";
+        return null;
+    }
+
+    public void ApplyTo(BusinessProcess p)
+    {
+        p.Name = Name.Trim();
+        p.Description = DraftText.Clean(Description);
+        p.Domain = Domain;
+        p.ProcessOwnerId = ProcessOwnerId;
+        p.ParentProcessId = ParentProcessId;
+    }
+}
+
+public class PainPointDraft
+{
+    public int Id { get; set; }
+    public int ProcessId { get; set; }
+    public string Description { get; set; } = "";
+    public PainSeverity Severity { get; set; } = PainSeverity.Medium;
+    public int? ApplicationId { get; set; }
+    public int? AddressedByItemId { get; set; }
+    public PainPointStatus Status { get; set; } = PainPointStatus.Open;
+
+    public bool IsNew => Id == 0;
+
+    public static PainPointDraft New(int processId) => new() { ProcessId = processId };
+
+    public static PainPointDraft From(ProcessPainPoint p) => new()
+    {
+        Id = p.Id, ProcessId = p.ProcessId, Description = p.Description, Severity = p.Severity, ApplicationId = p.ApplicationId,
+        AddressedByItemId = p.AddressedByItemId, Status = p.Status,
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Description)) return "Describe the pain point.";
+        if (Description.Trim().Length > 1000) return "Description can be at most 1000 characters.";
+        return null;
+    }
+
+    public void ApplyTo(ProcessPainPoint p)
+    {
+        p.Description = Description.Trim();
+        p.Severity = Severity;
+        p.ApplicationId = ApplicationId;
+        p.AddressedByItemId = AddressedByItemId;
+        p.Status = Status;
+    }
+}
+
+public class KpiDraft
+{
+    public int Id { get; set; }
+    public int ProcessId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Unit { get; set; }
+    public KpiDirection Direction { get; set; } = KpiDirection.HigherIsBetter;
+    public decimal? Baseline { get; set; }
+    public decimal? Target { get; set; }
+    public decimal? Current { get; set; }
+    public DateOnly? MeasuredOn { get; set; }
+
+    public bool IsNew => Id == 0;
+
+    public static KpiDraft New(int processId) => new() { ProcessId = processId };
+
+    public static KpiDraft From(ProcessKpi k) => new()
+    {
+        Id = k.Id, ProcessId = k.ProcessId, Name = k.Name, Unit = k.Unit, Direction = k.Direction, Baseline = k.Baseline,
+        Target = k.Target, Current = k.Current, MeasuredOn = k.MeasuredOn,
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) return "KPI name is required.";
+        if (Name.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
+        if (Unit?.Trim().Length > 30) return "Unit can be at most 30 characters.";
+        if (Baseline is { } b && Target is { } t)
+        {
+            if (Direction == KpiDirection.HigherIsBetter && t < b) return "For a higher-is-better KPI the target should be above the baseline.";
+            if (Direction == KpiDirection.LowerIsBetter && t > b) return "For a lower-is-better KPI the target should be below the baseline.";
+        }
+        return null;
+    }
+
+    public void ApplyTo(ProcessKpi k)
+    {
+        k.Name = Name.Trim();
+        k.Unit = DraftText.Clean(Unit);
+        k.Direction = Direction;
+        k.Baseline = Baseline;
+        k.Target = Target;
+        k.Current = Current;
+        k.MeasuredOn = Current is null ? null : MeasuredOn;
+    }
+}

@@ -62,6 +62,7 @@ public partial class PortfolioService
         roles.AddRange((await db.IntegrationRisks.Where(r => r.OwnerId == id)
             .Join(db.Integrations, r => r.IntegrationId, i => i.Id, (r, i) => i.Name).ToListAsync())
             .Select(n => $"Risk owner on {n}"));
+        roles.AddRange((await db.BusinessProcesses.Where(p => p.ProcessOwnerId == id).Select(p => p.Name).ToListAsync()).Select(n => $"Owner of process {n}"));
         return roles;
     }
 }

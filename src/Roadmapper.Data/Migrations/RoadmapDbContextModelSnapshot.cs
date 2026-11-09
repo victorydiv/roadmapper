@@ -312,6 +312,54 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("ApplicationSupportContacts", (string)null);
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int?>("ParentProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ProcessOwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("ParentProcessId");
+
+                    b.HasIndex("ProcessOwnerId");
+
+                    b.ToTable("BusinessProcesses", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
                 {
                     b.Property<int>("Id")
@@ -653,6 +701,138 @@ namespace Roadmapper.Data.Migrations
                             DefaultReviewIntervalMonths = 12,
                             RenewalWarningDays = 120
                         });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessApplication", b =>
+                {
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Usage")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ProcessId", "ApplicationId");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.ToTable("ProcessApplications", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessIntegration", b =>
+                {
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("IntegrationId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProcessId", "IntegrationId");
+
+                    b.HasIndex("IntegrationId");
+
+                    b.ToTable("ProcessIntegrations", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessKpi", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("Baseline")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Current")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("MeasuredOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("Target")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessId");
+
+                    b.ToTable("ProcessKpis", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessPainPoint", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AddressedByItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddressedByItemId");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("ProcessId");
+
+                    b.ToTable("ProcessPainPoints", (string)null);
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>
@@ -1304,6 +1484,23 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Contact");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "ParentProcess")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentProcessId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "ProcessOwner")
+                        .WithMany()
+                        .HasForeignKey("ProcessOwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ParentProcess");
+
+                    b.Navigation("ProcessOwner");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TradingPartner")
@@ -1393,6 +1590,80 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Integration");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessApplication", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "Process")
+                        .WithMany("Applications")
+                        .HasForeignKey("ProcessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Process");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessIntegration", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Integration", "Integration")
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "Process")
+                        .WithMany("Integrations")
+                        .HasForeignKey("ProcessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Integration");
+
+                    b.Navigation("Process");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessKpi", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "Process")
+                        .WithMany("Kpis")
+                        .HasForeignKey("ProcessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Process");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessPainPoint", b =>
+                {
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "AddressedBy")
+                        .WithMany()
+                        .HasForeignKey("AddressedByItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.BusinessProcess", "Process")
+                        .WithMany("PainPoints")
+                        .HasForeignKey("ProcessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddressedBy");
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Process");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>
@@ -1547,6 +1818,19 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Initiatives");
 
                     b.Navigation("SupportContacts");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.BusinessProcess", b =>
+                {
+                    b.Navigation("Applications");
+
+                    b.Navigation("Children");
+
+                    b.Navigation("Integrations");
+
+                    b.Navigation("Kpis");
+
+                    b.Navigation("PainPoints");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>

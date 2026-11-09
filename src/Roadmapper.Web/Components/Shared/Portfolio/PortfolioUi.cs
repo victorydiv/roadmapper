@@ -35,7 +35,21 @@ public static class PortfolioUi
     public static string NoticeClass(Contract? c, DateOnly today, int warningDays) =>
         c is null ? "" : PortfolioRules.NoticeMissed(c, today) ? "overdue" : PortfolioRules.NoticeDue(c, today, warningDays) ? "due-soon" : "";
 
-    public static string Fit(int? score) => score is { } s ? $"{s}/5" : "–";
+    /// <summary>A KPI value with its unit: "96.5%", "18 hrs", "$1,200"; "–" when unknown.</summary>
+    public static string Number(decimal? value, string? unit)
+    {
+        if (value is not { } v) return "–";
+        var n = v.ToString("#,0.##", Us);
+        return unit switch
+        {
+            null or "" => n,
+            "%" => n + "%",
+            "USD" or "$" => "$" + n,
+            _ => $"{n} {unit}",
+        };
+    }
+
+        public static string Fit(int? score) => score is { } s ? $"{s}/5" : "–";
 
     /// <summary>The detail page of an application or trading partner.</summary>
     public static string Href(NodeRef node) => node.IsPartner ? $"/portfolio/partners/{node.Id}" : $"/portfolio/applications/{node.Id}";

@@ -1,5 +1,23 @@
 // Small browser helpers called from Blazor via JS interop.
 window.roadmapper = {
+    /** Copies text to the clipboard; returns false when the browser refuses. */
+    async copyText(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            const area = document.createElement("textarea");
+            area.value = text;
+            area.style.position = "fixed";
+            area.style.opacity = "0";
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand("copy");
+            area.remove();
+            return ok;
+        }
+    },
+
     /** Fetches an SVG from the server, rasterizes it at up to 2x, and downloads it as a PNG. */
     async downloadSvgAsPng(url, fileName) {
         const response = await fetch(url);

@@ -1,0 +1,127 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New business process" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <label class="field">Name
+                    <InputText @bind-Value="draft.Name" placeholder="e.g. Order to Cash, Receiving, Carrier tendering" autofocus />
+                </label>
+                <div class="grid-2">
+                    <label class="field">Domain
+                        <InputSelect @bind-Value="draft.Domain">
+                            @foreach (var d in Enum.GetValues<ProcessDomain>())
+                            {
+                                <option value="@d">@PortfolioText.Label(d)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="Leave empty for a top-level process; pick one to make this a step of it">Part of
+                        <InputSelect @bind-Value="draft.ParentProcessId">
+                            <option value="">— top level —</option>
+                            @foreach (var p in parents)
+                            {
+                                <option value="@p.Id">@Indent(p)@p.Name</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+                <label class="field" title="Who answers for how this process runs">Process owner
+                    <ContactSelect Contacts="contacts" Vendors="vendors" @bind-Value="draft.ProcessOwnerId" />
+                </label>
+                <label class="field">Description
+                    <InputTextArea @bind-Value="draft.Description" placeholder="What the process covers, start to finish" />
+                </label>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete @original with its pain points and KPIs?</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProcessDraft Draft { get; set; } = default!;
+    /// <summary>Called with the saved process's id, 0 when it was deleted, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private ProcessDraft draft = default!;
+    private string original = "";
+    private List<Contact> contacts = [];
+    private List<Vendor> vendors = [];
+    private List<BusinessProcess> parents = [];
+    private Dictionary<int, int?> parentOf = [];
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        original = Draft.Name;
+        contacts = await Svc.GetContactsAsync();
+        vendors = await Svc.GetVendorsAsync();
+        var all = await Svc.GetProcessesAsync();
+        parentOf = all.ToDictionary(p => p.Id, p => p.ParentProcessId);
+        // A process can't move under itself or one of its own sub-processes.
+        parents = all.Where(p => draft.IsNew || PortfolioRules.ParentError(draft.Id, p.Id, parentOf) is null).ToList();
+    }
+
+    private string Indent(BusinessProcess p) =>
+        new string(' ', 3 * (PortfolioRules.SelfAndAncestors(p.Id, parentOf).Count() - 1));
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var id = await Svc.SaveProcessAsync(draft);
+            await CloseAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        error = null;
+        try
+        {
+            await Svc.DeleteProcessAsync(draft.Id);
+            await CloseAsync(0);
+        }
+        catch (InvalidOperationException ex)
+        {
+            error = ex.Message;
+            confirmingDelete = false;
+        }
+    }
+
+    private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);
+}

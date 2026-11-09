@@ -108,6 +108,26 @@ else
     </div>
 
     <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Business processes</h2>
+            <span class="muted small">Processes that stop or degrade when this flow does. Link them from the process page.</span>
+        </div>
+        @if (processes.Count == 0)
+        {
+            <div class="muted small">None linked.</div>
+        }
+        else
+        {
+            <ul class="dep-list">
+                @foreach (var p in processes)
+                {
+                    <li><a href="/portfolio/processes/@p.Id"><b>@p.Name</b></a> <span class="muted small">@PortfolioText.Label(p.Domain)@(p.ProcessOwner is { } owner ? $" · {owner.Name}" : "")</span></li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
         <h2>History</h2>
         <PortfolioActivityList Entries="history" />
     </div>
@@ -132,6 +152,7 @@ else
     private List<PortfolioAuditEntry> history = [];
     private IntegrationDraft? editing;
     private RiskDraft? editingRisk;
+    private List<BusinessProcess> processes = [];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -145,6 +166,7 @@ else
         item = await Svc.GetIntegrationAsync(Id);
         if (item is null) return;
         history = await Svc.GetActivityAsync(PortfolioEntityType.Integration, Id);
+        processes = await Svc.GetProcessesForIntegrationAsync(Id);
     }
 
     private async Task RunAsync(Func<Task> action)

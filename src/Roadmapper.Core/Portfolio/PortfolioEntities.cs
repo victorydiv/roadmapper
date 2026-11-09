@@ -250,6 +250,96 @@ public class IntegrationRisk
     public bool IsActive => Status is RiskStatus.Open or RiskStatus.Accepted;
 }
 
+/// <summary>
+/// Something the operation does, e.g. "Order to Cash" with sub-processes "Order intake" and "Outbound shipping".
+/// Processes say which applications they use and which integrations they rely on, so a change to either can be
+/// traced to the work it affects.
+/// </summary>
+public class BusinessProcess
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public ProcessDomain Domain { get; set; } = ProcessDomain.Other;
+    public int? ProcessOwnerId { get; set; }
+    public Contact? ProcessOwner { get; set; }
+    /// <summary>The process this is a step of; null for a top-level (L1) process.</summary>
+    public int? ParentProcessId { get; set; }
+    public BusinessProcess? ParentProcess { get; set; }
+    public int SortOrder { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<BusinessProcess> Children { get; set; } = new();
+    public List<ProcessApplication> Applications { get; set; } = new();
+    public List<ProcessIntegration> Integrations { get; set; } = new();
+    public List<ProcessPainPoint> PainPoints { get; set; } = new();
+    public List<ProcessKpi> Kpis { get; set; } = new();
+}
+
+/// <summary>An application a process uses, and what for.</summary>
+public class ProcessApplication
+{
+    public int ProcessId { get; set; }
+    public BusinessProcess? Process { get; set; }
+    public int ApplicationId { get; set; }
+    public Application? Application { get; set; }
+    /// <summary>e.g. "wave planning", "carrier tendering".</summary>
+    public string? Usage { get; set; }
+    /// <summary>The main system for this process, as opposed to one it touches in passing.</summary>
+    public bool IsPrimary { get; set; }
+}
+
+/// <summary>An integration a process relies on: if the flow stops, the process stops or degrades.</summary>
+public class ProcessIntegration
+{
+    public int ProcessId { get; set; }
+    public BusinessProcess? Process { get; set; }
+    public int IntegrationId { get; set; }
+    public Integration? Integration { get; set; }
+}
+
+/// <summary>Something that slows a process down or causes errors, optionally tied to the application where it hurts and the roadmap item that fixes it.</summary>
+public class ProcessPainPoint
+{
+    public int Id { get; set; }
+    public int ProcessId { get; set; }
+    public BusinessProcess? Process { get; set; }
+    public string Description { get; set; } = "";
+    public PainSeverity Severity { get; set; } = PainSeverity.Medium;
+    public int? ApplicationId { get; set; }
+    public Application? Application { get; set; }
+    /// <summary>The roadmap item (usually an Initiative) that fixes it.</summary>
+    public int? AddressedByItemId { get; set; }
+    public RoadmapItem? AddressedBy { get; set; }
+    public PainPointStatus Status { get; set; } = PainPointStatus.Open;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A measure of how well a process runs: where it started, where it should be and where it is.</summary>
+public class ProcessKpi
+{
+    public int Id { get; set; }
+    public int ProcessId { get; set; }
+    public BusinessProcess? Process { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>"%", "hrs", "orders/hr", "USD".</summary>
+    public string? Unit { get; set; }
+    public KpiDirection Direction { get; set; } = KpiDirection.HigherIsBetter;
+    public decimal? Baseline { get; set; }
+    public decimal? Target { get; set; }
+    public decimal? Current { get; set; }
+    public DateOnly? MeasuredOn { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Share of the way from baseline to target in percent; null when baseline, target or current is missing.</summary>
+    public int? ProgressPct => PortfolioRules.KpiProgress(this);
+    /// <summary>Current meets the target in the right direction; null when either is missing.</summary>
+    public bool? OnTarget => PortfolioRules.KpiOnTarget(this);
+}
+
 /// <summary>Portfolio-wide settings; a single row with Id 1.</summary>
 public class PortfolioSettings
 {

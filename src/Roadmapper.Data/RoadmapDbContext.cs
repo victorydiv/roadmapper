@@ -32,6 +32,11 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<TradingPartner> TradingPartners => Set<TradingPartner>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<IntegrationRisk> IntegrationRisks => Set<IntegrationRisk>();
+    public DbSet<BusinessProcess> BusinessProcesses => Set<BusinessProcess>();
+    public DbSet<ProcessApplication> ProcessApplications => Set<ProcessApplication>();
+    public DbSet<ProcessIntegration> ProcessIntegrations => Set<ProcessIntegration>();
+    public DbSet<ProcessPainPoint> ProcessPainPoints => Set<ProcessPainPoint>();
+    public DbSet<ProcessKpi> ProcessKpis => Set<ProcessKpi>();
     public DbSet<PortfolioSettings> PortfolioSettings => Set<PortfolioSettings>();
     public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
 

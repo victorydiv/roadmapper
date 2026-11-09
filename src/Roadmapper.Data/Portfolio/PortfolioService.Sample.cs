@@ -13,7 +13,7 @@ public partial class PortfolioService
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
-            && !await db.TradingPartners.AnyAsync();
+            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync();
     }
 
     /// <summary>
@@ -111,6 +111,7 @@ public partial class PortfolioService
         }
 
         await SeedSampleIntegrationsAsync();
+        await SeedSampleProcessesAsync();
     }
 
     // The sample applications the sample integrations connect; they must all exist.
@@ -217,5 +218,106 @@ public partial class PortfolioService
         var gate = await Flow("Trailer arrivals keyed into WMS", yard, wms, IntegrationType.Manual, IntegrationFrequency.OnDemand, Criticality.Tier3,
             "Gate staff re-key trailer arrivals so receiving can schedule doors.", owner: "Jordan Ruiz", reviewedMonthsAgo: 14);
         await Risk(gate, "Typos in trailer numbers delay receiving.", 4, 2, "Replace with the yard management initiative.", owner: "Jordan Ruiz");
+    }
+
+    // The sample integrations the sample processes rely on.
+    private static readonly string[] SampleProcessIntegrations =
+        ["Acme warehouse orders (940)", "Globex warehouse orders (940)", "Self-service orders and inventory", "Order release for load planning",
+         "Acme ship confirmations (945)", "Billable activity for invoicing", "Invoices and statements", "Trailer arrivals keyed into WMS",
+         "Load tenders (204)", "Shipment status (214)"];
+
+    /// <summary>True when there are no processes yet and the sample applications and integrations are all present.</summary>
+    public async Task<bool> CanSeedSampleProcessesAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.BusinessProcesses.AnyAsync()) return false;
+        return await db.Applications.CountAsync(a => SampleIntegrationApps.Contains(a.Name)) == SampleIntegrationApps.Length
+            && await db.Integrations.Select(i => i.Name).Distinct().CountAsync(n => SampleProcessIntegrations.Contains(n)) == SampleProcessIntegrations.Length;
+    }
+
+    /// <summary>
+    /// Adds made-up business processes over the sample applications and integrations: Order to Cash with three steps,
+    /// Inbound with receiving, and Transportation, each with pain points and KPIs. Only while there are no processes.
+    /// </summary>
+    public async Task SeedSampleProcessesAsync()
+    {
+        if (!await CanSeedSampleProcessesAsync())
+            throw new InvalidOperationException("Sample processes need the sample applications and integrations, and no processes yet.");
+        var today = Today;
+
+        Dictionary<string, int> apps, flows, people;
+        int? billingItem = null;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            apps = await db.Applications.ToDictionaryAsync(a => a.Name, a => a.Id, StringComparer.OrdinalIgnoreCase);
+            flows = (await db.Integrations.Select(i => new { i.Name, i.Id }).ToListAsync())
+                .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Min(i => i.Id), StringComparer.OrdinalIgnoreCase);
+            people = (await db.Contacts.AsNoTracking().Where(c => c.VendorId == null && c.TradingPartnerId == null).ToListAsync())
+                .GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().Id);
+            billingItem = await db.Items.Where(i => i.Title == "Billing self-service" && i.Product!.Name == SampleProductName)
+                .Select(i => (int?)i.Id).FirstOrDefaultAsync();
+        }
+        int? Who(string name) => people.TryGetValue(name, out var id) ? id : null;
+
+        async Task<int> Process(string name, ProcessDomain domain, string owner, string description, int? parent = null,
+            (string App, string Usage, bool Primary)[]? uses = null, string[]? relies = null)
+        {
+            var id = await SaveProcessAsync(new ProcessDraft { Name = name, Domain = domain, ProcessOwnerId = Who(owner), Description = description, ParentProcessId = parent });
+            foreach (var (app, usage, primary) in uses ?? []) await SetProcessApplicationAsync(id, apps[app], usage, primary);
+            foreach (var flow in relies ?? []) await AddProcessIntegrationAsync(id, flows[flow]);
+            return id;
+        }
+
+        Task Pain(int process, string description, PainSeverity severity, string? app = null, int? addressedBy = null) =>
+            SavePainPointAsync(new PainPointDraft
+            {
+                ProcessId = process, Description = description, Severity = severity,
+                ApplicationId = app is null ? null : apps[app], AddressedByItemId = addressedBy,
+            });
+
+        Task Kpi(int process, string name, string unit, KpiDirection direction, decimal baseline, decimal target, decimal current) =>
+            SaveKpiAsync(new KpiDraft
+            {
+                ProcessId = process, Name = name, Unit = unit, Direction = direction, Baseline = baseline, Target = target,
+                Current = current, MeasuredOn = today.AddDays(-7),
+            });
+
+        var o2c = await Process("Order to Cash", ProcessDomain.Outbound, "Jordan Ruiz",
+            "From a customer's order to the invoice: intake, picking and shipping, billing.");
+        var intake = await Process("Order intake", ProcessDomain.CustomerService, "Alex Moreno",
+            "Customer orders arrive by EDI or the portal and are released to the warehouse.", o2c,
+            [("Contoso EDI", "Translates 940 orders", false), ("Customer Portal", "Self-service order entry", false), ("Northwind WMS", "Order release", true)],
+            ["Acme warehouse orders (940)", "Globex warehouse orders (940)", "Self-service orders and inventory"]);
+        await Pain(intake, "Orders with unknown SKUs fail in EDI translation and aren't noticed until the next day.", PainSeverity.High, "Contoso EDI");
+        await Kpi(intake, "Orders released same day", "%", KpiDirection.HigherIsBetter, 92, 98, 95);
+
+        var ship = await Process("Pick, pack and ship", ProcessDomain.Outbound, "Jordan Ruiz",
+            "Waves, picking, packing, loading and ship confirmation.", o2c,
+            [("Northwind WMS", "Waves, picking, shipping", true), ("Fabrikam TMS", "Load planning", false)],
+            ["Order release for load planning", "Acme ship confirmations (945)"]);
+        await Pain(ship, "Wave planning is done by hand on peak days.", PainSeverity.Medium, "Northwind WMS");
+        await Kpi(ship, "On-time shipping", "%", KpiDirection.HigherIsBetter, 94, 99, 96.5m);
+
+        var invoicing = await Process("Customer invoicing", ProcessDomain.Billing, "Dana Kim",
+            "Handling, storage and accessorial charges billed to customers.", o2c,
+            [("Litware ERP", "Billing runs", true), ("Northwind WMS", "Billable activity", false), ("Customer Portal", "Invoice delivery", false)],
+            ["Billable activity for invoicing", "Invoices and statements"]);
+        await Pain(invoicing, "Accessorial charges are keyed by hand before each billing run.", PainSeverity.High, "Litware ERP", billingItem);
+        await Kpi(invoicing, "Days to invoice", "days", KpiDirection.LowerIsBetter, 6, 2, 4);
+
+        var inbound = await Process("Inbound", ProcessDomain.Inbound, "Jordan Ruiz", "Trailers arriving, receiving and putaway.");
+        var receiving = await Process("Receiving", ProcessDomain.Inbound, "Jordan Ruiz",
+            "Door scheduling, unloading and receipt into inventory.", inbound,
+            [("Northwind WMS", "Receipts and putaway", true), ("Yard Log Spreadsheet", "Trailer check-in", false)],
+            ["Trailer arrivals keyed into WMS"]);
+        await Pain(receiving, "Trailer numbers are re-keyed from the yard log, and typos delay door scheduling.", PainSeverity.Medium, "Yard Log Spreadsheet");
+        await Kpi(receiving, "Dock-to-stock time", "hrs", KpiDirection.LowerIsBetter, 24, 8, 18);
+
+        var transport = await Process("Transportation", ProcessDomain.Transportation, "Jordan Ruiz",
+            "Tendering loads to carriers and tracking them to delivery.", null,
+            [("Fabrikam TMS", "Tendering, track & trace", true)],
+            ["Load tenders (204)", "Shipment status (214)"]);
+        await Pain(transport, "Carrier status messages arrive late, so customer service can't answer where-is-my-order calls.", PainSeverity.Medium, "Fabrikam TMS");
+        await Kpi(transport, "Tender acceptance", "%", KpiDirection.HigherIsBetter, 85, 95, 88);
     }
 }

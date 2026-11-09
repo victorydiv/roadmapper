@@ -1,0 +1,109 @@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New KPI" : $"Edit {original}")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(false)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <div class="grid-2">
+                    <label class="field">Name
+                        <InputText @bind-Value="draft.Name" placeholder="e.g. On-time shipping, Dock-to-stock time" autofocus />
+                    </label>
+                    <div class="grid-2">
+                        <label class="field">Unit
+                            <InputText @bind-Value="draft.Unit" placeholder="%, hrs, USD" maxlength="30" />
+                        </label>
+                        <label class="field">Direction
+                            <InputSelect @bind-Value="draft.Direction">
+                                @foreach (var d in Enum.GetValues<KpiDirection>())
+                                {
+                                    <option value="@d">@PortfolioText.Label(d)</option>
+                                }
+                            </InputSelect>
+                        </label>
+                    </div>
+                </div>
+                <div class="grid-4">
+                    <label class="field" title="Where it was before improvement work started">Baseline
+                        <InputNumber @bind-Value="draft.Baseline" step="any" />
+                    </label>
+                    <label class="field">Target
+                        <InputNumber @bind-Value="draft.Target" step="any" />
+                    </label>
+                    <label class="field" title="The latest measurement">Current
+                        <InputNumber @bind-Value="draft.Current" step="any" />
+                    </label>
+                    <label class="field" title="Defaults to today when you enter a current value">Measured on
+                        <InputDate @bind-Value="draft.MeasuredOn" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete @original?</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(false)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@(draft.IsNew ? "Create" : "Save")</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public KpiDraft Draft { get; set; } = default!;
+    /// <summary>Called with true when something was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private KpiDraft draft = default!;
+    private string original = "";
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        draft = Draft;
+        original = Draft.Name;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveKpiAsync(draft);
+            await CloseAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteKpiAsync(draft.Id);
+        await CloseAsync(true);
+    }
+
+    private Task CloseAsync(bool changed) => OnClose.InvokeAsync(changed);
+}

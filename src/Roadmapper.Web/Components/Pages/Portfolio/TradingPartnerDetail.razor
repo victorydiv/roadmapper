@@ -18,6 +18,7 @@ else
 {
     <PortfolioHeader Title="@partner.Name" Parent="@(("Trading partners", "/portfolio/partners"))">
         <PartnerBadges Partner="partner" />
+        <a class="btn" href="/portfolio/impact?partner=@partner.Id" title="What a change to this partner's flows touches">Impact analysis</a>
         <button class="btn" @onclick="() => editing = TradingPartnerDraft.From(partner)">Edit</button>
     </PortfolioHeader>
 

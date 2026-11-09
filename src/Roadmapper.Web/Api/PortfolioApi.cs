@@ -82,6 +82,26 @@ public static class PortfolioApi
         api.MapGet("/partners/{id:int}/dependencies", async (int id, PortfolioService svc, int? depth) =>
             await svc.GetDependenciesAsync(NodeRef.Partner(id), depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
 
+        // Business processes in tree order (parents first). ?domain=Outbound&applicationId=3 (uses that application)
+        api.MapGet("/processes", async (PortfolioService svc, string? domain, int? applicationId) =>
+        {
+            IEnumerable<BusinessProcess> list = await svc.GetProcessesAsync();
+            if (Parse<ProcessDomain>(domain) is { } d) list = list.Where(p => p.Domain == d);
+            if (applicationId is { } appId) list = list.Where(p => p.Applications.Any(a => a.ApplicationId == appId));
+            return list.Select(ProcessDto.From).ToList();
+        });
+
+        api.MapGet("/processes/{id:int}", async (int id, PortfolioService svc) =>
+            await svc.GetProcessAsync(id) is { } p ? Results.Ok(ProcessDetailDto.From(p, svc.Today)) : Results.NotFound());
+
+        // Change impact: what a change to the application or partner touches. depth = 1–5 steps downstream.
+        // ?format=text returns the plain-text report (for email or a ticket) instead of JSON.
+        api.MapGet("/applications/{id:int}/impact", async (int id, PortfolioService svc, int? depth, string? format) =>
+            Impact(await svc.GetImpactAsync(NodeRef.App(id), depth ?? ImpactAnalyzer.DefaultDepth), format));
+
+        api.MapGet("/partners/{id:int}/impact", async (int id, PortfolioService svc, int? depth, string? format) =>
+            Impact(await svc.GetImpactAsync(NodeRef.Partner(id), depth ?? ImpactAnalyzer.DefaultDepth), format));
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -99,6 +119,12 @@ public static class PortfolioApi
             return download == true ? Results.File(bytes, "image/svg+xml", "integration-map.svg") : Results.Bytes(bytes, "image/svg+xml");
         });
     }
+
+    private static IResult Impact(ImpactReport? report, string? format) => report is null
+        ? Results.NotFound()
+        : string.Equals(format, "text", StringComparison.OrdinalIgnoreCase)
+            ? Results.Text(ImpactAnalyzer.ToText(report), "text/plain; charset=utf-8")
+            : Results.Ok(ImpactDto.From(report));
 
     private static T? Parse<T>(string? value) where T : struct, Enum =>
         Enum.TryParse<T>(value, ignoreCase: true, out var v) && Enum.IsDefined(v) ? v : null;
@@ -225,4 +251,78 @@ public record DependencyDto(EndpointDto Node, int Depth, IReadOnlyList<Integrati
         return new(EndpointDto.Of(v.Node, v.Name), v.Depth, v.Direct.Select(i => IntegrationDto.From(i, today)).ToList(),
             v.Upstream.Select(Row).ToList(), v.Downstream.Select(Row).ToList());
     }
+}
+
+public record ProcessDto(int Id, string Name, string? Description, ProcessDomain Domain, Ref? Owner, Ref? Parent,
+    IReadOnlyList<ProcessApplicationDto> Applications, IReadOnlyList<Ref> Integrations, int OpenPainPoints, int Kpis, int KpisOnTarget)
+{
+    public static ProcessDto From(BusinessProcess p) => new(p.Id, p.Name, p.Description, p.Domain, Ref.Of(p.ProcessOwner),
+        p.ParentProcess is { } parent ? new Ref(parent.Id, parent.Name) : null,
+        p.Applications.OrderByDescending(a => a.IsPrimary).ThenBy(a => a.Application?.Name)
+            .Select(a => new ProcessApplicationDto(new Ref(a.ApplicationId, a.Application?.Name ?? ""), a.Usage, a.IsPrimary)).ToList(),
+        p.Integrations.Select(i => new Ref(i.IntegrationId, i.Integration?.Name ?? "")).OrderBy(r => r.Name).ToList(),
+        p.PainPoints.Count(pp => pp.Status == PainPointStatus.Open), p.Kpis.Count, p.Kpis.Count(k => k.OnTarget == true));
+}
+
+public record ProcessApplicationDto(Ref Application, string? Usage, bool IsPrimary);
+
+public record PainPointDto(int Id, string Description, PainSeverity Severity, PainPointStatus Status, Ref? Application, Ref? AddressedBy)
+{
+    public static PainPointDto From(ProcessPainPoint p) => new(p.Id, p.Description, p.Severity, p.Status,
+        p.Application is { } a ? new Ref(a.Id, a.Name) : null,
+        p.AddressedBy is { } i ? new Ref(i.Id, i.Title) : null);
+}
+
+public record KpiDto(int Id, string Name, string? Unit, KpiDirection Direction, decimal? Baseline, decimal? Target, decimal? Current,
+    DateOnly? MeasuredOn, int? ProgressPct, bool? OnTarget)
+{
+    public static KpiDto From(ProcessKpi k) => new(k.Id, k.Name, k.Unit, k.Direction, k.Baseline, k.Target, k.Current, k.MeasuredOn, k.ProgressPct, k.OnTarget);
+}
+
+public record ProcessDetailDto(ProcessDto Process, IReadOnlyList<Ref> SubProcesses, IReadOnlyList<IntegrationDto> Integrations,
+    IReadOnlyList<PainPointDto> PainPoints, IReadOnlyList<KpiDto> Kpis)
+{
+    public static ProcessDetailDto From(BusinessProcess p, DateOnly today) => new(ProcessDto.From(p),
+        p.Children.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new Ref(c.Id, c.Name)).ToList(),
+        p.Integrations.Select(i => IntegrationDto.From(i.Integration!, today)).OrderBy(i => i.Name).ToList(),
+        p.PainPoints.OrderBy(pp => pp.Status).ThenByDescending(pp => pp.Severity).Select(PainPointDto.From).ToList(),
+        p.Kpis.OrderBy(k => k.Name).Select(KpiDto.From).ToList());
+}
+
+public record ImpactIntegrationDto(Ref Integration, bool Direct, int Distance, EndpointDto Source, EndpointDto Target, Ref? Via,
+    IntegrationType Type, Criticality Criticality, RiskLevel RiskLevel);
+
+public record ImpactNodeDto(EndpointDto Node, int Distance, Criticality? Criticality, PartnerImportance? Importance);
+
+public record ImpactProcessDto(Ref Process, bool TopLevel, ProcessImpactKind Kind, bool Direct, IReadOnlyList<string> Reasons, int OpenPainPoints);
+
+public record ImpactInitiativeDto(int ItemId, Ref Product, ItemType ItemType, string Title, ItemStatus Status, int ProgressPct,
+    DateOnly? StartDate, DateOnly? EndDate, string? Owner, bool InFlight, bool OnSubject, IReadOnlyList<string> Applications);
+
+public record ImpactVendorDto(Ref Vendor, bool SuppliesSubject, IReadOnlyList<Ref> Applications, string? SupportPhone,
+    IReadOnlyList<EscalationDto> Escalation, Ref? NextRenewalContract, DateOnly? NoticeDeadline);
+
+public record ImpactDto(EndpointDto Subject, int Depth, DateOnly AsOf, ImpactSeverity Severity, IReadOnlyList<string> SeverityReasons, string Summary,
+    IReadOnlyList<ImpactIntegrationDto> Integrations, IReadOnlyList<ImpactNodeDto> Applications, IReadOnlyList<ImpactNodeDto> Partners,
+    IReadOnlyList<ImpactProcessDto> Processes, IReadOnlyList<ImpactInitiativeDto> Initiatives, IReadOnlyList<ImpactVendorDto> Vendors,
+    IReadOnlyList<RiskDto> OpenRisks, IReadOnlyList<PainPointDto> OpenPainPoints)
+{
+    public static ImpactDto From(ImpactReport r) => new(EndpointDto.Of(r.Subject, r.SubjectName), r.Depth, r.AsOf, r.Severity, r.SeverityReasons, r.Summary,
+        r.Integrations.Select(ii => new ImpactIntegrationDto(new Ref(ii.Integration.Id, ii.Integration.Name), ii.Direct, ii.Distance,
+            EndpointDto.Of(ii.Integration.SourceNode, ii.Integration.SourceName), EndpointDto.Of(ii.Integration.TargetNode, ii.Integration.TargetName),
+            ii.Integration.Via is { } v ? new Ref(v.Id, v.Name) : null, ii.Integration.Type, ii.Integration.Criticality, ii.Risk)).ToList(),
+        r.Applications.Select(Node).ToList(),
+        r.Partners.Select(Node).ToList(),
+        r.Processes.Select(p => new ImpactProcessDto(new Ref(p.Process.Id, p.Process.Name), p.IsTopLevel, p.Kind, p.Direct, p.Reasons, p.OpenPainPoints)).ToList(),
+        r.Initiatives.Select(i => new ImpactInitiativeDto(i.Item.ItemId, new Ref(i.Item.ProductId, i.Item.ProductName), i.Item.ItemType, i.Item.Title,
+            i.Item.Status, i.Item.ProgressPct, i.Item.StartDate, i.Item.EndDate, i.Item.Owner, i.Item.InFlight, i.OnSubject, i.Applications)).ToList(),
+        r.Vendors.Select(v => new ImpactVendorDto(new Ref(v.Vendor.Id, v.Vendor.Name), v.SuppliesSubject,
+            v.Applications.Select(a => new Ref(a.Id, a.Name)).ToList(), v.Vendor.SupportPhone,
+            v.Escalation.Where(e => e.Contact is not null)
+                .Select(e => new EscalationDto(e.Level, new Ref(e.ContactId, e.Contact!.Name), e.Contact.Title, e.Contact.Email, e.Contact.Phone, e.Note)).ToList(),
+            v.NextRenewal is { } c ? new Ref(c.Id, c.Name) : null, v.NextRenewal?.NoticeDeadline)).ToList(),
+        r.OpenRisks.Select(x => RiskDto.From(x.Risk)).ToList(),
+        r.OpenPainPoints.Select(x => PainPointDto.From(x.PainPoint)).ToList());
+
+    private static ImpactNodeDto Node(ImpactedNode n) => new(EndpointDto.Of(n.Node, n.Name), n.Distance, n.Application?.Criticality, n.Partner?.Importance);
 }

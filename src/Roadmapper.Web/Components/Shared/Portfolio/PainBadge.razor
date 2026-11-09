@@ -1,0 +1,5 @@
+<span class="badge pain-@Severity" title="Pain point severity">@PortfolioText.Label(Severity)</span>
+
+@code {
+    [Parameter, EditorRequired] public PainSeverity Severity { get; set; }
+}

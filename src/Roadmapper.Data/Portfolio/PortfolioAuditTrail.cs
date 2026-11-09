@@ -104,6 +104,37 @@ internal static class PortfolioAuditTrail
             [nameof(TradingPartner.RelationshipOwnerId)] = "Relationship owner",
             [nameof(TradingPartner.Notes)] = "Notes",
         },
+        [typeof(BusinessProcess)] = new()
+        {
+            [nameof(BusinessProcess.Name)] = "Name",
+            [nameof(BusinessProcess.Description)] = "Description",
+            [nameof(BusinessProcess.Domain)] = "Domain",
+            [nameof(BusinessProcess.ProcessOwnerId)] = "Process owner",
+            [nameof(BusinessProcess.ParentProcessId)] = "Part of",
+        },
+        [typeof(ProcessApplication)] = new()
+        {
+            [nameof(ProcessApplication.Usage)] = "Usage",
+            [nameof(ProcessApplication.IsPrimary)] = "Primary system",
+        },
+        [typeof(ProcessPainPoint)] = new()
+        {
+            [nameof(ProcessPainPoint.Description)] = "Description",
+            [nameof(ProcessPainPoint.Severity)] = "Severity",
+            [nameof(ProcessPainPoint.ApplicationId)] = "Application",
+            [nameof(ProcessPainPoint.AddressedByItemId)] = "Addressed by",
+            [nameof(ProcessPainPoint.Status)] = "Status",
+        },
+        [typeof(ProcessKpi)] = new()
+        {
+            [nameof(ProcessKpi.Name)] = "Name",
+            [nameof(ProcessKpi.Unit)] = "Unit",
+            [nameof(ProcessKpi.Direction)] = "Direction",
+            [nameof(ProcessKpi.Baseline)] = "Baseline",
+            [nameof(ProcessKpi.Target)] = "Target",
+            [nameof(ProcessKpi.Current)] = "Current",
+            [nameof(ProcessKpi.MeasuredOn)] = "Measured on",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -122,7 +153,8 @@ internal static class PortfolioAuditTrail
         {
             var entity = entry.Entity;
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
-                or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner)) continue;
+                or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
+                or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi)) continue;
 
             switch (entry.State)
             {
@@ -209,6 +241,44 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Deleted) entry.OldValue = risk;
                     break;
                 }
+                case BusinessProcess bp:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Process, bp.Id, bp.Name, field);
+                    break;
+                // A process's applications, integrations, pain points and KPIs are filed under the process.
+                case ProcessApplication pa:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Process, pa.ProcessId, await ProcessNameAsync(db, pa.ProcessId, ct));
+                    var app = await AppNameAsync(db, pa.ApplicationId, ct);
+                    entry.Field = field is null ? "Application used" : $"Use of {app} · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = app;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = app;
+                    break;
+                }
+                case ProcessIntegration pi:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Process, pi.ProcessId, await ProcessNameAsync(db, pi.ProcessId, ct));
+                    entry.Field = "Relies on integration";
+                    var name = await IntegrationNameAsync(db, pi.IntegrationId, ct);
+                    if (p.Action == AuditAction.Created) entry.NewValue = name; else entry.OldValue = name;
+                    break;
+                }
+                case ProcessPainPoint pp:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Process, pp.ProcessId, await ProcessNameAsync(db, pp.ProcessId, ct));
+                    var pain = Truncate(pp.Description.Length > 80 ? pp.Description[..77] + "…" : pp.Description);
+                    entry.Field = field is null ? "Pain point" : $"Pain point “{pain}” · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = $"{pain} ({pp.Severity})";
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = pain;
+                    break;
+                }
+                case ProcessKpi k:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Process, k.ProcessId, await ProcessNameAsync(db, k.ProcessId, ct));
+                    entry.Field = field is null ? "KPI" : $"KPI “{k.Name}” · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = k.Name;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = k.Name;
+                    break;
+                }
                 default:
                     continue;
             }
@@ -234,11 +304,14 @@ internal static class PortfolioAuditTrail
             nameof(Application.ProductId) => await db.Products.AsNoTracking().Where(p => p.Id == (int)value).Select(p => p.Name).FirstOrDefaultAsync(ct),
             nameof(Application.BusinessOwnerId) or nameof(Application.TechnicalOwnerId)
                 or nameof(Vendor.AccountManagerId) or nameof(Vendor.TechnicalContactId)
-                or nameof(Integration.OwnerId) or nameof(TradingPartner.RelationshipOwnerId) => await ContactNameAsync(db, (int)value, ct),
+                or nameof(Integration.OwnerId) or nameof(TradingPartner.RelationshipOwnerId)
+                or nameof(BusinessProcess.ProcessOwnerId) => await ContactNameAsync(db, (int)value, ct),
+            nameof(BusinessProcess.ParentProcessId) => await ProcessNameAsync(db, (int)value, ct),
+            nameof(ProcessPainPoint.AddressedByItemId) => await ItemTitleAsync(db, (int)value, ct),
             nameof(Integration.SourcePartnerId) or nameof(Integration.TargetPartnerId)
                 or nameof(Contact.TradingPartnerId) => await PartnerNameAsync(db, (int)value, ct),
             nameof(Integration.SourceApplicationId) or nameof(Integration.TargetApplicationId)
-                or nameof(Integration.ViaApplicationId) => await AppNameAsync(db, (int)value, ct),
+                or nameof(Integration.ViaApplicationId) or nameof(ProcessPainPoint.ApplicationId) => await AppNameAsync(db, (int)value, ct),
             _ => PortfolioText.Format(value),
         };
         return Truncate(text ?? $"#{value}");
@@ -269,6 +342,11 @@ internal static class PortfolioAuditTrail
     private static async Task<string> IntegrationNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
         db.Integrations.Local.FirstOrDefault(i => i.Id == id)?.Name
         ?? await db.Integrations.AsNoTracking().Where(i => i.Id == id).Select(i => i.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> ProcessNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.BusinessProcesses.Local.FirstOrDefault(p => p.Id == id)?.Name
+        ?? await db.BusinessProcesses.AsNoTracking().Where(p => p.Id == id).Select(p => p.Name).FirstOrDefaultAsync(ct)
         ?? $"#{id}";
 
     private static async Task<string> ItemTitleAsync(RoadmapDbContext db, int id, CancellationToken ct) =>

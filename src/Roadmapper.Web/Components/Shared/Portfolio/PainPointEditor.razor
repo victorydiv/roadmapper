@@ -1,0 +1,212 @@
+@inject PortfolioService Svc
+@inject RoadmapService Roadmaps
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? "New pain point" : "Edit pain point")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(false)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <label class="field">Pain point
+                    <InputTextArea @bind-Value="draft.Description" placeholder="What slows the process down or causes errors, and what it costs" autofocus />
+                </label>
+                <div class="grid-3">
+                    <label class="field">Severity
+                        <InputSelect @bind-Value="draft.Severity">
+                            @foreach (var s in Enum.GetValues<PainSeverity>())
+                            {
+                                <option value="@s">@PortfolioText.Label(s)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field">Status
+                        <InputSelect @bind-Value="draft.Status">
+                            @foreach (var s in Enum.GetValues<PainPointStatus>())
+                            {
+                                <option value="@s">@PortfolioText.Label(s)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="The application where it hurts, if one">Application
+                        <InputSelect @bind-Value="draft.ApplicationId">
+                            <option value="">— none —</option>
+                            @foreach (var a in apps)
+                            {
+                                <option value="@a.Id">@a.Name</option>
+                            }
+                        </InputSelect>
+                    </label>
+                </div>
+
+                <fieldset>
+                    <legend>Addressed by</legend>
+                    @if (draft.AddressedByItemId is { } itemId && current is { } c && c.Id == itemId)
+                    {
+                        <div class="row nowrap">
+                            <span class="inline-gap"><TypeBadge Type="c.ItemType" /> <b>@c.Title</b> <span class="muted small">· @c.Path</span></span>
+                            <span class="spacer"></span>
+                            <button type="button" class="btn sm" @onclick="() => { draft.AddressedByItemId = null; current = null; }">Unlink</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row nowrap">
+                            <button type="button" class="btn sm @(mode == Mode.Link ? "primary" : "")" @onclick="() => mode = Mode.Link">Link an existing item</button>
+                            <button type="button" class="btn sm @(mode == Mode.Create ? "primary" : "")" @onclick="() => mode = Mode.Create">Create an initiative</button>
+                        </div>
+                        @if (mode != Mode.None)
+                        {
+                            <div class="grid-2">
+                                <label class="field">Roadmap
+                                    <select @bind="productId" @bind:after="LoadItemsAsync">
+                                        <option value="0">— roadmap —</option>
+                                        @foreach (var p in products)
+                                        {
+                                            <option value="@p.Id">@p.Name</option>
+                                        }
+                                    </select>
+                                </label>
+                                @if (mode == Mode.Link)
+                                {
+                                    <label class="field">Item
+                                        <select @bind="linkItemId" disabled="@(productId == 0)">
+                                            <option value="0">— item —</option>
+                                            @foreach (var i in items)
+                                            {
+                                                <option value="@i.Id">@i.ItemType: @(i.Path.Length > 0 ? $"{i.Path} › " : "")@i.Title</option>
+                                            }
+                                        </select>
+                                    </label>
+                                }
+                                else
+                                {
+                                    <label class="field" title="An Initiative sits under a Goal">Under goal
+                                        <select @bind="goalId" disabled="@(productId == 0)">
+                                            <option value="0">— goal —</option>
+                                            @foreach (var g in goals)
+                                            {
+                                                <option value="@g.Id">@g.Title</option>
+                                            }
+                                        </select>
+                                    </label>
+                                }
+                            </div>
+                            @if (mode == Mode.Create)
+                            {
+                                <label class="field">Initiative title
+                                    <input @bind="newTitle" placeholder="e.g. Automate accessorial billing" />
+                                </label>
+                                @if (productId != 0 && goals.Count == 0)
+                                {
+                                    <div class="muted small">This roadmap has no goals yet. Add one on the roadmap first: an Initiative must sit under a Goal.</div>
+                                }
+                                <div class="muted small">Created as an Idea, with this pain point as its description. Open it in the roadmap to plan and score it.</div>
+                            }
+                        }
+                    }
+                </fieldset>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingDelete)
+                    {
+                        <span class="small">Delete this pain point?</span>
+                        <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                        <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(false)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@saving">@SaveLabel</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PainPointDraft Draft { get; set; } = default!;
+    /// <summary>The roadmap item the pain point is linked to, when editing; shown with its path.</summary>
+    [Parameter] public ItemOption? Current { get; set; }
+    /// <summary>Called with true when something was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private enum Mode { None, Link, Create }
+
+    private PainPointDraft draft = default!;
+    private ItemOption? current;
+    private List<Application> apps = [];
+    private List<(int Id, string Name)> products = [];
+    private List<ItemOption> items = [], goals = [];
+    private Mode mode;
+    private int productId, linkItemId, goalId;
+    private string? newTitle;
+    private bool saving, confirmingDelete;
+    private string? error;
+
+    private string SaveLabel => mode == Mode.Create && draft.AddressedByItemId is null && goalId != 0
+        ? "Save and create initiative"
+        : draft.IsNew ? "Create" : "Save";
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        current = Current;
+        apps = (await Svc.GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired || a.Id == draft.ApplicationId).ToList();
+        products = await Svc.GetProductOptionsAsync();
+    }
+
+    private async Task LoadItemsAsync()
+    {
+        linkItemId = goalId = 0;
+        items = productId == 0 ? [] : await Svc.GetLinkableItemsAsync(productId);
+        goals = productId == 0 ? [] : await Svc.GetGoalsAsync(productId);
+        if (goals.Count == 1) goalId = goals[0].Id;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            if (draft.Validate() is { } invalid) throw new InvalidOperationException(invalid);
+            if (draft.AddressedByItemId is null && mode == Mode.Link && linkItemId != 0) draft.AddressedByItemId = linkItemId;
+            if (draft.AddressedByItemId is null && mode == Mode.Create && (goalId != 0 || !string.IsNullOrWhiteSpace(newTitle)))
+            {
+                if (goalId == 0) throw new InvalidOperationException("Pick the roadmap and goal the new initiative goes under.");
+                if (string.IsNullOrWhiteSpace(newTitle)) throw new InvalidOperationException("Give the new initiative a title.");
+                var item = ItemDraft.New(productId, ItemType.Initiative, goalId);
+                item.Title = newTitle.Trim();
+                item.Description = draft.Description.Trim();
+                item.Status = ItemStatus.Idea;
+                draft.AddressedByItemId = await Roadmaps.SaveItemAsync(item);
+            }
+            await Svc.SavePainPointAsync(draft);
+            await CloseAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeletePainPointAsync(draft.Id);
+        await CloseAsync(true);
+    }
+
+    private Task CloseAsync(bool changed) => OnClose.InvokeAsync(changed);
+}

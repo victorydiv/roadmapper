@@ -1,0 +1,19 @@
+@* A KPI's current value against its target: "96.5% → 99%" with a progress bar from baseline to target. *@
+<span class="kpi @(Kpi.OnTarget switch { true => "kpi-on", false => "kpi-off", _ => "" })"
+      title="@Tooltip">
+    <b>@PortfolioUi.Number(Kpi.Current, Kpi.Unit)</b>
+    <span class="muted small">target @PortfolioUi.Number(Kpi.Target, Kpi.Unit)</span>
+    @if (Kpi.ProgressPct is { } pct)
+    {
+        <span class="progress kpi-bar"><span style="width:@Math.Clamp(pct, 0, 100)%"></span></span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ProcessKpi Kpi { get; set; } = default!;
+
+    private string Tooltip =>
+        $"Baseline {PortfolioUi.Number(Kpi.Baseline, Kpi.Unit)} · {PortfolioText.Label(Kpi.Direction).ToLowerInvariant()}" +
+        (Kpi.ProgressPct is { } p ? $" · {p}% of the way from baseline to target" : "") +
+        (Kpi.MeasuredOn is { } d ? $" · measured {PortfolioUi.Date(d)}" : "");
+}

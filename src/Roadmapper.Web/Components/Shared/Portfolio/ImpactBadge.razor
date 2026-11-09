@@ -1,0 +1,6 @@
+<span class="badge impact-@Severity" title="@Title">@PortfolioText.Label(Severity)</span>
+
+@code {
+    [Parameter, EditorRequired] public ImpactSeverity Severity { get; set; }
+    [Parameter] public string? Title { get; set; }
+}

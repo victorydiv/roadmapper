@@ -1,0 +1,350 @@
+@page "/portfolio/processes/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (process is null)
+{
+    <PageTitle>Process not found</PageTitle>
+    <div class="card empty">
+        <h2>Process not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/processes">Back to processes</a></p>
+    </div>
+}
+else
+{
+    <PortfolioHeader Title="@process.Name" Subtitle="@process.Description" Parent="@(("Processes", "/portfolio/processes"))">
+        <span class="badge tag">@PortfolioText.Label(process.Domain)</span>
+        <button class="btn" @onclick="() => editing = ProcessDraft.From(process)">Edit</button>
+    </PortfolioHeader>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Overview</h2>
+            <dl class="facts">
+                <dt>Process owner</dt>
+                <dd>
+                    @if (process.ProcessOwner is { } o)
+                    {
+                        <span class="inline-gap">@o.Name @if (o.Title is { } t) { <span class="muted small">· @t</span> } @if (o.Email is { } e) { <a class="small" href="mailto:@e">@e</a> }</span>
+                    }
+                    else { <span class="muted">–</span> }
+                </dd>
+                <dt>Part of</dt>
+                <dd>
+                    @if (ancestors.Count > 0)
+                    {
+                        @foreach (var (a, n) in ancestors.Select((a, n) => (a, n)))
+                        {
+                            @if (n > 0) { <text> › </text> }
+                            <a href="/portfolio/processes/@a.Id">@a.Name</a>
+                        }
+                    }
+                    else { <span class="muted">Top level</span> }
+                </dd>
+                <dt>Sub-processes</dt>
+                <dd>
+                    @if (process.Children.Count > 0)
+                    {
+                        @foreach (var (c, n) in process.Children.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select((c, n) => (c, n)))
+                        {
+                            @if (n > 0) { <text>, </text> }
+                            <a href="/portfolio/processes/@c.Id">@c.Name</a>
+                        }
+                    }
+                    else { <span class="muted">None</span> }
+                    <button class="btn sm" style="margin-left:.4rem" @onclick="() => editing = new ProcessDraft { ParentProcessId = process.Id, Domain = process.Domain, ProcessOwnerId = process.ProcessOwnerId }">+ Add step</button>
+                </dd>
+            </dl>
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">KPIs</h2>
+                <span class="spacer"></span>
+                <button class="btn" @onclick="() => editingKpi = KpiDraft.New(process.Id)">+ Add KPI</button>
+            </div>
+            @if (process.Kpis.Count == 0)
+            {
+                <div class="muted small">No KPIs yet. Add the measures the business watches for this process, with a baseline and target.</div>
+            }
+            <ul class="dep-list kpi-list">
+                @foreach (var k in process.Kpis.OrderBy(k => k.Name))
+                {
+                    <li>
+                        <span class="kpi-name">@k.Name</span>
+                        <KpiValue Kpi="k" />
+                        <span class="spacer"></span>
+                        <button class="btn sm" @onclick="() => editingKpi = KpiDraft.From(k)">Edit</button>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Applications used</h2>
+            <span class="muted small">A change to any of these shows up in this process's impact. Mark the main system as primary.</span>
+        </div>
+        @if (process.Applications.Count == 0)
+        {
+            <div class="muted small">None yet.</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead><tr><th>Application</th><th>Used for</th><th>Primary</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var pa in process.Applications.OrderByDescending(a => a.IsPrimary).ThenBy(a => a.Application?.Name))
+                        {
+                            <tr>
+                                <td class="title-cell">
+                                    <span class="inline-gap">
+                                        <a href="/portfolio/applications/@pa.ApplicationId">@pa.Application?.Name</a>
+                                        @if (pa.Application is { } app) { <TierBadge Tier="app.Criticality" /> @if (app.Status != LifecycleStatus.Active) { <LifecycleBadge Status="app.Status" /> } }
+                                    </span>
+                                </td>
+                                <td><input value="@pa.Usage" placeholder="What the process uses it for" @onchange="e => RunAsync(() => Svc.SetProcessApplicationAsync(process.Id, pa.ApplicationId, e.Value as string, pa.IsPrimary))" /></td>
+                                <td><input type="checkbox" checked="@pa.IsPrimary" @onchange="e => RunAsync(() => Svc.SetProcessApplicationAsync(process.Id, pa.ApplicationId, pa.Usage, e.Value is true))" /></td>
+                                <td><button class="btn sm" @onclick="() => RunAsync(() => Svc.RemoveProcessApplicationAsync(process.Id, pa.ApplicationId))">Remove</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="row add-row">
+            <select @bind="newAppId" style="width:auto">
+                <option value="0">— application —</option>
+                @foreach (var a in apps.Where(a => process.Applications.All(pa => pa.ApplicationId != a.Id)))
+                {
+                    <option value="@a.Id">@a.Name</option>
+                }
+            </select>
+            <input placeholder="Used for (optional)" @bind="newUsage" style="flex:1" />
+            <label class="check"><input type="checkbox" @bind="newPrimary" /> Primary</label>
+            <button class="btn" disabled="@(newAppId == 0)" @onclick="AddAppAsync">Add</button>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Integrations relied on</h2>
+            <span class="muted small">Flows this process stops or degrades without. Link them so a change upstream reaches this process.</span>
+        </div>
+        @if (process.Integrations.Count == 0)
+        {
+            <div class="muted small">None yet.</div>
+        }
+        else
+        {
+            <ul class="dep-list">
+                @foreach (var i in process.Integrations.Select(pi => pi.Integration!).OrderBy(i => i.Criticality).ThenBy(i => i.Name))
+                {
+                    <li>
+                        <span class="inline-gap">
+                            <a href="/portfolio/integrations/@i.Id"><b>@i.Name</b></a>
+                            <IntegrationTypeBadge Type="i.Type" />
+                            <TierBadge Tier="i.Criticality" />
+                            <RiskBadge Level="PortfolioRules.RiskLevel(i, today)" />
+                            @if (i.Status != LifecycleStatus.Active) { <LifecycleBadge Status="i.Status" /> }
+                            <span class="muted small">@i.SourceName → @(i.Via is { } v ? $"{v.Name} → " : "")@i.TargetName</span>
+                        </span>
+                        <span class="spacer"></span>
+                        <button class="btn sm" @onclick="() => RunAsync(() => Svc.RemoveProcessIntegrationAsync(process.Id, i.Id))">Remove</button>
+                    </li>
+                }
+            </ul>
+        }
+        <div class="row add-row">
+            <select @bind="newIntegrationId" style="flex:1;width:auto">
+                <option value="0">— integration —</option>
+                @foreach (var group in SuggestedIntegrations)
+                {
+                    <optgroup label="@group.Key">
+                        @foreach (var i in group)
+                        {
+                            <option value="@i.Id">@i.Name (@i.SourceName → @i.TargetName)</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+            <button class="btn" disabled="@(newIntegrationId == 0)" @onclick="AddIntegrationAsync">Add</button>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Pain points</h2>
+            <span class="muted small">What slows this process down or causes errors. Link each to the roadmap item that fixes it, or create one.</span>
+            <span class="spacer"></span>
+            <label class="check small"><input type="checkbox" @bind="showClosed" /> Show addressed</label>
+            <button class="btn" @onclick="() => { editingPain = PainPointDraft.New(process.Id); painItem = null; }">+ Add pain point</button>
+        </div>
+        @{ var pains = process.PainPoints.Where(pp => showClosed || pp.Status == PainPointStatus.Open).OrderBy(pp => pp.Status).ThenByDescending(pp => pp.Severity).ToList(); }
+        @if (pains.Count == 0)
+        {
+            <div class="muted small">@(process.PainPoints.Count == 0 ? "None recorded." : "No open pain points.")</div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="tree">
+                    <thead><tr><th>Pain point</th><th>Severity</th><th>Application</th><th>Addressed by</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var pp in pains)
+                        {
+                            <tr class="@(pp.Status == PainPointStatus.Open ? "" : "muted")">
+                                <td>@pp.Description</td>
+                                <td><PainBadge Severity="pp.Severity" /></td>
+                                <td>@if (pp.Application is { } a) { <a href="/portfolio/applications/@a.Id">@a.Name</a> } else { <span class="muted">–</span> }</td>
+                                <td>
+                                    @if (pp.AddressedBy is { } item)
+                                    {
+                                        <span class="inline-gap">
+                                            <TypeBadge Type="item.ItemType" />
+                                            <a href="/products/@item.ProductId">@item.Title</a>
+                                            <StatusBadge Status="item.Status" />
+                                            <span class="muted small">@item.Product?.Name</span>
+                                        </span>
+                                    }
+                                    else { <span class="muted">Not on a roadmap</span> }
+                                </td>
+                                <td>@PortfolioText.Label(pp.Status)</td>
+                                <td><button class="btn sm" @onclick="() => EditPainAsync(pp)">Edit</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>History</h2>
+        <PortfolioActivityList Entries="history" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <ProcessEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+@if (editingKpi is not null)
+{
+    <KpiEditor Draft="editingKpi" OnClose="OnChildClosed" />
+}
+@if (editingPain is not null)
+{
+    <PainPointEditor Draft="editingPain" Current="painItem" OnClose="OnChildClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private BusinessProcess? process;
+    private bool loaded, showClosed;
+    private string? error;
+    private DateOnly today;
+    private List<BusinessProcess> ancestors = [];
+    private List<Application> apps = [];
+    private List<Integration> integrations = [];
+    private List<PortfolioAuditEntry> history = [];
+    private ProcessDraft? editing;
+    private KpiDraft? editingKpi;
+    private PainPointDraft? editingPain;
+    private ItemOption? painItem;
+
+    private int newAppId, newIntegrationId;
+    private string? newUsage;
+    private bool newPrimary;
+
+    /// <summary>Integrations touching the process's applications first, then the rest; already-linked ones left out.</summary>
+    private IEnumerable<IGrouping<string, Integration>> SuggestedIntegrations
+    {
+        get
+        {
+            var appIds = process!.Applications.Select(a => a.ApplicationId).ToHashSet();
+            bool Touches(Integration i) => new[] { i.SourceApplicationId, i.TargetApplicationId, i.ViaApplicationId }.Any(id => id is { } x && appIds.Contains(x));
+            return integrations
+                .Where(i => i.Status != LifecycleStatus.Retired && process.Integrations.All(pi => pi.IntegrationId != i.Id))
+                .OrderBy(i => i.Name)
+                .GroupBy(i => Touches(i) ? "Touching this process's applications" : "Other integrations")
+                .OrderBy(g => g.Key.StartsWith("Other") ? 1 : 0);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        apps = (await Svc.GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired).ToList();
+        integrations = await Svc.GetIntegrationsAsync();
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        process = await Svc.GetProcessAsync(Id);
+        if (process is null) return;
+        var all = await Svc.GetProcessesAsync();
+        var parentOf = all.ToDictionary(p => p.Id, p => p.ParentProcessId);
+        var byId = all.ToDictionary(p => p.Id);
+        ancestors = PortfolioRules.SelfAndAncestors(Id, parentOf).Skip(1).Reverse().Select(id => byId[id]).ToList();
+        history = await Svc.GetActivityAsync(PortfolioEntityType.Process, Id);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await ReloadAsync();
+    }
+
+    private async Task AddAppAsync()
+    {
+        await RunAsync(() => Svc.SetProcessApplicationAsync(Id, newAppId, newUsage, newPrimary));
+        if (error is null) { newAppId = 0; newUsage = null; newPrimary = false; }
+    }
+
+    private async Task AddIntegrationAsync()
+    {
+        await RunAsync(() => Svc.AddProcessIntegrationAsync(Id, newIntegrationId));
+        newIntegrationId = 0;
+    }
+
+    private async Task EditPainAsync(ProcessPainPoint pp)
+    {
+        painItem = null;
+        if (pp.AddressedBy is { } item)
+            painItem = (await Svc.GetLinkableItemsAsync(item.ProductId)).FirstOrDefault(i => i.Id == item.Id)
+                ?? new ItemOption(item.Id, item.ItemType, item.Title, item.Product?.Name ?? "");
+        editingPain = PainPointDraft.From(pp);
+    }
+
+    private async Task OnEditorClosed(int? result)
+    {
+        editing = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/processes"); return; }
+        if (result is { } id && id != Id) { Nav.NavigateTo($"/portfolio/processes/{id}"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+
+    private async Task OnChildClosed(bool changed)
+    {
+        editingKpi = null;
+        editingPain = null;
+        if (changed) await ReloadAsync();
+    }
+}
