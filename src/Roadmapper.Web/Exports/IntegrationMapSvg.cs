@@ -5,8 +5,12 @@ using Roadmapper.Core.Portfolio;
 
 namespace Roadmapper.Web.Exports;
 
-/// <summary>What to draw. With <see cref="FocusId"/> it's a dependency view (upstream | app | downstream); otherwise the whole catalog by category.</summary>
-public sealed record MapOptions(int? FocusId = null, int Depth = 2, IntegrationType? Type = null, Criticality? MaxTier = null, bool IncludeRetired = false);
+/// <summary>
+/// What to draw. With <see cref="FocusId"/> it's a dependency view (upstream | app | downstream); otherwise the whole catalog by
+/// category. <see cref="HideExternal"/> drops flows to or from external parties (customers, carriers, trading partners).
+/// </summary>
+public sealed record MapOptions(int? FocusId = null, int Depth = 2, IntegrationType? Type = null, Criticality? MaxTier = null,
+    bool IncludeRetired = false, bool HideExternal = false);
 
 public sealed record MapPicture(string Svg, int ApplicationCount, int IntegrationCount);
 
@@ -42,7 +46,12 @@ public static class IntegrationMapSvg
         .Where(i => o.IncludeRetired || i.Status != LifecycleStatus.Retired)
         .Where(i => o.Type is null || i.Type == o.Type)
         .Where(i => o.MaxTier is null || i.Criticality <= o.MaxTier)
+        .Where(i => !o.HideExternal || !TouchesExternal(i))
         .ToList();
+
+    /// <summary>True when the source, target or middle hop is an external party. Needs Source/Target/Via loaded.</summary>
+    public static bool TouchesExternal(Integration i) =>
+        new[] { i.Source, i.Target, i.Via }.Any(a => a?.Category == AppCategory.ExternalParty);
 
     public static MapPicture Render(IReadOnlyList<Application> apps, IReadOnlyList<Integration> integrations, MapOptions o, DateOnly today, string title)
     {

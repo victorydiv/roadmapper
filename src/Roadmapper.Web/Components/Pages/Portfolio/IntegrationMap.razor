@@ -47,6 +47,7 @@ else
             <option value="@Criticality.Tier2">Tier 1 and 2</option>
         </select>
         <label class="check"><input type="checkbox" @bind="includeRetired" /> Show retired</label>
+        <label class="check" title="Customers, carriers and trading partners"><input type="checkbox" @bind="showExternal" /> Show external parties</label>
         @if (Focus is { } f)
         {
             <a class="small" href="/portfolio/applications/@f">Open @apps.FirstOrDefault(a => a.Id == f)?.Name →</a>
@@ -81,7 +82,7 @@ else
     private DateOnly today;
     private IntegrationType? type;
     private Criticality? maxTier;
-    private bool includeRetired;
+    private bool includeRetired, showExternal = true;
 
     private int FocusValue
     {
@@ -95,7 +96,7 @@ else
         set => Nav.NavigateTo(Nav.GetUriWithQueryParameter("depth", value), replace: true);
     }
 
-    private MapOptions Options => new(Focus, Depth ?? 2, type, maxTier, includeRetired);
+    private MapOptions Options => new(Focus, Depth ?? 2, type, maxTier, includeRetired, HideExternal: !showExternal);
 
     private MapPicture Picture
     {
@@ -115,6 +116,7 @@ else
             if (type is { } t) query.Add($"type={t}");
             if (maxTier is { } m) query.Add($"tier={(int)m}");
             if (includeRetired) query.Add("retired=true");
+            if (!showExternal) query.Add("external=false");
             return "/api/portfolio/map.svg?" + string.Join("&", query);
         }
     }

@@ -64,10 +64,11 @@ public static class PortfolioApi
             await svc.GetDependenciesAsync(id, depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
 
         // The integration map as SVG. ?focus={applicationId}&depth=2 draws its dependency view; type, tier (1–3: that tier
-        // and more critical) and retired=true filter; download=true saves it as a file.
-        api.MapGet("/map.svg", async (PortfolioService svc, int? focus, int? depth, string? type, string? tier, bool? retired, bool? download) =>
+        // and more critical), retired=true and external=false (leave out customers, carriers and other external parties) filter;
+        // download=true saves it as a file.
+        api.MapGet("/map.svg", async (PortfolioService svc, int? focus, int? depth, string? type, string? tier, bool? retired, bool? external, bool? download) =>
         {
-            var options = new MapOptions(focus, depth ?? 2, Parse<IntegrationType>(type), ParseTier(tier), retired == true);
+            var options = new MapOptions(focus, depth ?? 2, Parse<IntegrationType>(type), ParseTier(tier), retired == true, HideExternal: external == false);
             var apps = await svc.GetApplicationsAsync();
             var title = focus is { } f && apps.FirstOrDefault(a => a.Id == f) is { } app ? $"{app.Name}: dependencies" : "Integration map";
             var picture = IntegrationMapSvg.Render(apps, await svc.GetIntegrationsAsync(), options, svc.Today, title);

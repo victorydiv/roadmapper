@@ -86,6 +86,7 @@ else
             }
         </select>
         <label class="check"><input type="checkbox" @bind="overdueOnly" /> Review overdue</label>
+        <label class="check" title="Flows to or from customers, carriers and trading partners"><input type="checkbox" @bind="showExternal" /> Show external flows</label>
     </div>
 
     <div class="card">
@@ -107,7 +108,7 @@ else
     private IntegrationDraft? editing;
     private DateOnly today;
     private int settingsMonths = 12;
-    private bool canSeed, overdueOnly;
+    private bool canSeed, overdueOnly, showExternal = true;
     private string? error;
     private string search = "";
     private IntegrationType? type;
@@ -124,6 +125,7 @@ else
         .Where(i => tier is null || i.Criticality == tier)
         .Where(i => risk is null || PortfolioRules.RiskLevel(i, today) == risk)
         .Where(i => !overdueOnly || PortfolioRules.ReviewOverdue(i, today))
+        .Where(i => showExternal || !IntegrationMapSvg.TouchesExternal(i))
         .Where(i => string.IsNullOrWhiteSpace(search)
             || i.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
             || i.BusinessPurpose.Contains(search, StringComparison.OrdinalIgnoreCase)
