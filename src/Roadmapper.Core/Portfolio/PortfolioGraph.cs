@@ -40,7 +40,8 @@ public sealed record Reach(NodeRef Node, int Distance, IReadOnlyList<int> Integr
 /// Applications, trading partners and the integrations between them, for dependency questions: what feeds this
 /// node (upstream) and what it feeds (downstream). Each integration is one step. An integration that runs through
 /// a middle hop links source → via, via → target and source → target, so the source's direct dependents are
-/// both the hop and the target. Bidirectional integrations count in both directions. Cycles are fine.
+/// both the hop and the target. Bidirectional integrations count in both directions. Cycles are fine. Trading
+/// partners are end points: walks stop at them, and a partner's dependencies never include other partners.
 /// </summary>
 public sealed class PortfolioGraph
 {
@@ -94,6 +95,11 @@ public sealed class PortfolioGraph
     /// <summary>Nodes that send data to <paramref name="start"/>, directly or through others, up to <paramref name="maxDepth"/> steps.</summary>
     public IReadOnlyList<Reach> Upstream(NodeRef start, int maxDepth) => Walk(_backward, start, maxDepth);
 
+    /// <summary>
+    /// Breadth-first walk. Trading partners are end points: the walk can arrive at a partner but never carries on
+    /// through one, and a walk that starts at a partner never reports other partners. Two customers that use the
+    /// same WMS depend on the WMS, not on each other.
+    /// </summary>
     private static IReadOnlyList<Reach> Walk(Dictionary<NodeRef, List<(NodeRef To, int IntegrationId)>> adjacency, NodeRef start, int maxDepth)
     {
         var result = new List<Reach>();
@@ -108,7 +114,7 @@ public sealed class PortfolioGraph
                 if (!adjacency.TryGetValue(from, out var next)) continue;
                 foreach (var (to, integrationId) in next)
                 {
-                    if (seen.Contains(to)) continue;
+                    if (seen.Contains(to) || (start.IsPartner && to.IsPartner)) continue;
                     (reached.TryGetValue(to, out var ids) ? ids : reached[to] = new()).Add(integrationId);
                 }
             }
@@ -117,7 +123,7 @@ public sealed class PortfolioGraph
                 seen.Add(node);
                 result.Add(new Reach(node, distance, ids.ToList()));
             }
-            frontier = reached.Keys.ToList();
+            frontier = reached.Keys.Where(n => !n.IsPartner).ToList();
         }
         return result;
     }

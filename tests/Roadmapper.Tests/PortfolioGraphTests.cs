@@ -85,6 +85,33 @@ public class PortfolioGraphTests
         Assert.Equal([P(5)], g.Upstream(A(5), 2).Select(r => r.Node));
     }
 
+    [Fact]
+    public void Two_customers_sharing_a_WMS_do_not_depend_on_each_other()
+    {
+        // Partner 1 ACH and partner 2 PCP, both two-way EDI with the WMS (app 1) through the integration platform (app 2).
+        var g = new PortfolioGraph([
+            new GraphEdge(1, P(1), A(1), Via: A(2), Bidirectional: true),
+            new GraphEdge(3, P(2), A(1), Via: A(2), Bidirectional: true),
+        ]);
+        foreach (var depth in new[] { 1, 2, 5 })
+        {
+            Assert.Equal([A(1), A(2)], g.Downstream(P(2), depth).Select(r => r.Node).Order());
+            Assert.Equal([A(1), A(2)], g.Upstream(P(2), depth).Select(r => r.Node).Order());
+        }
+        // From the WMS, both customers are direct neighbors.
+        Assert.Equal([P(1), P(2)], g.Downstream(A(1), 2).Where(r => r.Node.IsPartner).Select(r => r.Node).Order());
+        Assert.Equal(new[] { A(1), A(2), P(2) }.Order(), MapLayout.FocusColumns(g, P(2), 5).Keys.Order());
+    }
+
+    [Fact]
+    public void Walks_stop_at_partners_instead_of_passing_through_them()
+    {
+        // TMS → carrier and carrier → reporting: the carrier doesn't relay TMS data onward.
+        var g = new PortfolioGraph([new GraphEdge(1, A(1), P(9)), new GraphEdge(2, P(9), A(2))]);
+        Assert.Equal([P(9)], g.Downstream(A(1), 5).Select(r => r.Node));
+        Assert.Equal([A(2)], g.Downstream(P(9), 5).Select(r => r.Node));
+    }
+
     [Theory]
     [InlineData("a12", NodeKind.Application, 12)]
     [InlineData("p3", NodeKind.Partner, 3)]
