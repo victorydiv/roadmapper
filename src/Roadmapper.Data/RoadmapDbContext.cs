@@ -29,6 +29,7 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<Application> Applications => Set<Application>();
     public DbSet<ApplicationSupportContact> ApplicationSupportContacts => Set<ApplicationSupportContact>();
     public DbSet<ApplicationInitiative> ApplicationInitiatives => Set<ApplicationInitiative>();
+    public DbSet<TradingPartner> TradingPartners => Set<TradingPartner>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<IntegrationRisk> IntegrationRisks => Set<IntegrationRisk>();
     public DbSet<PortfolioSettings> PortfolioSettings => Set<PortfolioSettings>();

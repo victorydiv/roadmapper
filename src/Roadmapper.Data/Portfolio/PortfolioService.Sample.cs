@@ -12,7 +12,8 @@ public partial class PortfolioService
     public async Task<bool> IsEmptyAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync();
+        return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
+            && !await db.TradingPartners.AnyAsync();
     }
 
     /// <summary>
@@ -125,8 +126,8 @@ public partial class PortfolioService
     }
 
     /// <summary>
-    /// Adds made-up integrations between the sample applications, plus two external parties (EDI customers and
-    /// carriers) so EDI flows have both ends. Only while there are no integrations.
+    /// Adds made-up integrations between the sample applications, plus three trading partners (two customers and a
+    /// carrier) so EDI flows have both ends. Only while there are no integrations.
     /// </summary>
     public async Task SeedSampleIntegrationsAsync()
     {
@@ -143,30 +144,41 @@ public partial class PortfolioService
                 .GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().Id);
         }
 
-        async Task<int> External(string name, string description)
+        int? Who(string name) => people.TryGetValue(name, out var id) ? id : null;
+        NodeRef App(string name) => NodeRef.App(apps[name].Id);
+
+        async Task<NodeRef> Partner(string name, PartnerType type, PartnerImportance importance, string code, string qualifier, string ediId,
+            string? owner, string? contact = null, string? contactTitle = null)
         {
-            if (apps.TryGetValue(name, out var existing)) return existing.Id;
-            return await SaveApplicationAsync(new ApplicationDraft
+            int id;
+            await using (var db = await dbFactory.CreateDbContextAsync())
+                id = await db.TradingPartners.Where(p => p.Name == name).Select(p => p.Id).FirstOrDefaultAsync();
+            if (id != 0) return NodeRef.Partner(id);
+            id = await SavePartnerAsync(new TradingPartnerDraft
             {
-                Name = name, Description = description, Category = AppCategory.ExternalParty, Criticality = Criticality.Tier1,
-                Hosting = Hosting.SaaS,
+                Name = name, Type = type, Importance = importance, AccountCode = code, EdiQualifier = qualifier, EdiId = ediId,
+                RelationshipOwnerId = owner is null ? null : Who(owner),
             });
+            if (contact is not null)
+                await SaveContactAsync(new ContactDraft { Name = contact, Title = contactTitle, TradingPartnerId = id });
+            return NodeRef.Partner(id);
         }
 
-        int App(string name) => apps[name].Id;
-        int? Who(string name) => people.TryGetValue(name, out var id) ? id : null;
+        var acme = await Partner("Acme Retail", PartnerType.Customer, PartnerImportance.Key, "ACME01", "01", "123456789",
+            "Alex Moreno", "Sam Lee", "EDI Coordinator");
+        var globex = await Partner("Globex Home Goods", PartnerType.Customer, PartnerImportance.Standard, "GLBX", "ZZ", "GLOBEXHOME", "Alex Moreno");
+        var blueRidge = await Partner("Blue Ridge Freight", PartnerType.Carrier, PartnerImportance.Key, "BRFT", "02", "BRFT", "Jordan Ruiz",
+            "Kim Alvarez", "Carrier IT Support");
+        var (wms, tms, erp, portal, reporting, yard) = (App("Northwind WMS"), App("Fabrikam TMS"), App("Litware ERP"),
+            App("Customer Portal"), App("Operations Reporting"), App("Yard Log Spreadsheet"));
+        var edi = apps["Contoso EDI"].Id;
 
-        var customers = await External("Customers (EDI trading partners)", "Retail and e-commerce customers who send orders and receive ship confirmations by EDI.");
-        var carriers = await External("Carriers", "Truckload, LTL and parcel carriers exchanging tenders and shipment status.");
-        var (wms, tms, erp, edi, portal, reporting, yard) = (App("Northwind WMS"), App("Fabrikam TMS"), App("Litware ERP"),
-            App("Contoso EDI"), App("Customer Portal"), App("Operations Reporting"), App("Yard Log Spreadsheet"));
-
-        Task<int> Flow(string name, int source, int target, IntegrationType type, IntegrationFrequency frequency, Criticality tier,
+        Task<int> Flow(string name, NodeRef source, NodeRef target, IntegrationType type, IntegrationFrequency frequency, Criticality tier,
             string purpose, string? format = null, int? via = null, FlowDirection direction = FlowDirection.OneWay,
             string? owner = "Marcus Bell", int reviewedMonthsAgo = 3) =>
             SaveIntegrationAsync(new IntegrationDraft
             {
-                Name = name, SourceApplicationId = source, TargetApplicationId = target, ViaApplicationId = via, Type = type,
+                Name = name, SourceKey = source.Key, TargetKey = target.Key, ViaApplicationId = via, Type = type,
                 Frequency = frequency, Criticality = tier, BusinessPurpose = purpose, MessageFormat = format, Direction = direction,
                 OwnerId = owner is null ? null : Who(owner), LastReviewDate = today.AddMonths(-reviewedMonthsAgo),
             });
@@ -178,17 +190,19 @@ public partial class PortfolioService
                 Mitigation = mitigation, OwnerId = owner is null ? null : Who(owner), RaisedOn = today.AddDays(-40),
             });
 
-        await Flow("Inbound warehouse orders (940)", customers, wms, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
-            "Customers release orders to the warehouse for picking and shipping.", "X12 940", via: edi);
-        var asn = await Flow("Ship confirmations (945)", wms, customers, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
-            "Tells customers what shipped, so they can bill their customers and update inventory.", "X12 945", via: edi);
+        await Flow("Acme warehouse orders (940)", acme, wms, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
+            "Acme releases store and e-commerce orders to the warehouse for picking and shipping.", "X12 940", via: edi);
+        var asn = await Flow("Acme ship confirmations (945)", wms, acme, IntegrationType.EDI, IntegrationFrequency.NearRealTime, Criticality.Tier1,
+            "Tells Acme what shipped, so they can bill their customers and update inventory.", "X12 945", via: edi);
         await Risk(asn, "Trading-partner map changes go live without regression testing.", 3, 5,
             "Add a test partner and replay last week's 945s before each map change.");
         await Flow("Order release for load planning", wms, tms, IntegrationType.API, IntegrationFrequency.NearRealTime, Criticality.Tier1,
             "Sends released orders to the TMS to build loads and tender to carriers.", "JSON");
-        await Flow("Load tenders (204)", tms, carriers, IntegrationType.EDI, IntegrationFrequency.RealTime, Criticality.Tier2,
-            "Offers loads to carriers.", "X12 204", via: edi);
-        await Flow("Shipment status (214)", carriers, tms, IntegrationType.EDI, IntegrationFrequency.Hourly, Criticality.Tier2,
+        await Flow("Globex warehouse orders (940)", globex, wms, IntegrationType.EDI, IntegrationFrequency.Hourly, Criticality.Tier2,
+            "Globex sends replenishment orders for its home-goods stores.", "X12 940", via: edi);
+        await Flow("Load tenders (204)", tms, blueRidge, IntegrationType.EDI, IntegrationFrequency.RealTime, Criticality.Tier2,
+            "Offers loads to Blue Ridge Freight.", "X12 204", via: edi);
+        await Flow("Shipment status (214)", blueRidge, tms, IntegrationType.EDI, IntegrationFrequency.Hourly, Criticality.Tier2,
             "Carrier pickup, in-transit and delivery events for track & trace.", "X12 214", via: edi, reviewedMonthsAgo: 16);
         var billing = await Flow("Billable activity for invoicing", wms, erp, IntegrationType.Batch, IntegrationFrequency.Daily, Criticality.Tier1,
             "Nightly handling, storage and accessorial charges for customer invoicing.", "CSV", owner: "Dana Kim");

@@ -207,7 +207,7 @@ public sealed class PortfolioServiceTests : IDisposable
         await _svc.SeedSampleAsync();
 
         var apps = await _svc.GetApplicationsAsync();
-        Assert.Equal(9, apps.Count); // 7 applications plus 2 external parties for the sample integrations
+        Assert.Equal(7, apps.Count);
         var portal = apps.Single(a => a.Name == "Customer Portal");
         Assert.Equal(PortfolioService.SampleProductName, portal.Product!.Name);
         Assert.Equal(2, (await _svc.GetLinkedItemsAsync(portal.Id)).Count);

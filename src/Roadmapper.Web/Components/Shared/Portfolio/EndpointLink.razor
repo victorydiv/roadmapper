@@ -1,0 +1,15 @@
+@* One end of an integration: an application, or a trading partner (shown as a lilac pill). The current page's own node is bold, not a link. *@
+@if (Node == Current)
+{
+    <b class="@(Node.IsPartner ? "partner-ref" : null)">@Name</b>
+}
+else
+{
+    <a class="@(Node.IsPartner ? "partner-ref" : null)" href="@PortfolioUi.Href(Node)" title="@(Node.IsPartner ? "Trading partner" : null)">@Name</a>
+}
+
+@code {
+    [Parameter, EditorRequired] public NodeRef Node { get; set; }
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter] public NodeRef? Current { get; set; }
+}

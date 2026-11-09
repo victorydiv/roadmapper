@@ -36,14 +36,14 @@ else
         <div class="card stack">
             <h2>Overview</h2>
             <div class="flow-strip">
-                <a class="flow-node" href="/portfolio/applications/@item.SourceApplicationId">@item.Source?.Name</a>
+                <a class="flow-node @(item.SourceNode.IsPartner ? "partner" : null)" href="@PortfolioUi.Href(item.SourceNode)">@item.SourceName</a>
                 <span class="flow-arrow">@(item.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
                 @if (item.Via is { } via)
                 {
                     <a class="flow-node via" href="/portfolio/applications/@via.Id" title="Passes through">@via.Name</a>
                     <span class="flow-arrow">@(item.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
                 }
-                <a class="flow-node" href="/portfolio/applications/@item.TargetApplicationId">@item.Target?.Name</a>
+                <a class="flow-node @(item.TargetNode.IsPartner ? "partner" : null)" href="@PortfolioUi.Href(item.TargetNode)">@item.TargetName</a>
             </div>
             <dl class="facts">
                 <dt>Type</dt>

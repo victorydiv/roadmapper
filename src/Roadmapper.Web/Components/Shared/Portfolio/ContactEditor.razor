@@ -28,15 +28,29 @@
                         <InputText @bind-Value="draft.Phone" />
                     </label>
                     <label class="field">Company
-                        <InputSelect @bind-Value="draft.VendorId">
+                        <InputSelect @bind-Value="draft.CompanyKey">
                             <option value="">Internal (our company)</option>
-                            @foreach (var v in Vendors)
+                            @if (Vendors.Count > 0)
                             {
-                                <option value="@v.Id">@v.Name</option>
+                                <optgroup label="Vendors">
+                                    @foreach (var v in Vendors)
+                                    {
+                                        <option value="v@(v.Id)">@v.Name</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (Partners.Count > 0)
+                            {
+                                <optgroup label="Trading partners">
+                                    @foreach (var tp in Partners)
+                                    {
+                                        <option value="p@(tp.Id)">@tp.Name</option>
+                                    }
+                                </optgroup>
                             }
                         </InputSelect>
                     </label>
-                    @if (draft.VendorId is null)
+                    @if (draft.IsInternal)
                     {
                         <label class="field">Department
                             <InputText @bind-Value="draft.Department" placeholder="e.g. Operations – Memphis DC" />
@@ -78,6 +92,7 @@
 @code {
     [Parameter, EditorRequired] public ContactDraft Draft { get; set; } = default!;
     [Parameter] public IReadOnlyList<Vendor> Vendors { get; set; } = [];
+    [Parameter] public IReadOnlyList<TradingPartner> Partners { get; set; } = [];
     /// <summary>Called with true when anything was saved or deleted.</summary>
     [Parameter] public EventCallback<bool> OnClose { get; set; }
 

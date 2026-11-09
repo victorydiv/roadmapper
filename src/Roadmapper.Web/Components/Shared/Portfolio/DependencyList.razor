@@ -12,8 +12,9 @@
                 <li>
                     <span class="distance" title="@(r.Distance == 1 ? "Direct" : $"{r.Distance} integrations away")">@r.Distance</span>
                     <span class="inline-gap">
-                        <a href="/portfolio/applications/@r.Application.Id"><b>@r.Application.Name</b></a>
-                        <TierBadge Tier="r.Application.Criticality" />
+                        <b><EndpointLink Node="r.Node" Name="@r.Name" /></b>
+                        @if (r.Application is { } app) { <TierBadge Tier="app.Criticality" /> }
+                        @if (r.Partner is { } partner) { <PartnerBadges Partner="partner" /> }
                         <span class="muted small">
                             via
                             @foreach (var (i, n) in r.Integrations.Select((i, n) => (i, n)))

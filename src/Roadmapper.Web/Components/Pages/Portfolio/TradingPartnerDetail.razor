@@ -1,0 +1,208 @@
+@page "/portfolio/partners/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+@if (!loaded)
+{
+    <p class="muted">Loading…</p>
+}
+else if (partner is null)
+{
+    <PageTitle>Trading partner not found</PageTitle>
+    <div class="card empty">
+        <h2>Trading partner not found</h2>
+        <p>It may have been deleted. <a href="/portfolio/partners">Back to trading partners</a></p>
+    </div>
+}
+else
+{
+    <PortfolioHeader Title="@partner.Name" Parent="@(("Trading partners", "/portfolio/partners"))">
+        <PartnerBadges Partner="partner" />
+        <button class="btn" @onclick="() => editing = TradingPartnerDraft.From(partner)">Edit</button>
+    </PortfolioHeader>
+
+    <div class="settings">
+        <div class="card stack">
+            <h2>Overview</h2>
+            <dl class="facts">
+                <dt>Type</dt>
+                <dd>@PortfolioText.Label(partner.Type) · @PortfolioText.Label(partner.Importance)</dd>
+                <dt>Status</dt>
+                <dd>@PortfolioText.Label(partner.Status)</dd>
+                <dt>Account code</dt>
+                <dd>@(partner.AccountCode ?? "–")</dd>
+                <dt>EDI ID (ISA)</dt>
+                <dd class="mono">@(partner.EdiAddress ?? "–")</dd>
+                <dt>GS ID</dt>
+                <dd class="mono">@(partner.GsId ?? "–")</dd>
+                <dt>Relationship owner</dt>
+                <dd>
+                    @if (partner.RelationshipOwner is { } o)
+                    {
+                        <span class="inline-gap">@o.Name @if (o.Title is { } t) { <span class="muted small">· @t</span> } @if (o.Email is { } e) { <a class="small" href="mailto:@e">@e</a> }</span>
+                    }
+                    else { <span class="muted">–</span> }
+                </dd>
+            </dl>
+            @if (partner.Notes is { } notes)
+            {
+                <div class="small notes">@notes</div>
+            }
+        </div>
+
+        <div class="card stack">
+            <div class="row">
+                <h2 style="margin:0">People at @partner.Name</h2>
+                <span class="spacer"></span>
+                <button class="btn" @onclick="() => editingContact = new ContactDraft { TradingPartnerId = partner.Id }">+ Add person</button>
+            </div>
+            @if (partner.Staff.Count == 0)
+            {
+                <div class="muted small">No one yet. Add their EDI coordinator or IT contact.</div>
+            }
+            <ul class="dep-list">
+                @foreach (var p in partner.Staff.OrderBy(s => s.Name))
+                {
+                    <li class="@(p.IsActive ? "" : "muted")">
+                        <span class="inline-gap"><b>@p.Name</b> @if (p.Title is { } t) { <span class="muted small">· @t</span> }</span>
+                        <span class="spacer"></span>
+                        @if (p.Email is { } email) { <a class="small" href="mailto:@email">@email</a> }
+                        @if (p.Phone is { } phone) { <span class="muted small">@phone</span> }
+                        <button class="btn sm" @onclick="() => editingContact = ContactDraft.From(p)">Edit</button>
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Integrations</h2>
+            <span class="muted small">Flows to and from @partner.Name.</span>
+            <span class="spacer"></span>
+            <button class="btn" @onclick="NewIntegration">+ New integration</button>
+        </div>
+        @if (integrations.Count == 0)
+        {
+            <div class="muted small">No integrations yet. Add the flows they send you (orders, tenders) and you send them (confirmations, status).</div>
+        }
+        else
+        {
+            <IntegrationTable Items="integrations" Today="today" Current="NodeRef.Partner(partner.Id)" />
+        }
+    </div>
+
+    @if (deps is { } dv && dv.Upstream.Count + dv.Downstream.Count > 0)
+    {
+        <div class="card stack" style="margin-top:1rem">
+            <div class="row">
+                <h2 style="margin:0">Dependencies</h2>
+                <span class="muted small">The applications @partner.Name's flows pass through: a change to any of them can affect this partner.</span>
+                <span class="spacer"></span>
+                <label class="inline-gap small">Depth
+                    <select @bind="depth" @bind:after="LoadDependenciesAsync" style="width:auto">
+                        @for (var step = 1; step <= PortfolioService.MaxDependencyDepth; step++)
+                        {
+                            var n = step;
+                            <option value="@n">@n step@(n == 1 ? "" : "s")</option>
+                        }
+                    </select>
+                </label>
+                <a class="small" href="/portfolio/map?partner=@partner.Id&depth=@depth">Open in map →</a>
+            </div>
+            <div class="settings">
+                <DependencyList Title="Sends to it" Hint="upstream" Rows="dv.Upstream" />
+                <DependencyList Title="Receives from it" Hint="downstream" Rows="dv.Downstream" />
+            </div>
+            <div class="map-card">@((MarkupString)mapSvg)</div>
+        </div>
+    }
+
+    <div class="card stack" style="margin-top:1rem">
+        <h2>History</h2>
+        <PortfolioActivityList Entries="history" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <TradingPartnerEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+@if (editingContact is not null)
+{
+    <ContactEditor Draft="editingContact" Vendors="vendors" Partners="partners" OnClose="OnContactClosed" />
+}
+@if (editingIntegration is not null)
+{
+    <IntegrationEditor Draft="editingIntegration" OnClose="OnIntegrationClosed" />
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private TradingPartner? partner;
+    private bool loaded;
+    private DateOnly today;
+    private int depth = 2;
+    private string mapSvg = "";
+    private DependencyView? deps;
+    private List<Integration> integrations = [];
+    private List<PortfolioAuditEntry> history = [];
+    private List<Vendor> vendors = [];
+    private List<TradingPartner> partners = [];
+    private TradingPartnerDraft? editing;
+    private ContactDraft? editingContact;
+    private IntegrationDraft? editingIntegration;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = Svc.Today;
+        vendors = await Svc.GetVendorsAsync();
+        await ReloadAsync();
+        loaded = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        partner = await Svc.GetPartnerAsync(Id);
+        if (partner is null) return;
+        partners = await Svc.GetPartnersAsync();
+        integrations = await Svc.GetIntegrationsForPartnerAsync(Id);
+        history = await Svc.GetActivityAsync(PortfolioEntityType.TradingPartner, Id);
+        await LoadDependenciesAsync();
+    }
+
+    private async Task LoadDependenciesAsync()
+    {
+        deps = await Svc.GetDependenciesAsync(NodeRef.Partner(Id), depth);
+        if (deps is null || deps.Upstream.Count + deps.Downstream.Count == 0) { mapSvg = ""; return; }
+        mapSvg = IntegrationMapSvg.Render(await Svc.GetApplicationsAsync(), partners, await Svc.GetIntegrationsAsync(),
+            new MapOptions(NodeRef.Partner(Id), depth), today, $"{partner!.Name}: dependencies").Svg;
+    }
+
+    private async Task NewIntegration()
+    {
+        var months = (await Svc.GetSettingsAsync()).DefaultReviewIntervalMonths;
+        // Most partner flows start with them (orders, tenders); swap source and target in the form for outbound ones.
+        editingIntegration = new IntegrationDraft { SourcePartnerId = Id, ReviewIntervalMonths = months, LastReviewDate = today, Type = IntegrationType.EDI };
+    }
+
+    private async Task OnEditorClosed(int? result)
+    {
+        editing = null;
+        if (result == 0) { Nav.NavigateTo("/portfolio/partners"); return; }
+        if (result is not null) await ReloadAsync();
+    }
+
+    private async Task OnContactClosed(bool changed)
+    {
+        editingContact = null;
+        if (changed) await ReloadAsync();
+    }
+
+    private async Task OnIntegrationClosed(int? result)
+    {
+        editingIntegration = null;
+        if (result is not null) await ReloadAsync();
+    }
+}

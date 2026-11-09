@@ -1,7 +1,7 @@
 @page "/portfolio/contacts"
 @inject PortfolioService Svc
 
-<PortfolioHeader Title="Contacts" Subtitle="Everyone named in the portfolio: owners, vendor account managers, support and escalation contacts.">
+<PortfolioHeader Title="Contacts" Subtitle="Everyone named in the portfolio: owners, vendor account managers, support and escalation contacts, and trading partners' people.">
     <button class="btn primary" @onclick="() => editing = new ContactDraft()">+ New contact</button>
 </PortfolioHeader>
 
@@ -16,9 +16,23 @@ else
         <select @bind="company">
             <option value="all">Everyone</option>
             <option value="internal">Internal</option>
-            @foreach (var v in vendors)
+            @if (vendors.Count > 0)
             {
-                <option value="@v.Id">@v.Name</option>
+                <optgroup label="Vendors">
+                    @foreach (var v in vendors)
+                    {
+                        <option value="v@(v.Id)">@v.Name</option>
+                    }
+                </optgroup>
+            }
+            @if (partners.Count > 0)
+            {
+                <optgroup label="Trading partners">
+                    @foreach (var tp in partners)
+                    {
+                        <option value="p@(tp.Id)">@tp.Name</option>
+                    }
+                </optgroup>
             }
         </select>
         <label class="check"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
@@ -43,6 +57,7 @@ else
                             <td>@(c.Title ?? "–")</td>
                             <td>
                                 @if (c.Vendor is { } v) { <a href="/portfolio/vendors/@v.Id">@v.Name</a> }
+                                else if (c.TradingPartner is { } tp) { <a class="partner-ref" href="/portfolio/partners/@tp.Id">@tp.Name</a> }
                                 else { <span>Internal@(c.Department is { } d ? $" · {d}" : "")</span> }
                             </td>
                             <td>@if (c.Email is { } e) { <a href="mailto:@e">@e</a> } else { <span class="muted">–</span> }</td>
@@ -62,12 +77,13 @@ else
 
 @if (editing is not null)
 {
-    <ContactEditor Draft="editing" Vendors="vendors" OnClose="OnEditorClosed" />
+    <ContactEditor Draft="editing" Vendors="vendors" Partners="partners" OnClose="OnEditorClosed" />
 }
 
 @code {
     private List<Contact>? contacts;
     private List<Vendor> vendors = [];
+    private List<TradingPartner> partners = [];
     private ContactDraft? editing;
     private string search = "";
     private string company = "all";
@@ -78,8 +94,8 @@ else
         .Where(c => company switch
         {
             "all" => true,
-            "internal" => c.VendorId is null,
-            var id => c.VendorId?.ToString() == id,
+            "internal" => c.IsInternal,
+            var key => (c.VendorId is { } v && key == $"v{v}") || (c.TradingPartnerId is { } p && key == $"p{p}"),
         })
         .Where(c => string.IsNullOrWhiteSpace(search)
             || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
@@ -92,6 +108,7 @@ else
     {
         contacts = await Svc.GetContactsAsync();
         vendors = await Svc.GetVendorsAsync();
+        partners = await Svc.GetPartnersAsync();
     }
 
     private async Task OnEditorClosed(bool changed)

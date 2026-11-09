@@ -127,14 +127,14 @@ else
         }
         else
         {
-            <IntegrationTable Items="integrations" Today="today" CurrentAppId="app.Id" />
+            <IntegrationTable Items="integrations" Today="today" Current="NodeRef.App(app.Id)" />
         }
     </div>
 
     <div class="card stack" style="margin-top:1rem">
         <div class="row">
             <h2 style="margin:0">Dependencies</h2>
-            <span class="muted small">Upstream applications send data to @app.Name; downstream applications receive it. Retired integrations are left out.</span>
+            <span class="muted small">Upstream applications and partners send data to @app.Name; downstream ones receive it. Retired integrations are left out.</span>
             <span class="spacer"></span>
             <label class="inline-gap small">Depth
                 <select @bind="depth" @bind:after="LoadDependenciesAsync" style="width:auto">
@@ -295,8 +295,8 @@ else
     {
         deps = await Svc.GetDependenciesAsync(Id, depth);
         if (deps is null || deps.Upstream.Count + deps.Downstream.Count == 0) { mapSvg = ""; return; }
-        var picture = IntegrationMapSvg.Render(await Svc.GetApplicationsAsync(), await Svc.GetIntegrationsAsync(),
-            new MapOptions(Id, depth), today, $"{app!.Name}: dependencies");
+        var picture = IntegrationMapSvg.Render(await Svc.GetApplicationsAsync(), await Svc.GetPartnersAsync(), await Svc.GetIntegrationsAsync(),
+            new MapOptions(NodeRef.App(Id), depth), today, $"{app!.Name}: dependencies");
         mapSvg = picture.Svg;
     }
 

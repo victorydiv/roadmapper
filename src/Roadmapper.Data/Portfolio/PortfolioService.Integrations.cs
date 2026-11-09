@@ -3,11 +3,17 @@ using Roadmapper.Core.Portfolio;
 
 namespace Roadmapper.Data.Portfolio;
 
-/// <summary>An application up- or downstream of another, <see cref="Distance"/> integrations away, reached through <see cref="Integrations"/>.</summary>
-public record DependencyRow(Application Application, int Distance, IReadOnlyList<Integration> Integrations);
+/// <summary>
+/// An application or trading partner up- or downstream of another, <see cref="Distance"/> integrations away, reached
+/// through <see cref="Integrations"/>. Exactly one of <see cref="Application"/> and <see cref="Partner"/> is set.
+/// </summary>
+public record DependencyRow(NodeRef Node, Application? Application, TradingPartner? Partner, int Distance, IReadOnlyList<Integration> Integrations)
+{
+    public string Name => Application?.Name ?? Partner?.Name ?? "";
+}
 
-/// <summary>What feeds an application and what it feeds, plus every integration it takes part in directly.</summary>
-public record DependencyView(Application Application, int Depth, IReadOnlyList<Integration> Direct,
+/// <summary>What feeds an application or partner and what it feeds, plus every integration it takes part in directly.</summary>
+public record DependencyView(NodeRef Node, string Name, int Depth, IReadOnlyList<Integration> Direct,
     IReadOnlyList<DependencyRow> Upstream, IReadOnlyList<DependencyRow> Downstream);
 
 public partial class PortfolioService
@@ -16,13 +22,15 @@ public partial class PortfolioService
 
     private static IQueryable<Integration> WithParts(IQueryable<Integration> q) => q
         .Include(i => i.Source)
+        .Include(i => i.SourcePartner)
         .Include(i => i.Target)
+        .Include(i => i.TargetPartner)
         .Include(i => i.Via)
         .Include(i => i.Owner)
         .Include(i => i.Risks)
         .AsSplitQuery();
 
-    /// <summary>Every integration with its applications, owner and risks.</summary>
+    /// <summary>Every integration with its applications, partners, owner and risks.</summary>
     public async Task<List<Integration>> GetIntegrationsAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -47,26 +55,34 @@ public partial class PortfolioService
             .ToListAsync();
     }
 
+    /// <summary>Integrations to or from the trading partner.</summary>
+    public async Task<List<Integration>> GetIntegrationsForPartnerAsync(int partnerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await WithParts(db.Integrations.AsNoTracking())
+            .Where(i => i.SourcePartnerId == partnerId || i.TargetPartnerId == partnerId)
+            .OrderBy(i => i.Name)
+            .ToListAsync();
+    }
+
     /// <summary>Creates or updates an integration. A blank name becomes "Source → Target".</summary>
     public async Task<int> SaveIntegrationAsync(IntegrationDraft draft)
     {
         if (draft.Validate() is { } error) throw new InvalidOperationException(error);
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        var ids = new[] { draft.SourceApplicationId, draft.TargetApplicationId, draft.ViaApplicationId }.OfType<int>().ToList();
-        var names = await db.Applications.Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
-        if (!names.ContainsKey(draft.SourceApplicationId!.Value)) throw NotFound("Source application");
-        if (!names.ContainsKey(draft.TargetApplicationId!.Value)) throw NotFound("Target application");
-        if (draft.ViaApplicationId is { } via && !names.ContainsKey(via)) throw NotFound("“Via” application");
+        var sourceName = await EndpointNameAsync(db, draft.Source!.Value) ?? throw NotFound(draft.Source.Value.IsPartner ? "Source partner" : "Source application");
+        var targetName = await EndpointNameAsync(db, draft.Target!.Value) ?? throw NotFound(draft.Target.Value.IsPartner ? "Target partner" : "Target application");
+        if (draft.ViaApplicationId is { } via && !await db.Applications.AnyAsync(a => a.Id == via)) throw NotFound("“Via” application");
         await EnsureContactAsync(db, draft.OwnerId, "owner");
 
-        var name = string.IsNullOrWhiteSpace(draft.Name)
-            ? $"{names[draft.SourceApplicationId.Value]} → {names[draft.TargetApplicationId.Value]}"
-            : draft.Name.Trim();
+        var name = string.IsNullOrWhiteSpace(draft.Name) ? $"{sourceName} → {targetName}" : draft.Name.Trim();
         if (name.Length > PortfolioRules.MaxNameLength) name = name[..PortfolioRules.MaxNameLength];
-        if (await db.Integrations.AnyAsync(i => i.Id != draft.Id && i.SourceApplicationId == draft.SourceApplicationId
-                && i.TargetApplicationId == draft.TargetApplicationId && i.Type == draft.Type && i.Name == name))
-            throw new InvalidOperationException($"There's already a {PortfolioText.Label(draft.Type)} integration named “{name}” between these applications.");
+        if (await db.Integrations.AnyAsync(i => i.Id != draft.Id
+                && i.SourceApplicationId == draft.SourceApplicationId && i.SourcePartnerId == draft.SourcePartnerId
+                && i.TargetApplicationId == draft.TargetApplicationId && i.TargetPartnerId == draft.TargetPartnerId
+                && i.Type == draft.Type && i.Name == name))
+            throw new InvalidOperationException($"There's already a {PortfolioText.Label(draft.Type)} integration named “{name}” between these two.");
 
         Integration integration;
         if (draft.IsNew)
@@ -81,6 +97,10 @@ public partial class PortfolioService
         await db.SaveChangesAsync();
         return integration.Id;
     }
+
+    private static Task<string?> EndpointNameAsync(RoadmapDbContext db, NodeRef node) => node.IsPartner
+        ? db.TradingPartners.Where(p => p.Id == node.Id).Select(p => p.Name).FirstOrDefaultAsync()
+        : db.Applications.Where(a => a.Id == node.Id).Select(a => a.Name).FirstOrDefaultAsync();
 
     /// <summary>Deletes the integration and its risks. Prefer setting it to Retired to keep it on record.</summary>
     public async Task DeleteIntegrationAsync(int id)
@@ -137,27 +157,32 @@ public partial class PortfolioService
 
     // ---- Dependencies ----
 
+    public Task<DependencyView?> GetDependenciesAsync(int applicationId, int depth = 2) => GetDependenciesAsync(NodeRef.App(applicationId), depth);
+
     /// <summary>
-    /// Applications upstream (they send data to this one) and downstream (they receive data from it), up to
-    /// <paramref name="depth"/> integrations away. Retired integrations are ignored: they no longer move data.
+    /// Applications and partners upstream (they send data to this one) and downstream (they receive data from it), up
+    /// to <paramref name="depth"/> integrations away. Retired integrations are ignored: they no longer move data.
     /// </summary>
-    public async Task<DependencyView?> GetDependenciesAsync(int applicationId, int depth = 2)
+    public async Task<DependencyView?> GetDependenciesAsync(NodeRef node, int depth = 2)
     {
         depth = Math.Clamp(depth, 1, MaxDependencyDepth);
         await using var db = await dbFactory.CreateDbContextAsync();
         var apps = await db.Applications.AsNoTracking().Include(a => a.Vendor).ToDictionaryAsync(a => a.Id);
-        if (!apps.TryGetValue(applicationId, out var app)) return null;
+        var partners = await db.TradingPartners.AsNoTracking().ToDictionaryAsync(p => p.Id);
+        string? NameOf(NodeRef n) => n.IsPartner ? partners.GetValueOrDefault(n.Id)?.Name : apps.GetValueOrDefault(n.Id)?.Name;
+        if (NameOf(node) is not { } name) return null;
 
         var live = await WithParts(db.Integrations.AsNoTracking()).Where(i => i.Status != LifecycleStatus.Retired).ToListAsync();
         var byId = live.ToDictionary(i => i.Id);
         var graph = PortfolioGraph.From(live);
 
         List<DependencyRow> Rows(IEnumerable<Reach> reach) => reach
-            .Select(r => new DependencyRow(apps[r.ApplicationId], r.Distance, r.IntegrationIds.Select(id => byId[id]).OrderBy(i => i.Name).ToList()))
-            .OrderBy(r => r.Distance).ThenBy(r => r.Application.Criticality).ThenBy(r => r.Application.Name)
+            .Select(r => new DependencyRow(r.Node, r.Node.IsPartner ? null : apps[r.Node.Id], r.Node.IsPartner ? partners[r.Node.Id] : null,
+                r.Distance, r.IntegrationIds.Select(id => byId[id]).OrderBy(i => i.Name).ToList()))
+            .OrderBy(r => r.Distance).ThenBy(r => r.Node.Kind).ThenBy(r => r.Application?.Criticality).ThenBy(r => r.Name)
             .ToList();
 
-        var direct = graph.IntegrationsTouching(applicationId).Select(id => byId[id]).OrderBy(i => i.Name).ToList();
-        return new DependencyView(app, depth, direct, Rows(graph.Upstream(applicationId, depth)), Rows(graph.Downstream(applicationId, depth)));
+        var direct = graph.IntegrationsTouching(node).Select(id => byId[id]).OrderBy(i => i.Name).ToList();
+        return new DependencyView(node, name, depth, direct, Rows(graph.Upstream(node, depth)), Rows(graph.Downstream(node, depth)));
     }
 }

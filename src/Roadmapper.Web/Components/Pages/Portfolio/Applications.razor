@@ -34,12 +34,12 @@ else
     <div class="tiles" style="margin-bottom:1rem">
         <div class="card tile">
             <span class="tile-label">Applications</span>
-            <span class="tile-value">@Visible.Count(a => a.Status != LifecycleStatus.Retired)</span>
-            <span class="muted small">@Visible.Count(a => a.Criticality == Criticality.Tier1 && a.Status != LifecycleStatus.Retired) Tier 1</span>
+            <span class="tile-value">@apps.Count(a => a.Status != LifecycleStatus.Retired)</span>
+            <span class="muted small">@apps.Count(a => a.Criticality == Criticality.Tier1 && a.Status != LifecycleStatus.Retired) Tier 1</span>
         </div>
         <div class="card tile">
             <span class="tile-label">Annual run cost</span>
-            <span class="tile-value">@PortfolioUi.MoneyShort(Visible.Where(a => a.Status != LifecycleStatus.Retired).Sum(a => a.AnnualCost ?? 0))</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(apps.Where(a => a.Status != LifecycleStatus.Retired).Sum(a => a.AnnualCost ?? 0))</span>
             <span class="muted small">active, planned &amp; retiring</span>
         </div>
         <div class="card tile">
@@ -49,8 +49,8 @@ else
         </div>
         <div class="card tile">
             <span class="tile-label">Retiring</span>
-            <span class="tile-value">@Visible.Count(a => a.Status == LifecycleStatus.Retiring)</span>
-            <span class="muted small">@Visible.Count(a => a.TimeQuadrant == TimeQuadrant.Eliminate) rated Eliminate</span>
+            <span class="tile-value">@apps.Count(a => a.Status == LifecycleStatus.Retiring)</span>
+            <span class="muted small">@apps.Count(a => a.TimeQuadrant == TimeQuadrant.Eliminate) rated Eliminate</span>
         </div>
     </div>
 
@@ -77,12 +77,6 @@ else
                 <option value="@s">@PortfolioText.Label(s)</option>
             }
         </select>
-        @if (apps.Any(a => a.Category == AppCategory.ExternalParty))
-        {
-            <label class="check" title="Customers, carriers and trading partners: endpoints of integrations, not applications you manage">
-                <input type="checkbox" @bind="showExternal" /> Show external parties (@apps.Count(a => a.Category == AppCategory.ExternalParty))
-            </label>
-        }
         <span class="spacer"></span>
         <div class="segmented">
             <button class="@(matrix ? "" : "on")" @onclick="() => matrix = false">Table</button>
@@ -187,7 +181,7 @@ else
     private List<Application>? apps;
     private List<PortfolioAuditEntry> activity = [];
     private ApplicationDraft? editing;
-    private bool canSeed, matrix, showExternal;
+    private bool canSeed, matrix;
     private string? error;
     private string search = "";
     private AppCategory? category;
@@ -196,14 +190,7 @@ else
     private int warningDays = 120;
     private DateOnly today;
 
-    /// <summary>
-    /// Applications you manage. External parties (customers, carriers, trading partners) exist only as integration
-    /// endpoints, so they're left out of the list and totals unless asked for, or filtered on directly.
-    /// </summary>
-    private IEnumerable<Application> Visible => apps!
-        .Where(a => showExternal || category == AppCategory.ExternalParty || a.Category != AppCategory.ExternalParty);
-
-    private IEnumerable<Application> Filtered => Visible
+    private IEnumerable<Application> Filtered => apps!
         .Where(a => status is { } s ? a.Status == s : a.Status != LifecycleStatus.Retired)
         .Where(a => category is null || a.Category == category)
         .Where(a => tier is null || a.Criticality == tier)

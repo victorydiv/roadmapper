@@ -53,6 +53,7 @@ internal static class PortfolioAuditTrail
             [nameof(Contact.Email)] = "Email",
             [nameof(Contact.Phone)] = "Phone",
             [nameof(Contact.VendorId)] = "Company",
+            [nameof(Contact.TradingPartnerId)] = "Partner company",
             [nameof(Contact.Department)] = "Department",
             [nameof(Contact.IsActive)] = "Active",
             [nameof(Contact.Notes)] = "Notes",
@@ -73,8 +74,10 @@ internal static class PortfolioAuditTrail
         [typeof(Integration)] = new()
         {
             [nameof(Integration.Name)] = "Name",
-            [nameof(Integration.SourceApplicationId)] = "Source",
-            [nameof(Integration.TargetApplicationId)] = "Target",
+            [nameof(Integration.SourceApplicationId)] = "Source application",
+            [nameof(Integration.SourcePartnerId)] = "Source partner",
+            [nameof(Integration.TargetApplicationId)] = "Target application",
+            [nameof(Integration.TargetPartnerId)] = "Target partner",
             [nameof(Integration.ViaApplicationId)] = "Via",
             [nameof(Integration.Type)] = "Type",
             [nameof(Integration.Direction)] = "Direction",
@@ -87,6 +90,19 @@ internal static class PortfolioAuditTrail
             [nameof(Integration.LastReviewDate)] = "Last review",
             [nameof(Integration.ReviewIntervalMonths)] = "Review interval (months)",
             [nameof(Integration.Notes)] = "Notes",
+        },
+        [typeof(TradingPartner)] = new()
+        {
+            [nameof(TradingPartner.Name)] = "Name",
+            [nameof(TradingPartner.Type)] = "Type",
+            [nameof(TradingPartner.Status)] = "Status",
+            [nameof(TradingPartner.Importance)] = "Importance",
+            [nameof(TradingPartner.AccountCode)] = "Account code",
+            [nameof(TradingPartner.EdiQualifier)] = "EDI qualifier",
+            [nameof(TradingPartner.EdiId)] = "EDI ID",
+            [nameof(TradingPartner.GsId)] = "GS ID",
+            [nameof(TradingPartner.RelationshipOwnerId)] = "Relationship owner",
+            [nameof(TradingPartner.Notes)] = "Notes",
         },
         [typeof(IntegrationRisk)] = new()
         {
@@ -106,7 +122,7 @@ internal static class PortfolioAuditTrail
         {
             var entity = entry.Entity;
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
-                or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk)) continue;
+                or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner)) continue;
 
             switch (entry.State)
             {
@@ -177,6 +193,9 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Created) entry.NewValue = who; else entry.OldValue = who;
                     break;
                 }
+                case TradingPartner tp:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.TradingPartner, tp.Id, tp.Name, field);
+                    break;
                 case Integration i:
                     (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Integration, i.Id, i.Name, field);
                     break;
@@ -215,7 +234,9 @@ internal static class PortfolioAuditTrail
             nameof(Application.ProductId) => await db.Products.AsNoTracking().Where(p => p.Id == (int)value).Select(p => p.Name).FirstOrDefaultAsync(ct),
             nameof(Application.BusinessOwnerId) or nameof(Application.TechnicalOwnerId)
                 or nameof(Vendor.AccountManagerId) or nameof(Vendor.TechnicalContactId)
-                or nameof(Integration.OwnerId) => await ContactNameAsync(db, (int)value, ct),
+                or nameof(Integration.OwnerId) or nameof(TradingPartner.RelationshipOwnerId) => await ContactNameAsync(db, (int)value, ct),
+            nameof(Integration.SourcePartnerId) or nameof(Integration.TargetPartnerId)
+                or nameof(Contact.TradingPartnerId) => await PartnerNameAsync(db, (int)value, ct),
             nameof(Integration.SourceApplicationId) or nameof(Integration.TargetApplicationId)
                 or nameof(Integration.ViaApplicationId) => await AppNameAsync(db, (int)value, ct),
             _ => PortfolioText.Format(value),
@@ -238,6 +259,11 @@ internal static class PortfolioAuditTrail
     private static async Task<string> ContactNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
         db.Contacts.Local.FirstOrDefault(c => c.Id == id)?.Name
         ?? await db.Contacts.AsNoTracking().Where(c => c.Id == id).Select(c => c.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> PartnerNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.TradingPartners.Local.FirstOrDefault(p => p.Id == id)?.Name
+        ?? await db.TradingPartners.AsNoTracking().Where(p => p.Id == id).Select(p => p.Name).FirstOrDefaultAsync(ct)
         ?? $"#{id}";
 
     private static async Task<string> IntegrationNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>

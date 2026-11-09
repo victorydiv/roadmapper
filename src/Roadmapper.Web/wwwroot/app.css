@@ -408,3 +408,11 @@ ul.risks li { align-items: flex-start; }
 .distance { flex: none; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: .8rem; display: grid; place-items: center; }
 .map-card { overflow: auto; padding: 0; }
 .map-card svg { display: block; }
+
+/* ---------- Trading partners ---------- */
+.partner-ref { padding: 0 .4rem; border: 1px solid #d9cdf2; border-radius: 999px; background: #f6f3fd; }
+.flow-node.partner { background: #f6f3fd; border-color: #d9cdf2; border-radius: 999px; }
+.key-partner { background: #efe8fb; color: #5b34a8; border-color: #d9cdf2; }
+.partner-Onboarding { background: var(--accent-soft); color: var(--accent); }
+.partner-Inactive { background: var(--surface-2); color: var(--muted); }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }

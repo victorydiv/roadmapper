@@ -1,0 +1,13 @@
+<span class="badge tag">@PortfolioText.Label(Partner.Type)</span>
+@if (Partner.Importance == PartnerImportance.Key)
+{
+    <span class="badge key-partner" title="Key partner: breaks in their flows are high severity">Key</span>
+}
+@if (Partner.Status != PartnerStatus.Active)
+{
+    <span class="badge partner-@Partner.Status">@PortfolioText.Label(Partner.Status)</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public TradingPartner Partner { get; set; } = default!;
+}

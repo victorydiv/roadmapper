@@ -112,7 +112,7 @@ Index: (VendorId), (RenewalDate).
 | Id | int PK | |
 | Name | text(200) req, unique NOCASE | |
 | Description | text(4000) | |
-| Category | enum text | WMS, TMS, ERP, EDI, CustomerPortal, Reporting, Integration­Platform, Finance, Other, **ExternalParty** (customer/carrier/trading-partner endpoints so EDI flows have both ends) |
+| Category | enum text | WMS, TMS, ERP, EDI, CustomerPortal, Reporting, Integration­Platform, Finance, Other (customers, carriers and suppliers are **TradingPartners**, §2.3a) |
 | VendorId | int? FK→Vendors (SetNull) | null = in-house / external party |
 | ContractId | int? FK→Contracts (SetNull) | must belong to VendorId (service rule) |
 | ProductId | int? FK→Products (SetNull), unique when not null | the app's own roadmap |
@@ -135,6 +135,31 @@ Index: (Status), (VendorId), (Criticality).
 **ApplicationInitiatives** — the bridge to the existing roadmap ("Linked Roadmap Initiatives")
 | ApplicationId FK→Applications (Cascade) | RoadmapItemId FK→Items (Cascade) | ImpactType enum text: Enhances, Implements, Replaces, Retires, Integrates, Upgrades | PK(ApplicationId, RoadmapItemId) |
 Any item level is allowed (Initiative is the default in the UI); status, dates, progress, owner all read from `Items` — nothing copied.
+
+### 2.3a Trading partners (added during Phase 2 review)
+
+Customers, carriers and suppliers are not applications you manage, so they get their own table instead of an
+"External party" application category (which was removed; existing ones are converted by migration
+`ConvertExternalPartiesToPartners`: carrier-sounding names → Carrier, else Customer; Tier 1 → Key; Retired → Inactive).
+
+**TradingPartners**
+| Column | Type | Notes |
+|---|---|---|
+| Id | int PK | |
+| Name | text(200) req, unique NOCASE | |
+| Type | enum text: Customer, Carrier, Supplier, Other | |
+| Status | enum text: Onboarding, Active, Inactive | |
+| Importance | enum text: Key, Standard | raises impact severity (Phase 3) |
+| AccountCode | text(100) | your ID for them (WMS/ERP customer code) |
+| EdiQualifier, EdiId, GsId | text(2), text(35), text(35) | ISA qualifier + ID, GS ID |
+| RelationshipOwnerId | int? FK→Contacts (SetNull) | account manager / CS lead |
+| Notes | text(4000) | |
+`Contacts.TradingPartnerId` (FK, Cascade) holds the partner's own people, as `VendorId` does for vendors.
+
+An integration end is **an application or a partner**: `Source/TargetApplicationId` became nullable and
+`Source/TargetPartnerId` (FK→TradingPartners, Restrict) were added, with CHECK constraints that exactly one of each pair
+is set. At least one end must be an application (service rule). `Via` stays application-only. The graph works on
+`NodeRef` (Application | Partner, id) so partners take part in dependency walks and the map.
 
 ### 2.3 Integrations
 
@@ -298,7 +323,7 @@ Output is grouped, sorted by criticality, and includes a severity summary ("3 Ti
 
 **BenefitMath**: realization % = actual ÷ expected (direction-aware), $-normalized totals (Hours × LaborRate), and "at risk" when ExpectedBy has passed with < 50 % realized.
 
-**MapLayout**: layered (Sugiyama-lite) layout — columns by Category order (ExternalParty · Portal · ERP · WMS/TMS · EDI/Integration · Reporting) or, for the dependency view, upstream | selected | downstream. Deterministic, pure, unit-tested; rendered as SVG.
+**MapLayout**: layered (Sugiyama-lite) layout — columns: Trading partners · EDI/Integration · Portals · WMS/TMS · ERP/Finance · Reporting/Other or, for the dependency view, upstream | selected | downstream. Deterministic, pure, unit-tested; rendered as SVG.
 
 ## 6. API endpoints (read-only JSON, `Roadmapper.Web/Api/PortfolioApi.cs`)
 `app.MapPortfolioApi()` → group `/api/portfolio`, JSON camelCase + string enums (same options as `RoadmapFile`):
@@ -403,7 +428,7 @@ docs/USER_GUIDE.md               (new "Portfolio" sections + §10 data model/rou
 **Phase 2 — Integrations, catalog map, dependency view**
 - Integrations + risks, `AddIntegrations`; `PortfolioGraph`, `MapLayout`, `IntegrationMapSvg`; Integrations page, Map page, application Dependencies tab; `/integrations`, `/applications/{id}/dependencies`, `/map.svg`.
 - Tests: graph traversal (cycles, bidirectional, via), layout determinism, delete-restrict rule.
-- *As built:* pages `/portfolio/integrations` (catalog with tiles + filters), `/portfolio/integrations/{id}` (flow strip, risk register, "Mark reviewed", history), `/portfolio/map` (`?focus=&depth=`); the application page gained Integrations and Dependencies sections (lists + focused map). Graph semantics: every integration is one step; a Via hop links source→via, via→target and source→target; bidirectional counts both ways; retired integrations are ignored. In the dependency map an app that is both up- and downstream is drawn downstream, and flows between two apps in the same column are faded. The sample portfolio adds two external parties (EDI customers, carriers) and 10 integrations; an existing sample portfolio gets an "Add sample integrations" button.
+- *As built:* pages `/portfolio/integrations` (catalog with tiles + filters), `/portfolio/integrations/{id}` (flow strip, risk register, "Mark reviewed", history), `/portfolio/map` (`?focus=&depth=`); the application page gained Integrations and Dependencies sections (lists + focused map). Graph semantics: every integration is one step; a Via hop links source→via, via→target and source→target; bidirectional counts both ways; retired integrations are ignored. In the dependency map an app that is both up- and downstream is drawn downstream, and flows between two apps in the same column are faded. The sample portfolio adds three trading partners (Acme Retail, Globex Home Goods, Blue Ridge Freight) and 11 integrations; an existing sample portfolio gets an "Add sample integrations" button. Trading partners (§2.3a) were added after review: `/portfolio/partners`, `/portfolio/partners/{id}` (people, integrations, dependencies, history), API `/partners`, `/partners/{id}`, `/partners/{id}/dependencies`, map `?partner=` and `partners=false`.
 
 **Phase 3 — Business processes + Change Impact Analysis**
 - Processes, pain points, KPIs, `AddBusinessProcesses`; `ImpactAnalyzer`; Processes pages; Impact Analysis page; pain point → "Create initiative" (reuses `ItemDraft`/`ItemEditor`); `/processes`, `/applications/{id}/impact`.

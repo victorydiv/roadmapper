@@ -23,7 +23,10 @@ internal static class PortfolioModel
             e.Property(c => c.Notes).HasMaxLength(2000);
             // A vendor's people go with the vendor.
             e.HasOne(c => c.Vendor).WithMany(v => v.Staff).HasForeignKey(c => c.VendorId).OnDelete(DeleteBehavior.Cascade);
+            // A trading partner's people go with the partner.
+            e.HasOne(c => c.TradingPartner).WithMany(p => p.Staff).HasForeignKey(c => c.TradingPartnerId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(c => c.VendorId);
+            e.HasIndex(c => c.TradingPartnerId);
             e.HasIndex(c => c.Name);
         });
 
@@ -100,6 +103,22 @@ internal static class PortfolioModel
             e.HasIndex(x => x.RoadmapItemId);
         });
 
+        b.Entity<TradingPartner>(e =>
+        {
+            e.ToTable("TradingPartners");
+            e.Property(p => p.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
+            e.Property(p => p.Type).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.Importance).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.AccountCode).HasMaxLength(100);
+            e.Property(p => p.EdiQualifier).HasMaxLength(2);
+            e.Property(p => p.EdiId).HasMaxLength(35);
+            e.Property(p => p.GsId).HasMaxLength(35);
+            e.Property(p => p.Notes).HasMaxLength(Notes);
+            e.HasIndex(p => p.Name).IsUnique();
+            e.HasOne(p => p.RelationshipOwner).WithMany().HasForeignKey(p => p.RelationshipOwnerId).OnDelete(DeleteBehavior.SetNull);
+        });
+
         b.Entity<Integration>(e =>
         {
             e.Property(i => i.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
@@ -116,11 +135,22 @@ internal static class PortfolioModel
             e.HasOne(i => i.Source).WithMany().HasForeignKey(i => i.SourceApplicationId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Target).WithMany().HasForeignKey(i => i.TargetApplicationId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.Via).WithMany().HasForeignKey(i => i.ViaApplicationId).OnDelete(DeleteBehavior.Restrict);
+            // Likewise a trading partner with integrations.
+            e.HasOne(i => i.SourcePartner).WithMany().HasForeignKey(i => i.SourcePartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(i => i.TargetPartner).WithMany().HasForeignKey(i => i.TargetPartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(i => i.SourcePartnerId);
+            e.HasIndex(i => i.TargetPartnerId);
             e.HasOne(i => i.Owner).WithMany().HasForeignKey(i => i.OwnerId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(i => i.SourceApplicationId);
             e.HasIndex(i => i.TargetApplicationId);
             e.HasIndex(i => i.ViaApplicationId);
-            e.ToTable(t => t.HasCheckConstraint("CK_Integrations_SourceNotTarget", "\"SourceApplicationId\" <> \"TargetApplicationId\""));
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Integrations_SourceNotTarget", "\"SourceApplicationId\" <> \"TargetApplicationId\"");
+                // Each end is exactly one of: an application, a trading partner.
+                t.HasCheckConstraint("CK_Integrations_OneSource", "(\"SourceApplicationId\" IS NULL) <> (\"SourcePartnerId\" IS NULL)");
+                t.HasCheckConstraint("CK_Integrations_OneTarget", "(\"TargetApplicationId\" IS NULL) <> (\"TargetPartnerId\" IS NULL)");
+            });
         });
 
         b.Entity<IntegrationRisk>(e =>

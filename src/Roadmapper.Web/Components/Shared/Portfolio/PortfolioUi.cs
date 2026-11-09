@@ -36,4 +36,7 @@ public static class PortfolioUi
         c is null ? "" : PortfolioRules.NoticeMissed(c, today) ? "overdue" : PortfolioRules.NoticeDue(c, today, warningDays) ? "due-soon" : "";
 
     public static string Fit(int? score) => score is { } s ? $"{s}/5" : "–";
+
+    /// <summary>The detail page of an application or trading partner.</summary>
+    public static string Href(NodeRef node) => node.IsPartner ? $"/portfolio/partners/{node.Id}" : $"/portfolio/applications/{node.Id}";
 }

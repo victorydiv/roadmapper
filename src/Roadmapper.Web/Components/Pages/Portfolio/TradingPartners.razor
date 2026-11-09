@@ -1,0 +1,163 @@
+@page "/portfolio/partners"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PortfolioHeader Title="Trading partners" Subtitle="Customers, carriers and suppliers that exchange data with your applications: who they are, how to identify them, who owns the relationship.">
+    <button class="btn primary" @onclick="() => editing = new TradingPartnerDraft()">+ New trading partner</button>
+</PortfolioHeader>
+
+@if (partners is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (partners.Count == 0)
+{
+    <div class="card empty">
+        No trading partners yet. Add the customers and carriers whose orders, ship confirmations, tenders and status
+        messages flow through your systems, then pick them as the source or target of an integration.
+    </div>
+}
+else
+{
+    var live = partners.Where(p => p.Status != PartnerStatus.Inactive).ToList();
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Customers</span>
+            <span class="tile-value">@live.Count(p => p.Type == PartnerType.Customer)</span>
+            <span class="muted small">@live.Count(p => p.Type == PartnerType.Customer && p.Importance == PartnerImportance.Key) key</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Carriers</span>
+            <span class="tile-value">@live.Count(p => p.Type == PartnerType.Carrier)</span>
+            <span class="muted small">@live.Count(p => p.Type == PartnerType.Carrier && p.Importance == PartnerImportance.Key) key</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Onboarding</span>
+            <span class="tile-value">@live.Count(p => p.Status == PartnerStatus.Onboarding)</span>
+            <span class="muted small">being set up and tested</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">With high-risk flows</span>
+            <span class="tile-value @(HighRiskPartners > 0 ? "overdue" : "")">@HighRiskPartners</span>
+            <a class="small" href="/portfolio/integrations">See integrations</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input placeholder="Search name, code or EDI ID" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="type">
+            <option value="">All types</option>
+            @foreach (var t in Enum.GetValues<PartnerType>())
+            {
+                <option value="@t">@PortfolioText.Label(t)</option>
+            }
+        </select>
+        <select @bind="importance">
+            <option value="">Any importance</option>
+            @foreach (var i in Enum.GetValues<PartnerImportance>())
+            {
+                <option value="@i">@PortfolioText.Label(i)</option>
+            }
+        </select>
+        <select @bind="status">
+            <option value="">All but inactive</option>
+            @foreach (var s in Enum.GetValues<PartnerStatus>())
+            {
+                <option value="@s">@PortfolioText.Label(s)</option>
+            }
+        </select>
+    </div>
+
+    <div class="card table-wrap">
+        <table class="tree">
+            <thead>
+                <tr>
+                    <th>Partner</th>
+                    <th>Type</th>
+                    <th>Account code</th>
+                    <th>EDI ID</th>
+                    <th>Relationship owner</th>
+                    <th class="num" title="Integrations to or from this partner">Integrations</th>
+                    <th>Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtered)
+                {
+                    var flows = FlowsOf(p.Id);
+                    var worst = flows.Select(i => PortfolioRules.RiskLevel(i, today)).DefaultIfEmpty(RiskLevel.Low).Max();
+                    <tr class="@(p.Status == PartnerStatus.Inactive ? "muted" : "")">
+                        <td class="title-cell">
+                            <span class="inline-gap">
+                                <a class="title-link" href="/portfolio/partners/@p.Id">@p.Name</a>
+                                @if (p.Importance == PartnerImportance.Key) { <span class="badge key-partner">Key</span> }
+                                @if (p.Status != PartnerStatus.Active) { <span class="badge partner-@p.Status">@PortfolioText.Label(p.Status)</span> }
+                            </span>
+                        </td>
+                        <td>@PortfolioText.Label(p.Type)</td>
+                        <td>@(p.AccountCode ?? "–")</td>
+                        <td class="small mono">@(p.EdiAddress ?? "–")</td>
+                        <td>@(p.RelationshipOwner?.Name ?? "–")</td>
+                        <td class="num" title="@string.Join(", ", flows.Select(i => i.Name))">
+                            @if (flows.Count > 0)
+                            {
+                                <span>@flows.Count(i => i.SourcePartnerId == p.Id) in · @flows.Count(i => i.TargetPartnerId == p.Id) out</span>
+                            }
+                            else { <span class="muted">–</span> }
+                        </td>
+                        <td>@if (flows.Count > 0) { <RiskBadge Level="worst" /> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (!Filtered.Any())
+        {
+            <div class="empty muted">No trading partners match these filters.</div>
+        }
+    </div>
+}
+
+@if (editing is not null)
+{
+    <TradingPartnerEditor Draft="editing" OnClose="OnEditorClosed" />
+}
+
+@code {
+    private List<TradingPartner>? partners;
+    private List<Integration> integrations = [];
+    private TradingPartnerDraft? editing;
+    private DateOnly today;
+    private string search = "";
+    private PartnerType? type;
+    private PartnerImportance? importance;
+    private PartnerStatus? status;
+
+    private List<Integration> FlowsOf(int partnerId) =>
+        integrations.Where(i => i.Status != LifecycleStatus.Retired && (i.SourcePartnerId == partnerId || i.TargetPartnerId == partnerId)).ToList();
+
+    private int HighRiskPartners => partners!.Count(p => FlowsOf(p.Id).Any(i => PortfolioRules.RiskLevel(i, today) == RiskLevel.High));
+
+    private IEnumerable<TradingPartner> Filtered => partners!
+        .Where(p => status is { } s ? p.Status == s : p.Status != PartnerStatus.Inactive)
+        .Where(p => type is null || p.Type == type)
+        .Where(p => importance is null || p.Importance == importance)
+        .Where(p => string.IsNullOrWhiteSpace(search)
+            || p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (p.AccountCode?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (p.EdiId?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (p.GsId?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderBy(p => p.Importance).ThenBy(p => p.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Svc.Today;
+        partners = await Svc.GetPartnersAsync();
+        integrations = await Svc.GetIntegrationsAsync();
+    }
+
+    private void OnEditorClosed(int? id)
+    {
+        editing = null;
+        if (id is > 0) Nav.NavigateTo($"/portfolio/partners/{id}");
+    }
+}

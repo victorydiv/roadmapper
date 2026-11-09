@@ -8,7 +8,7 @@ public partial class PortfolioService
     public async Task<List<Contact>> GetContactsAsync()
     {
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Contacts.AsNoTracking().Include(c => c.Vendor).OrderBy(c => c.Name).ToListAsync();
+        return await db.Contacts.AsNoTracking().Include(c => c.Vendor).Include(c => c.TradingPartner).OrderBy(c => c.Name).ToListAsync();
     }
 
     public async Task<int> SaveContactAsync(ContactDraft draft)
@@ -17,6 +17,7 @@ public partial class PortfolioService
 
         await using var db = await dbFactory.CreateDbContextAsync();
         if (draft.VendorId is { } vid && !await db.Vendors.AnyAsync(v => v.Id == vid)) throw NotFound("Vendor");
+        if (draft.TradingPartnerId is { } pid && !await db.TradingPartners.AnyAsync(p => p.Id == pid)) throw NotFound("Trading partner");
 
         Contact contact;
         if (draft.IsNew)
@@ -56,6 +57,7 @@ public partial class PortfolioService
         roles.AddRange((await db.VendorEscalationContacts.Where(x => x.ContactId == id)
             .Join(db.Vendors, x => x.VendorId, v => v.Id, (x, v) => new { v.Name, x.Level }).ToListAsync())
             .Select(x => $"Escalation level {x.Level} for {x.Name}"));
+        roles.AddRange((await db.TradingPartners.Where(p => p.RelationshipOwnerId == id).Select(p => p.Name).ToListAsync()).Select(n => $"Relationship owner for {n}"));
         roles.AddRange((await db.Integrations.Where(i => i.OwnerId == id).Select(i => i.Name).ToListAsync()).Select(n => $"Owner of integration {n}"));
         roles.AddRange((await db.IntegrationRisks.Where(r => r.OwnerId == id)
             .Join(db.Integrations, r => r.IntegrationId, i => i.Id, (r, i) => i.Name).ToListAsync())

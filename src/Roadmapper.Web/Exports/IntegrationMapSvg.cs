@@ -6,24 +6,25 @@ using Roadmapper.Core.Portfolio;
 namespace Roadmapper.Web.Exports;
 
 /// <summary>
-/// What to draw. With <see cref="FocusId"/> it's a dependency view (upstream | app | downstream); otherwise the whole catalog by
-/// category. <see cref="HideExternal"/> drops flows to or from external parties (customers, carriers, trading partners).
+/// What to draw. With <see cref="Focus"/> it's a dependency view (upstream | selected | downstream); otherwise the whole
+/// catalog by category, trading partners first. <see cref="HidePartners"/> drops flows to or from trading partners.
 /// </summary>
-public sealed record MapOptions(int? FocusId = null, int Depth = 2, IntegrationType? Type = null, Criticality? MaxTier = null,
-    bool IncludeRetired = false, bool HideExternal = false);
+public sealed record MapOptions(NodeRef? Focus = null, int Depth = 2, IntegrationType? Type = null, Criticality? MaxTier = null,
+    bool IncludeRetired = false, bool HidePartners = false);
 
-public sealed record MapPicture(string Svg, int ApplicationCount, int IntegrationCount);
+public sealed record MapPicture(string Svg, int NodeCount, int IntegrationCount);
 
 /// <summary>
 /// The integration map as a self-contained SVG (inline styles, no external fonts), used on the Map page, the
-/// application page and the /api/portfolio/map.svg download. Boxes and lines are links to their detail pages.
-/// Layout comes from <see cref="MapLayout"/>; this class only filters and draws.
+/// application and partner pages and the /api/portfolio/map.svg download. Boxes and lines are links to their
+/// detail pages. Layout comes from <see cref="MapLayout"/>; this class only filters and draws.
 /// </summary>
 public static class IntegrationMapSvg
 {
     private const double TitleHeight = 52, HeaderHeight = 26, LegendHeight = 64, MinWidth = 900;
     private const string FontFamily = "Segoe UI, system-ui, -apple-system, sans-serif";
     private const string Ink = "#1d2330", Muted = "#667085", Line = "#e1e4ea";
+    private const string PartnerFill = "#f6f3fd", PartnerStroke = "#b9a6e3";
 
     public static string TypeColor(IntegrationType t) => t switch
     {
@@ -41,38 +42,39 @@ public static class IntegrationMapSvg
         _ => "#9aa3b2",
     };
 
+    public static string ImportanceColor(PartnerImportance i) => i == PartnerImportance.Key ? "#7c4dcc" : "#c9bce8";
+
     /// <summary>The integrations the options keep: live ones (unless retired are included) of the chosen type and tier.</summary>
     public static List<Integration> Filter(IEnumerable<Integration> integrations, MapOptions o) => integrations
         .Where(i => o.IncludeRetired || i.Status != LifecycleStatus.Retired)
         .Where(i => o.Type is null || i.Type == o.Type)
         .Where(i => o.MaxTier is null || i.Criticality <= o.MaxTier)
-        .Where(i => !o.HideExternal || !TouchesExternal(i))
+        .Where(i => !o.HidePartners || !i.InvolvesPartner)
         .ToList();
 
-    /// <summary>True when the source, target or middle hop is an external party. Needs Source/Target/Via loaded.</summary>
-    public static bool TouchesExternal(Integration i) =>
-        new[] { i.Source, i.Target, i.Via }.Any(a => a?.Category == AppCategory.ExternalParty);
-
-    public static MapPicture Render(IReadOnlyList<Application> apps, IReadOnlyList<Integration> integrations, MapOptions o, DateOnly today, string title)
+    public static MapPicture Render(IReadOnlyList<Application> apps, IReadOnlyList<TradingPartner> partners,
+        IReadOnlyList<Integration> integrations, MapOptions o, DateOnly today, string title)
     {
         var appById = apps.ToDictionary(a => a.Id);
+        var partnerById = partners.ToDictionary(p => p.Id);
+        bool Known(NodeRef n) => n.IsPartner ? partnerById.ContainsKey(n.Id) : appById.ContainsKey(n.Id);
+        string NameOf(NodeRef n) => n.IsPartner ? partnerById[n.Id].Name : appById[n.Id].Name;
         var kept = Filter(integrations, o);
 
-        // Columns: distance from the focus, or category.
-        Dictionary<int, int> columns;
-        if (o.FocusId is { } focus && appById.ContainsKey(focus))
-        {
-            columns = MapLayout.FocusColumns(PortfolioGraph.From(kept), focus, Math.Clamp(o.Depth, 1, 5));
-        }
+        // Columns: distance from the focus, or category (partners first).
+        Dictionary<NodeRef, int> columns;
+        var focus = o.Focus is { } f && Known(f) ? f : (NodeRef?)null;
+        if (focus is { } fn)
+            columns = MapLayout.FocusColumns(PortfolioGraph.From(kept), fn, Math.Clamp(o.Depth, 1, 5));
         else
-        {
-            columns = kept.SelectMany(Ends).Distinct().Where(appById.ContainsKey)
-                .ToDictionary(id => id, id => MapLayout.CategoryColumn(appById[id].Category));
-        }
-        // Only integrations whose source and target are both on the picture; a hop that isn't is skipped.
-        var shown = kept.Where(i => columns.ContainsKey(i.SourceApplicationId) && columns.ContainsKey(i.TargetApplicationId)).ToList();
+            columns = kept.SelectMany(Ends).Distinct().Where(Known)
+                .ToDictionary(n => n, n => n.IsPartner ? MapLayout.PartnerColumn : MapLayout.CategoryColumn(appById[n.Id].Category));
+        columns = columns.Where(c => Known(c.Key)).ToDictionary(c => c.Key, c => c.Value);
 
-        var nodes = columns.Where(c => appById.ContainsKey(c.Key)).Select(c => new MapNode(c.Key, appById[c.Key].Name, c.Value)).ToList();
+        // Only integrations whose source and target are both on the picture; a hop that isn't is skipped.
+        var shown = kept.Where(i => columns.ContainsKey(i.SourceNode) && columns.ContainsKey(i.TargetNode)).ToList();
+
+        var nodes = columns.Select(c => new MapNode(c.Key, NameOf(c.Key), c.Value)).ToList();
         var segments = shown.SelectMany(i => Segments(i, columns)).ToList();
         var layout = MapLayout.Layout(nodes, segments.Select(s => new MapEdge(s.From, s.To)));
 
@@ -80,7 +82,7 @@ public static class IntegrationMapSvg
         var loops = segments.Where(s => layout.Boxes[s.From].ColumnIndex == layout.Boxes[s.To].ColumnIndex).ToList();
         var loopRoom = loops.Count == 0 ? 0 : 56 + 8 * loops.Max(s => Math.Abs(layout.Boxes[s.From].Row - layout.Boxes[s.To].Row));
         var width = Math.Max(layout.Width + loopRoom, MinWidth);
-        var focusMode = o.FocusId is not null && nodes.Count > 0;
+        var focusMode = focus is not null && nodes.Count > 0;
         var top = TitleHeight + HeaderHeight;
         var height = top + Math.Max(layout.Height, 90) + LegendHeight;
 
@@ -94,8 +96,11 @@ public static class IntegrationMapSvg
         svg.Append($"""<rect width="{F(width)}" height="{F(height)}" fill="#ffffff"/>""");
 
         svg.Append($"""<text x="{F(MapLayout.Margin)}" y="24" font-size="17" font-weight="600" fill="{Ink}">{E(title)}</text>""");
-        var subtitle = $"{nodes.Count} applications · {shown.Count} integrations · {today.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"
-            + (focusMode ? " · applications that both send and receive are shown downstream" : "");
+        var appCount = nodes.Count(n => !n.Id.IsPartner);
+        var partnerCount = nodes.Count - appCount;
+        var subtitle = $"{appCount} applications" + (partnerCount > 0 ? $" · {partnerCount} trading partners" : "")
+            + $" · {shown.Count} integrations · {today.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"
+            + (focusMode ? " · anything that both sends and receives is shown downstream" : "");
         svg.Append($"""<text x="{F(MapLayout.Margin)}" y="42" fill="{Muted}">{E(subtitle)}</text>""");
 
         if (nodes.Count == 0)
@@ -114,7 +119,7 @@ public static class IntegrationMapSvg
         }
 
         // Lines: parallel segments between the same two boxes fan out so each stays visible.
-        var lanes = segments.GroupBy(s => (Math.Min(s.From, s.To), Math.Max(s.From, s.To)))
+        var lanes = segments.GroupBy(s => s.From.CompareTo(s.To) < 0 ? (s.From, s.To) : (s.To, s.From))
             .SelectMany(g => g.Select((s, k) => (s, offset: (k - (g.Count() - 1) / 2.0) * 7)))
             .ToDictionary(x => x.s, x => x.offset);
         var risks = new List<(double X, double Y, RiskLevel Level, Integration I)>();
@@ -124,14 +129,14 @@ public static class IntegrationMapSvg
             var dashed = i.Type == IntegrationType.Manual || i.Status == LifecycleStatus.Planned;
             var opacity = i.Status switch { LifecycleStatus.Retired => 0.3, LifecycleStatus.Retiring => 0.6, _ => 1.0 };
             var level = PortfolioRules.RiskLevel(i, today);
-            svg.Append($"""<a class="im-link" href="/portfolio/integrations/{i.Id}"><g opacity="{F(opacity)}"><title>{E(Tooltip(i, appById, level))}</title>""");
+            svg.Append($"""<a class="im-link" href="/portfolio/integrations/{i.Id}"><g opacity="{F(opacity)}"><title>{E(Tooltip(i, level))}</title>""");
             (double X, double Y)? mid = null;
             foreach (var s in segments.Where(s => s.IntegrationId == i.Id))
             {
                 var (a, b) = (layout.Boxes[s.From], layout.Boxes[s.To]);
                 var (path, m) = Curve(a, b, top, lanes[s]);
-                // In a dependency view, flows between two neighbors of the same rank are context, not the path to or from the selected app: fade them.
-                var side = focusMode && a.ColumnIndex == b.ColumnIndex && s.From != o.FocusId && s.To != o.FocusId;
+                // In a dependency view, flows between two neighbors of the same rank are context, not the path to or from the selected node: fade them.
+                var side = focusMode && a.ColumnIndex == b.ColumnIndex && s.From != focus && s.To != focus;
                 if (!side) mid ??= m;
                 var start = i.Direction == FlowDirection.Bidirectional ? $""" marker-start="url(#im-{i.Type})" """ : " ";
                 svg.Append($"""<path class="im-edge" d="{path}" fill="none" stroke="{color}" stroke-width="2"{(side ? " opacity=\"0.3\"" : "")}{(dashed ? " stroke-dasharray=\"6 4\"" : "")}{start}marker-end="url(#im-{i.Type})"/>""");
@@ -152,18 +157,10 @@ public static class IntegrationMapSvg
         // Boxes
         foreach (var box in layout.Boxes.Values)
         {
-            var a = appById[box.Id];
             var (x, y) = (box.X, box.Y + top);
-            var isFocus = box.Id == o.FocusId;
-            var dim = a.Status is LifecycleStatus.Retiring or LifecycleStatus.Retired ? " opacity=\"0.65\"" : "";
-            var dash = a.Status == LifecycleStatus.Planned ? " stroke-dasharray=\"5 3\"" : "";
-            svg.Append($"""<a class="im-link" href="/portfolio/applications/{a.Id}"><g{dim}><title>{E(NodeTooltip(a))}</title>""");
-            svg.Append($"""<rect class="im-box" x="{F(x)}" y="{F(y)}" width="{F(MapLayout.NodeWidth)}" height="{F(MapLayout.NodeHeight)}" rx="8" fill="{(isFocus ? "#e8ecfd" : "#ffffff")}" stroke="{(isFocus ? "#3f5bd9" : "#c3c8d2")}" stroke-width="{(isFocus ? 2 : 1)}"{dash}/>""");
-            svg.Append($"""<rect x="{F(x)}" y="{F(y)}" width="5" height="{F(MapLayout.NodeHeight)}" rx="2" fill="{TierColor(a.Criticality)}"/>""");
-            svg.Append($"""<text x="{F(x + 14)}" y="{F(y + 21)}" font-weight="600" fill="{Ink}">{E(Truncate(a.Name, 23))}</text>""");
-            var caption = $"{PortfolioText.Label(a.Category)} · {PortfolioText.Label(a.Criticality)}" + (a.Status == LifecycleStatus.Active ? "" : $" · {PortfolioText.Label(a.Status)}");
-            svg.Append($"""<text x="{F(x + 14)}" y="{F(y + 38)}" font-size="11" fill="{Muted}">{E(Truncate(caption, 30))}</text>""");
-            svg.Append("</g></a>");
+            var isFocus = box.Id == focus;
+            if (box.Id.IsPartner) PartnerBox(svg, partnerById[box.Id.Id], x, y, isFocus);
+            else AppBox(svg, appById[box.Id.Id], x, y, isFocus);
         }
 
         Legend(svg, height - LegendHeight + 12, width);
@@ -171,20 +168,49 @@ public static class IntegrationMapSvg
         return new MapPicture(svg.ToString(), nodes.Count, shown.Count);
     }
 
-    private sealed record Segment(int IntegrationId, int From, int To);
+    private static void AppBox(StringBuilder svg, Application a, double x, double y, bool isFocus)
+    {
+        var dim = a.Status is LifecycleStatus.Retiring or LifecycleStatus.Retired ? " opacity=\"0.65\"" : "";
+        var dash = a.Status == LifecycleStatus.Planned ? " stroke-dasharray=\"5 3\"" : "";
+        svg.Append($"""<a class="im-link" href="/portfolio/applications/{a.Id}"><g{dim}><title>{E(NodeTooltip(a))}</title>""");
+        svg.Append($"""<rect class="im-box" x="{F(x)}" y="{F(y)}" width="{F(MapLayout.NodeWidth)}" height="{F(MapLayout.NodeHeight)}" rx="8" fill="{(isFocus ? "#e8ecfd" : "#ffffff")}" stroke="{(isFocus ? "#3f5bd9" : "#c3c8d2")}" stroke-width="{(isFocus ? 2 : 1)}"{dash}/>""");
+        svg.Append($"""<rect x="{F(x)}" y="{F(y)}" width="5" height="{F(MapLayout.NodeHeight)}" rx="2" fill="{TierColor(a.Criticality)}"/>""");
+        svg.Append($"""<text x="{F(x + 14)}" y="{F(y + 21)}" font-weight="600" fill="{Ink}">{E(Truncate(a.Name, 23))}</text>""");
+        var caption = $"{PortfolioText.Label(a.Category)} · {PortfolioText.Label(a.Criticality)}" + (a.Status == LifecycleStatus.Active ? "" : $" · {PortfolioText.Label(a.Status)}");
+        svg.Append($"""<text x="{F(x + 14)}" y="{F(y + 38)}" font-size="11" fill="{Muted}">{E(Truncate(caption, 30))}</text>""");
+        svg.Append("</g></a>");
+    }
 
-    private static IEnumerable<int> Ends(Integration i) =>
-        i.ViaApplicationId is { } via ? [i.SourceApplicationId, via, i.TargetApplicationId] : [i.SourceApplicationId, i.TargetApplicationId];
+    /// <summary>Partners are drawn as lilac pills, so they read as outside companies rather than your systems.</summary>
+    private static void PartnerBox(StringBuilder svg, TradingPartner p, double x, double y, bool isFocus)
+    {
+        var dim = p.Status == PartnerStatus.Inactive ? " opacity=\"0.65\"" : "";
+        var dash = p.Status == PartnerStatus.Onboarding ? " stroke-dasharray=\"5 3\"" : "";
+        var h = MapLayout.NodeHeight;
+        svg.Append($"""<a class="im-link" href="/portfolio/partners/{p.Id}"><g{dim}><title>{E(PartnerTooltip(p))}</title>""");
+        svg.Append($"""<rect class="im-box" x="{F(x)}" y="{F(y)}" width="{F(MapLayout.NodeWidth)}" height="{F(h)}" rx="{F(h / 2)}" fill="{(isFocus ? "#e8ecfd" : PartnerFill)}" stroke="{(isFocus ? "#3f5bd9" : PartnerStroke)}" stroke-width="{(isFocus ? 2 : 1)}"{dash}/>""");
+        svg.Append($"""<circle cx="{F(x + 16)}" cy="{F(y + h / 2)}" r="5" fill="{ImportanceColor(p.Importance)}"/>""");
+        svg.Append($"""<text x="{F(x + 28)}" y="{F(y + 21)}" font-weight="600" fill="{Ink}">{E(Truncate(p.Name, 21))}</text>""");
+        var caption = PortfolioText.Label(p.Type) + (p.Importance == PartnerImportance.Key ? " · Key" : "")
+            + (p.Status == PartnerStatus.Active ? "" : $" · {PortfolioText.Label(p.Status)}");
+        svg.Append($"""<text x="{F(x + 28)}" y="{F(y + 38)}" font-size="11" fill="{Muted}">{E(Truncate(caption, 28))}</text>""");
+        svg.Append("</g></a>");
+    }
+
+    private sealed record Segment(int IntegrationId, NodeRef From, NodeRef To);
+
+    private static IEnumerable<NodeRef> Ends(Integration i) =>
+        i.ViaNode is { } via ? [i.SourceNode, via, i.TargetNode] : [i.SourceNode, i.TargetNode];
 
     /// <summary>Source → via → target when the hop is on the picture, otherwise straight source → target.</summary>
-    private static IEnumerable<Segment> Segments(Integration i, IReadOnlyDictionary<int, int> columns)
+    private static IEnumerable<Segment> Segments(Integration i, IReadOnlyDictionary<NodeRef, int> columns)
     {
-        if (i.ViaApplicationId is { } via && columns.ContainsKey(via))
+        if (i.ViaNode is { } via && columns.ContainsKey(via))
         {
-            yield return new Segment(i.Id, i.SourceApplicationId, via);
-            yield return new Segment(i.Id, via, i.TargetApplicationId);
+            yield return new Segment(i.Id, i.SourceNode, via);
+            yield return new Segment(i.Id, via, i.TargetNode);
         }
-        else yield return new Segment(i.Id, i.SourceApplicationId, i.TargetApplicationId);
+        else yield return new Segment(i.Id, i.SourceNode, i.TargetNode);
     }
 
     /// <summary>A smooth curve between the facing sides of two boxes (or out and back on the right when they share a column), and its midpoint.</summary>
@@ -202,15 +228,14 @@ public static class IntegrationMapSvg
             var bulge = 40 + 8 * Math.Abs(a.Row - b.Row);
             c0 = x0 + bulge; c1 = x1 + bulge;
         }
-        var mid = ((x0 + 3 * c0 + 3 * c1 + x1) / 8, (ay + 3 * ay + 3 * by + by) / 8);
+        var mid = ((x0 + 3 * c0 + 3 * c1 + x1) / 8, (ay + by) / 2);
         return ($"M{F(x0)},{F(ay)} C{F(c0)},{F(ay)} {F(c1)},{F(by)} {F(x1)},{F(by)}", mid);
     }
 
-    private static string Tooltip(Integration i, IReadOnlyDictionary<int, Application> apps, RiskLevel level)
+    private static string Tooltip(Integration i, RiskLevel level)
     {
-        string Name(int id) => apps.TryGetValue(id, out var a) ? a.Name : $"#{id}";
-        var route = $"{Name(i.SourceApplicationId)} {(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")} {Name(i.TargetApplicationId)}"
-            + (i.ViaApplicationId is { } via ? $" (via {Name(via)})" : "");
+        var route = $"{i.SourceName} {(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")} {i.TargetName}"
+            + (i.Via is { } via ? $" (via {via.Name})" : "");
         var facts = string.Join(" · ", new[] { PortfolioText.Label(i.Type), i.MessageFormat, PortfolioText.Label(i.Frequency), PortfolioText.Label(i.Criticality) }
             .Where(s => !string.IsNullOrEmpty(s)));
         return $"{i.Name}\n{route}\n{facts}\n{i.BusinessPurpose}" + (level == RiskLevel.Low ? "" : $"\n{PortfolioText.Label(level)}");
@@ -219,6 +244,10 @@ public static class IntegrationMapSvg
     private static string NodeTooltip(Application a) =>
         $"{a.Name}\n{PortfolioText.Label(a.Category)} · {PortfolioText.Label(a.Criticality)} · {PortfolioText.Label(a.Status)}"
         + (a.Vendor is { } v ? $"\n{v.Name}" : "");
+
+    private static string PartnerTooltip(TradingPartner p) =>
+        $"{p.Name}\n{PortfolioText.Label(p.Type)} · {PortfolioText.Label(p.Importance)} · {PortfolioText.Label(p.Status)}"
+        + (p.EdiAddress is { } edi ? $"\nEDI {edi}" : "");
 
     private static void Legend(StringBuilder svg, double y, double width)
     {
@@ -231,7 +260,7 @@ public static class IntegrationMapSvg
             svg.Append($"""<text x="{F(x + 34)}" y="{F(y + 10)}" fill="{Ink}">{E(PortfolioText.Label(t))}</text>""");
             x += 34 + 8 * PortfolioText.Label(t).Length + 22;
         }
-        svg.Append($"""<text x="{F(x)}" y="{F(y + 10)}" fill="{Muted}">Dashed: manual or planned · arrows at both ends: two-way</text>""");
+        svg.Append($"""<text x="{F(x)}" y="{F(y + 10)}" fill="{Muted}">Dashed: manual, planned or onboarding · arrows at both ends: two-way</text>""");
 
         var y2 = y + 28;
         x = MapLayout.Margin;
@@ -241,6 +270,9 @@ public static class IntegrationMapSvg
             svg.Append($"""<text x="{F(x + 11)}" y="{F(y2 + 11)}" fill="{Ink}">{PortfolioText.Label(c)}</text>""");
             x += 70;
         }
+        svg.Append($"""<rect x="{F(x)}" y="{F(y2)}" width="34" height="14" rx="7" fill="{PartnerFill}" stroke="{PartnerStroke}"/><circle cx="{F(x + 8)}" cy="{F(y2 + 7)}" r="3.5" fill="{ImportanceColor(PartnerImportance.Key)}"/>""");
+        svg.Append($"""<text x="{F(x + 42)}" y="{F(y2 + 11)}" fill="{Ink}">Trading partner (dark dot: key)</text>""");
+        x += 42 + 7 * 30 + 24;
         foreach (var (label, fill) in new[] { ("High risk", "#c8372d"), ("Medium risk or review overdue", "#eda100") })
         {
             svg.Append($"""<circle cx="{F(x + 7)}" cy="{F(y2 + 7)}" r="7" fill="{fill}"/><text x="{F(x + 7)}" y="{F(y2 + 11)}" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">!</text>""");

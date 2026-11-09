@@ -1,6 +1,6 @@
 @inject PortfolioService Svc
 
-@* A person picker: internal staff first, then each vendor's people. "+ New" adds someone without leaving the form. *@
+@* A person picker: internal staff first, then each vendor's and trading partner's people. "+ New" adds someone without leaving the form. *@
 <div class="contact-select">
     @if (!adding)
     {
@@ -31,11 +31,25 @@
                 <input placeholder="Name" @bind="draft.Name" @bind:event="oninput" />
                 <input placeholder="Title (optional)" @bind="draft.Title" />
                 <input placeholder="Email (optional)" @bind="draft.Email" />
-                <select @bind="draft.VendorId">
+                <select @bind="draft.CompanyKey">
                     <option value="">Internal (our company)</option>
-                    @foreach (var v in Vendors)
+                    @if (Vendors.Count > 0)
                     {
-                        <option value="@v.Id">@v.Name</option>
+                        <optgroup label="Vendors">
+                            @foreach (var v in Vendors)
+                            {
+                                <option value="v@(v.Id)">@v.Name</option>
+                            }
+                        </optgroup>
+                    }
+                    @if (Partners.Count > 0)
+                    {
+                        <optgroup label="Trading partners">
+                            @foreach (var tp in Partners)
+                            {
+                                <option value="p@(tp.Id)">@tp.Name</option>
+                            }
+                        </optgroup>
                     }
                 </select>
             </div>
@@ -53,8 +67,12 @@
     [Parameter] public IReadOnlyList<Vendor> Vendors { get; set; } = [];
     [Parameter] public int? Value { get; set; }
     [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+    /// <summary>Trading partners offered for a new person's company.</summary>
+    [Parameter] public IReadOnlyList<TradingPartner> Partners { get; set; } = [];
     /// <summary>This vendor's people are listed first, and a new person defaults to it.</summary>
     [Parameter] public int? PreferVendorId { get; set; }
+    /// <summary>This partner's people are listed first, and a new person defaults to it.</summary>
+    [Parameter] public int? PreferPartnerId { get; set; }
 
     private bool adding;
     private ContactDraft draft = new();
@@ -62,18 +80,23 @@
 
     private IEnumerable<IGrouping<string, Contact>> Groups => Contacts
         .Where(c => c.IsActive || c.Id == Value)
-        .OrderBy(c => c.VendorId == PreferVendorId && PreferVendorId is not null ? 0 : c.VendorId is null ? 1 : 2)
-        .ThenBy(c => c.Vendor?.Name).ThenBy(c => c.Name)
-        .GroupBy(c => c.Vendor?.Name ?? VendorName(c.VendorId) ?? "Internal");
+        .OrderBy(c => Preferred(c) ? 0 : c.IsInternal ? 1 : 2)
+        .ThenBy(c => Company(c)).ThenBy(c => c.Name)
+        .GroupBy(c => Company(c) ?? "Internal");
 
-    private string? VendorName(int? id) => id is null ? null : Vendors.FirstOrDefault(v => v.Id == id)?.Name;
+    private bool Preferred(Contact c) =>
+        (PreferVendorId is not null && c.VendorId == PreferVendorId) || (PreferPartnerId is not null && c.TradingPartnerId == PreferPartnerId);
+
+    private string? Company(Contact c) => c.CompanyName
+        ?? (c.VendorId is { } v ? Vendors.FirstOrDefault(x => x.Id == v)?.Name : null)
+        ?? (c.TradingPartnerId is { } p ? Partners.FirstOrDefault(x => x.Id == p)?.Name : null);
 
     private Task OnPicked(ChangeEventArgs e) =>
         ValueChanged.InvokeAsync(int.TryParse(e.Value as string, out var id) ? id : null);
 
     private void StartAdding()
     {
-        draft = new ContactDraft { VendorId = PreferVendorId };
+        draft = new ContactDraft { VendorId = PreferVendorId, TradingPartnerId = PreferVendorId is null ? PreferPartnerId : null };
         error = null;
         adding = true;
     }
@@ -84,9 +107,10 @@
         try
         {
             var id = await Svc.SaveContactAsync(draft);
-            var contact = new Contact { Id = id, VendorId = draft.VendorId };
+            var contact = new Contact { Id = id };
             draft.ApplyTo(contact);
             contact.Vendor = Vendors.FirstOrDefault(v => v.Id == draft.VendorId);
+            contact.TradingPartner = Partners.FirstOrDefault(p => p.Id == draft.TradingPartnerId);
             Contacts.Add(contact);
             adding = false;
             await ValueChanged.InvokeAsync(id);

@@ -21,22 +21,14 @@
                 else
                 {
                     <div class="grid-3">
-                        <label class="field">Source (sends)
-                            <InputSelect @bind-Value="draft.SourceApplicationId">
-                                <option value="">— choose —</option>
-                                @foreach (var a in apps)
-                                {
-                                    <option value="@a.Id">@AppLabel(a)</option>
-                                }
+                        <label class="field" title="An application, or a trading partner such as a customer or carrier">Source (sends)
+                            <InputSelect @bind-Value="draft.SourceKey">
+                                @EndpointOptions
                             </InputSelect>
                         </label>
-                        <label class="field">Target (receives)
-                            <InputSelect @bind-Value="draft.TargetApplicationId">
-                                <option value="">— choose —</option>
-                                @foreach (var a in apps)
-                                {
-                                    <option value="@a.Id">@AppLabel(a)</option>
-                                }
+                        <label class="field" title="An application, or a trading partner such as a customer or carrier">Target (receives)
+                            <InputSelect @bind-Value="draft.TargetKey">
+                                @EndpointOptions
                             </InputSelect>
                         </label>
                         <label class="field" title="A middle hop the data passes through, such as an EDI VAN, iPaaS or middleware">Via (optional)
@@ -171,18 +163,47 @@
     private bool loaded, saving, confirmingDelete;
     private string? error;
 
+    private List<TradingPartner> partners = [];
+
     private static string AppLabel(Application a) => a.Status == LifecycleStatus.Retired ? $"{a.Name} (retired)" : a.Name;
 
-    private string NamePlaceholder =>
-        apps.FirstOrDefault(a => a.Id == draft.SourceApplicationId) is { } s && apps.FirstOrDefault(a => a.Id == draft.TargetApplicationId) is { } t
-            ? $"{s.Name} → {t.Name}"
-            : "Leave blank to name it “Source → Target”";
+    private string? NameOf(NodeRef? node) => node switch
+    {
+        { IsPartner: true } p => partners.FirstOrDefault(x => x.Id == p.Id)?.Name,
+        { } a => apps.FirstOrDefault(x => x.Id == a.Id)?.Name,
+        _ => null,
+    };
+
+    private string NamePlaceholder => NameOf(draft.Source) is { } s && NameOf(draft.Target) is { } t
+        ? $"{s} → {t}"
+        : "Leave blank to name it “Source → Target”";
+
+    private RenderFragment EndpointOptions => __builder =>
+    {
+        <option value="">— choose —</option>
+        <optgroup label="Applications">
+            @foreach (var a in apps)
+            {
+                <option value="@NodeRef.App(a.Id).Key">@AppLabel(a)</option>
+            }
+        </optgroup>
+        @if (partners.Count > 0)
+        {
+            <optgroup label="Trading partners">
+                @foreach (var p in partners)
+                {
+                    <option value="@NodeRef.Partner(p.Id).Key">@p.Name (@PortfolioText.Label(p.Type).ToLowerInvariant())</option>
+                }
+            </optgroup>
+        }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         draft = Draft;
         original = Draft.Name ?? "integration";
         apps = await Svc.GetApplicationsAsync();
+        partners = await Svc.GetPartnersAsync();
         contacts = await Svc.GetContactsAsync();
         vendors = await Svc.GetVendorsAsync();
         loaded = true;

@@ -2,7 +2,7 @@
 @inject PortfolioService Svc
 @inject NavigationManager Nav
 
-<PortfolioHeader Title="Integration map" Subtitle="How data moves between your applications. Click a box or a line to open it.">
+<PortfolioHeader Title="Integration map" Subtitle="How data moves between your applications and trading partners. Click a box or a line to open it.">
     <a class="btn" href="@DownloadUrl" download>Download SVG</a>
 </PortfolioHeader>
 
@@ -15,14 +15,25 @@ else
     <div class="toolbar">
         <label class="inline-gap small">Focus on
             <select @bind="FocusValue">
-                <option value="0">— whole portfolio —</option>
-                @foreach (var a in apps.Where(a => connected.Contains(a.Id)))
+                <option value="">— whole portfolio —</option>
+                <optgroup label="Applications">
+                    @foreach (var a in apps.Where(a => connected.Contains(NodeRef.App(a.Id))))
+                    {
+                        <option value="@NodeRef.App(a.Id).Key">@a.Name</option>
+                    }
+                </optgroup>
+                @if (partners.Any(p => connected.Contains(NodeRef.Partner(p.Id))))
                 {
-                    <option value="@a.Id">@a.Name</option>
+                    <optgroup label="Trading partners">
+                        @foreach (var p in partners.Where(p => connected.Contains(NodeRef.Partner(p.Id))))
+                        {
+                            <option value="@NodeRef.Partner(p.Id).Key">@p.Name</option>
+                        }
+                    </optgroup>
                 }
             </select>
         </label>
-        @if (Focus is not null)
+        @if (FocusNode is not null)
         {
             <label class="inline-gap small">Depth
                 <select @bind="DepthValue">
@@ -47,10 +58,10 @@ else
             <option value="@Criticality.Tier2">Tier 1 and 2</option>
         </select>
         <label class="check"><input type="checkbox" @bind="includeRetired" /> Show retired</label>
-        <label class="check" title="Customers, carriers and trading partners"><input type="checkbox" @bind="showExternal" /> Show external parties</label>
-        @if (Focus is { } f)
+        <label class="check" title="Customers, carriers and other trading partners"><input type="checkbox" @bind="showPartners" /> Show trading partners</label>
+        @if (FocusNode is { } f && FocusName is { } name)
         {
-            <a class="small" href="/portfolio/applications/@f">Open @apps.FirstOrDefault(a => a.Id == f)?.Name →</a>
+            <a class="small" href="@PortfolioUi.Href(f)">Open @name →</a>
         }
     </div>
 
@@ -63,31 +74,51 @@ else
         <div class="card map-card">
             @((MarkupString)Picture.Svg)
         </div>
-        @if (Focus is null && apps.Count(a => !connected.Contains(a.Id) && a.Status != LifecycleStatus.Retired) is > 0 and var alone)
+        @if (FocusNode is null && apps.Where(a => !connected.Contains(NodeRef.App(a.Id)) && a.Status != LifecycleStatus.Retired).Select(a => a.Name).ToList() is { Count: > 0 } alone)
         {
-            <div class="muted small" style="margin-top:.5rem">
-                Not shown (no integrations yet): @string.Join(", ", apps.Where(a => !connected.Contains(a.Id) && a.Status != LifecycleStatus.Retired).Select(a => a.Name))
-            </div>
+            <div class="muted small" style="margin-top:.5rem">Applications not shown (no integrations yet): @string.Join(", ", alone)</div>
         }
     }
 }
 
 @code {
+    /// <summary>An application id to focus on.</summary>
     [SupplyParameterFromQuery(Name = "focus")] public int? Focus { get; set; }
+    /// <summary>A trading partner id to focus on (wins over focus).</summary>
+    [SupplyParameterFromQuery(Name = "partner")] public int? Partner { get; set; }
     [SupplyParameterFromQuery(Name = "depth")] public int? Depth { get; set; }
 
     private List<Application>? apps;
+    private List<TradingPartner> partners = [];
     private List<Integration>? integrations;
-    private HashSet<int> connected = [];
+    private HashSet<NodeRef> connected = [];
     private DateOnly today;
     private IntegrationType? type;
     private Criticality? maxTier;
-    private bool includeRetired, showExternal = true;
+    private bool includeRetired, showPartners = true;
 
-    private int FocusValue
+    private NodeRef? FocusNode => Partner is { } p ? NodeRef.Partner(p) : Focus is { } a ? NodeRef.App(a) : null;
+
+    private string? FocusName => FocusNode switch
     {
-        get => Focus ?? 0;
-        set => Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?> { ["focus"] = value == 0 ? null : value, ["depth"] = value == 0 ? null : Depth }), replace: true);
+        { IsPartner: true } p => partners.FirstOrDefault(x => x.Id == p.Id)?.Name,
+        { } a => apps?.FirstOrDefault(x => x.Id == a.Id)?.Name,
+        _ => null,
+    };
+
+    private string FocusValue
+    {
+        get => FocusNode?.Key ?? "";
+        set
+        {
+            var node = NodeRef.Parse(value);
+            Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+            {
+                ["focus"] = node is { IsPartner: false } a ? a.Id : null,
+                ["partner"] = node is { IsPartner: true } p ? p.Id : null,
+                ["depth"] = node is null ? null : Depth,
+            }), replace: true);
+        }
     }
 
     private int DepthValue
@@ -96,27 +127,21 @@ else
         set => Nav.NavigateTo(Nav.GetUriWithQueryParameter("depth", value), replace: true);
     }
 
-    private MapOptions Options => new(Focus, Depth ?? 2, type, maxTier, includeRetired, HideExternal: !showExternal);
+    private MapOptions Options => new(FocusNode, Depth ?? 2, type, maxTier, includeRetired, HidePartners: !showPartners);
 
-    private MapPicture Picture
-    {
-        get
-        {
-            var title = Focus is { } f && apps!.FirstOrDefault(a => a.Id == f) is { } app ? $"{app.Name}: dependencies" : "Integration map";
-            return IntegrationMapSvg.Render(apps!, integrations!, Options, today, title);
-        }
-    }
+    private MapPicture Picture => IntegrationMapSvg.Render(apps!, partners, integrations!, Options, today,
+        FocusName is { } name ? $"{name}: dependencies" : "Integration map");
 
     private string DownloadUrl
     {
         get
         {
             var query = new List<string> { "download=true" };
-            if (Focus is { } f) query.Add($"focus={f}&depth={Depth ?? 2}");
+            if (FocusNode is { } f) query.Add($"{(f.IsPartner ? "partner" : "focus")}={f.Id}&depth={Depth ?? 2}");
             if (type is { } t) query.Add($"type={t}");
             if (maxTier is { } m) query.Add($"tier={(int)m}");
             if (includeRetired) query.Add("retired=true");
-            if (!showExternal) query.Add("external=false");
+            if (!showPartners) query.Add("partners=false");
             return "/api/portfolio/map.svg?" + string.Join("&", query);
         }
     }
@@ -125,9 +150,10 @@ else
     {
         today = Svc.Today;
         apps = await Svc.GetApplicationsAsync();
+        partners = await Svc.GetPartnersAsync();
         integrations = await Svc.GetIntegrationsAsync();
         connected = integrations
-            .SelectMany(i => new[] { i.SourceApplicationId, i.TargetApplicationId, i.ViaApplicationId ?? 0 })
-            .Where(id => id != 0).ToHashSet();
+            .SelectMany(i => i.ViaNode is { } v ? new[] { i.SourceNode, i.TargetNode, v } : [i.SourceNode, i.TargetNode])
+            .ToHashSet();
     }
 }

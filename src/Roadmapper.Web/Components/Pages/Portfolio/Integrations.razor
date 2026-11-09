@@ -56,7 +56,7 @@ else
     </div>
 
     <div class="toolbar">
-        <input placeholder="Search name, application or purpose" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <input placeholder="Search name, application, partner or purpose" @bind="search" @bind:event="oninput" style="max-width:260px" />
         <select @bind="type">
             <option value="">All types</option>
             @foreach (var t in Enum.GetValues<IntegrationType>())
@@ -86,7 +86,7 @@ else
             }
         </select>
         <label class="check"><input type="checkbox" @bind="overdueOnly" /> Review overdue</label>
-        <label class="check" title="Flows to or from customers, carriers and trading partners"><input type="checkbox" @bind="showExternal" /> Show external flows</label>
+        <label class="check" title="Flows to or from customers, carriers and other trading partners"><input type="checkbox" @bind="showPartners" /> Show partner flows</label>
     </div>
 
     <div class="card">
@@ -108,7 +108,7 @@ else
     private IntegrationDraft? editing;
     private DateOnly today;
     private int settingsMonths = 12;
-    private bool canSeed, overdueOnly, showExternal = true;
+    private bool canSeed, overdueOnly, showPartners = true;
     private string? error;
     private string search = "";
     private IntegrationType? type;
@@ -125,12 +125,12 @@ else
         .Where(i => tier is null || i.Criticality == tier)
         .Where(i => risk is null || PortfolioRules.RiskLevel(i, today) == risk)
         .Where(i => !overdueOnly || PortfolioRules.ReviewOverdue(i, today))
-        .Where(i => showExternal || !IntegrationMapSvg.TouchesExternal(i))
+        .Where(i => showPartners || !i.InvolvesPartner)
         .Where(i => string.IsNullOrWhiteSpace(search)
             || i.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
             || i.BusinessPurpose.Contains(search, StringComparison.OrdinalIgnoreCase)
             || (i.MessageFormat?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
-            || new[] { i.Source, i.Target, i.Via }.Any(a => a?.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            || new[] { i.SourceName, i.TargetName, i.Via?.Name }.Any(n => n?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
         .OrderBy(i => PortfolioRules.RiskLevel(i, today) == RiskLevel.High ? 0 : 1).ThenBy(i => i.Criticality).ThenBy(i => i.Name);
 
     private IntegrationDraft NewDraft() => new() { ReviewIntervalMonths = settingsMonths, LastReviewDate = today };

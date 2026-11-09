@@ -1,6 +1,6 @@
 namespace Roadmapper.Core.Portfolio;
 
-/// <summary>A person: internal staff when <see cref="VendorId"/> is null, otherwise someone at that vendor.</summary>
+/// <summary>A person: someone at a vendor (<see cref="VendorId"/>), at a trading partner (<see cref="TradingPartnerId"/>), or internal staff when both are null.</summary>
 public class Contact
 {
     public int Id { get; set; }
@@ -10,6 +10,8 @@ public class Contact
     public string? Phone { get; set; }
     public int? VendorId { get; set; }
     public Vendor? Vendor { get; set; }
+    public int? TradingPartnerId { get; set; }
+    public TradingPartner? TradingPartner { get; set; }
     /// <summary>Internal staff only, e.g. "Ops – Memphis DC".</summary>
     public string? Department { get; set; }
     public string? Notes { get; set; }
@@ -18,7 +20,10 @@ public class Contact
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public bool IsInternal => VendorId is null;
+    public bool IsInternal => VendorId is null && TradingPartnerId is null;
+
+    /// <summary>The company name, or null for internal staff (needs Vendor / TradingPartner loaded).</summary>
+    public string? CompanyName => Vendor?.Name ?? TradingPartner?.Name;
 }
 
 /// <summary>A company we buy software or services from. Contract dates live on its <see cref="Contracts"/>.</summary>
@@ -139,17 +144,57 @@ public class ApplicationInitiative
 }
 
 /// <summary>
-/// A flow of data from <see cref="Source"/> to <see cref="Target"/>, optionally through a middle hop
-/// (<see cref="Via"/>: an EDI VAN, iPaaS or middleware application).
+/// A customer, carrier, supplier or other outside company that exchanges data with your applications. Partners
+/// are the far ends of integrations: you track who they are and how to reach them, not their systems.
+/// </summary>
+public class TradingPartner
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public PartnerType Type { get; set; } = PartnerType.Customer;
+    public PartnerStatus Status { get; set; } = PartnerStatus.Active;
+    public PartnerImportance Importance { get; set; } = PartnerImportance.Standard;
+    /// <summary>Your ID for them, e.g. the customer code in the WMS or ERP.</summary>
+    public string? AccountCode { get; set; }
+    /// <summary>EDI interchange (ISA) ID qualifier, e.g. "01", "12", "ZZ".</summary>
+    public string? EdiQualifier { get; set; }
+    /// <summary>EDI interchange (ISA) ID.</summary>
+    public string? EdiId { get; set; }
+    /// <summary>EDI application (GS) ID, when it differs from the ISA ID.</summary>
+    public string? GsId { get; set; }
+    /// <summary>Who owns the relationship on your side: account manager, CS lead.</summary>
+    public int? RelationshipOwnerId { get; set; }
+    public Contact? RelationshipOwner { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>The partner's own people (IT, EDI coordinators).</summary>
+    public List<Contact> Staff { get; set; } = new();
+
+    /// <summary>"01:123456789", or just the ID when there's no qualifier.</summary>
+    public string? EdiAddress => EdiId is null ? null : EdiQualifier is null ? EdiId : $"{EdiQualifier}:{EdiId}";
+}
+
+/// <summary>
+/// A flow of data from a source to a target, optionally through a middle hop (<see cref="Via"/>: an EDI VAN, iPaaS
+/// or middleware application). Each end is one of your applications or a trading partner, and at least one end is
+/// an application.
 /// </summary>
 public class Integration
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
-    public int SourceApplicationId { get; set; }
+    /// <summary>Set when the source is an application; otherwise <see cref="SourcePartnerId"/> is.</summary>
+    public int? SourceApplicationId { get; set; }
     public Application? Source { get; set; }
-    public int TargetApplicationId { get; set; }
+    public int? SourcePartnerId { get; set; }
+    public TradingPartner? SourcePartner { get; set; }
+    /// <summary>Set when the target is an application; otherwise <see cref="TargetPartnerId"/> is.</summary>
+    public int? TargetApplicationId { get; set; }
     public Application? Target { get; set; }
+    public int? TargetPartnerId { get; set; }
+    public TradingPartner? TargetPartner { get; set; }
     public int? ViaApplicationId { get; set; }
     public Application? Via { get; set; }
     public IntegrationType Type { get; set; } = IntegrationType.API;
@@ -172,6 +217,15 @@ public class Integration
 
     /// <summary>When the next review is due; null when it has never been reviewed.</summary>
     public DateOnly? NextReviewDate => LastReviewDate?.AddMonths(ReviewIntervalMonths);
+
+    public NodeRef SourceNode => NodeRef.Of(SourceApplicationId, SourcePartnerId);
+    public NodeRef TargetNode => NodeRef.Of(TargetApplicationId, TargetPartnerId);
+    public NodeRef? ViaNode => ViaApplicationId is { } v ? NodeRef.App(v) : null;
+    /// <summary>Needs Source / SourcePartner loaded.</summary>
+    public string SourceName => Source?.Name ?? SourcePartner?.Name ?? "";
+    /// <summary>Needs Target / TargetPartner loaded.</summary>
+    public string TargetName => Target?.Name ?? TargetPartner?.Name ?? "";
+    public bool InvolvesPartner => SourcePartnerId is not null || TargetPartnerId is not null;
 }
 
 /// <summary>A risk on an integration, scored likelihood × impact (each 1–5).</summary>

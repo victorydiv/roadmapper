@@ -80,7 +80,6 @@ public static class PortfolioText
     {
         AppCategory.CustomerPortal => "Customer portal",
         AppCategory.IntegrationPlatform => "Integration platform",
-        AppCategory.ExternalParty => "External party",
         _ => c.ToString(),
     };
 
@@ -126,6 +125,12 @@ public static class PortfolioText
 
     public static string Label(RiskStatus s) => s.ToString();
 
+    public static string Label(PartnerType t) => t.ToString();
+
+    public static string Label(PartnerStatus s) => s.ToString();
+
+    public static string Label(PartnerImportance i) => i == PartnerImportance.Key ? "Key partner" : "Standard";
+
     public static string Label(RiskLevel l) => $"{l} risk";
 
     /// <summary>Any portfolio enum (or other value) as display text, for history and exports.</summary>
@@ -138,6 +143,7 @@ public static class PortfolioText
         IntegrationType t => Label(t),
         FlowDirection d => Label(d),
         IntegrationFrequency f => Label(f),
+        PartnerImportance i => Label(i),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

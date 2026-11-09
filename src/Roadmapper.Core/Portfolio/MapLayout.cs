@@ -1,14 +1,14 @@
 namespace Roadmapper.Core.Portfolio;
 
 /// <summary>A box to place: <see cref="Column"/> is any sortable key (a category column, or a signed distance from the focus).</summary>
-public sealed record MapNode(int Id, string Label, int Column);
+public sealed record MapNode(NodeRef Id, string Label, int Column);
 
-public sealed record MapEdge(int FromId, int ToId);
+public sealed record MapEdge(NodeRef FromId, NodeRef ToId);
 
-public sealed record NodeBox(int Id, double X, double Y, int ColumnIndex, int Row);
+public sealed record NodeBox(NodeRef Id, double X, double Y, int ColumnIndex, int Row);
 
 /// <summary>Where every node goes. <see cref="ColumnKeys"/> are the non-empty columns, left to right.</summary>
-public sealed record MapLayoutResult(double Width, double Height, IReadOnlyDictionary<int, NodeBox> Boxes, IReadOnlyList<int> ColumnKeys)
+public sealed record MapLayoutResult(double Width, double Height, IReadOnlyDictionary<NodeRef, NodeBox> Boxes, IReadOnlyList<int> ColumnKeys)
 {
     public double ColumnX(int columnIndex) => MapLayout.Margin + columnIndex * (MapLayout.NodeWidth + MapLayout.ColumnGap);
 }
@@ -22,10 +22,12 @@ public static class MapLayout
 {
     public const double NodeWidth = 176, NodeHeight = 50, ColumnGap = 100, RowGap = 22, Margin = 24;
 
-    /// <summary>Catalog columns, left to right, roughly following an order's path through a 3PL.</summary>
+    /// <summary>Trading partners sit in the first column of the catalog map.</summary>
+    public const int PartnerColumn = 0;
+
+    /// <summary>Catalog columns, left to right, roughly following an order's path through a 3PL; partners come first.</summary>
     public static int CategoryColumn(AppCategory c) => c switch
     {
-        AppCategory.ExternalParty => 0,
         AppCategory.EDI or AppCategory.IntegrationPlatform => 1,
         AppCategory.CustomerPortal => 2,
         AppCategory.WMS or AppCategory.TMS => 3,
@@ -35,7 +37,7 @@ public static class MapLayout
 
     public static string CategoryColumnTitle(int column) => column switch
     {
-        0 => "External parties",
+        0 => "Trading partners",
         1 => "EDI & integration",
         2 => "Portals",
         3 => "Warehouse & transport",
@@ -57,12 +59,12 @@ public static class MapLayout
     /// Columns for a dependency view: upstream applications at negative distances, the focus at 0, downstream at
     /// positive distances. An application that is both (a two-way partner) goes on the nearer side, downstream on a tie.
     /// </summary>
-    public static Dictionary<int, int> FocusColumns(PortfolioGraph graph, int focusId, int depth)
+    public static Dictionary<NodeRef, int> FocusColumns(PortfolioGraph graph, NodeRef focus, int depth)
     {
-        var columns = new Dictionary<int, int> { [focusId] = 0 };
-        foreach (var r in graph.Downstream(focusId, depth)) columns[r.ApplicationId] = r.Distance;
-        foreach (var r in graph.Upstream(focusId, depth))
-            if (!columns.TryGetValue(r.ApplicationId, out var down) || r.Distance < down) columns[r.ApplicationId] = -r.Distance;
+        var columns = new Dictionary<NodeRef, int> { [focus] = 0 };
+        foreach (var r in graph.Downstream(focus, depth)) columns[r.Node] = r.Distance;
+        foreach (var r in graph.Upstream(focus, depth))
+            if (!columns.TryGetValue(r.Node, out var down) || r.Distance < down) columns[r.Node] = -r.Distance;
         return columns;
     }
 
@@ -78,7 +80,7 @@ public static class MapLayout
             .ToList();
         var colOf = nodeList.ToDictionary(n => n.Id, n => columnIndex[n.Column]);
 
-        var neighbors = nodeList.ToDictionary(n => n.Id, _ => new List<int>());
+        var neighbors = nodeList.ToDictionary(n => n.Id, _ => new List<NodeRef>());
         foreach (var e in edges)
         {
             if (e.FromId == e.ToId || !neighbors.ContainsKey(e.FromId) || !neighbors.ContainsKey(e.ToId)) continue;
@@ -87,7 +89,7 @@ public static class MapLayout
         }
 
         // Position within a column as 0–1, so columns of different heights compare fairly.
-        Dictionary<int, double> Positions() => columns
+        Dictionary<NodeRef, double> Positions() => columns
             .SelectMany(col => col.Select((id, row) => (id, pos: (row + 0.5) / col.Count)))
             .ToDictionary(x => x.id, x => x.pos);
 
@@ -113,7 +115,7 @@ public static class MapLayout
 
         var maxRows = columns.Count == 0 ? 0 : columns.Max(c => c.Count);
         var rowStep = NodeHeight + RowGap;
-        var boxes = new Dictionary<int, NodeBox>();
+        var boxes = new Dictionary<NodeRef, NodeBox>();
         for (var c = 0; c < columns.Count; c++)
         {
             var offset = (maxRows - columns[c].Count) * rowStep / 2;

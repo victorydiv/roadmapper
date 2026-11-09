@@ -349,6 +349,9 @@ namespace Roadmapper.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("TradingPartnerId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
@@ -358,6 +361,8 @@ namespace Roadmapper.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("TradingPartnerId");
 
                     b.HasIndex("VendorId");
 
@@ -473,7 +478,10 @@ namespace Roadmapper.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(12);
 
-                    b.Property<int>("SourceApplicationId")
+                    b.Property<int?>("SourceApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SourcePartnerId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Status")
@@ -481,7 +489,10 @@ namespace Roadmapper.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("TargetApplicationId")
+                    b.Property<int?>("TargetApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TargetPartnerId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Type")
@@ -501,12 +512,20 @@ namespace Roadmapper.Data.Migrations
 
                     b.HasIndex("SourceApplicationId");
 
+                    b.HasIndex("SourcePartnerId");
+
                     b.HasIndex("TargetApplicationId");
+
+                    b.HasIndex("TargetPartnerId");
 
                     b.HasIndex("ViaApplicationId");
 
                     b.ToTable("Integrations", t =>
                         {
+                            t.HasCheckConstraint("CK_Integrations_OneSource", "(\"SourceApplicationId\" IS NULL) <> (\"SourcePartnerId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Integrations_OneTarget", "(\"TargetApplicationId\" IS NULL) <> (\"TargetPartnerId\" IS NULL)");
+
                             t.HasCheckConstraint("CK_Integrations_SourceNotTarget", "\"SourceApplicationId\" <> \"TargetApplicationId\"");
                         });
                 });
@@ -634,6 +653,72 @@ namespace Roadmapper.Data.Migrations
                             DefaultReviewIntervalMonths = 12,
                             RenewalWarningDays = 120
                         });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccountCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EdiId")
+                        .HasMaxLength(35)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EdiQualifier")
+                        .HasMaxLength(2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GsId")
+                        .HasMaxLength(35)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Importance")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RelationshipOwnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("RelationshipOwnerId");
+
+                    b.ToTable("TradingPartners", (string)null);
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
@@ -1221,10 +1306,17 @@ namespace Roadmapper.Data.Migrations
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
                 {
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TradingPartner")
+                        .WithMany("Staff")
+                        .HasForeignKey("TradingPartnerId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
                         .WithMany("Staff")
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("TradingPartner");
 
                     b.Navigation("Vendor");
                 });
@@ -1250,14 +1342,22 @@ namespace Roadmapper.Data.Migrations
                     b.HasOne("Roadmapper.Core.Portfolio.Application", "Source")
                         .WithMany()
                         .HasForeignKey("SourceApplicationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "SourcePartner")
+                        .WithMany()
+                        .HasForeignKey("SourcePartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Roadmapper.Core.Portfolio.Application", "Target")
                         .WithMany()
                         .HasForeignKey("TargetApplicationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TargetPartner")
+                        .WithMany()
+                        .HasForeignKey("TargetPartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Roadmapper.Core.Portfolio.Application", "Via")
                         .WithMany()
@@ -1268,7 +1368,11 @@ namespace Roadmapper.Data.Migrations
 
                     b.Navigation("Source");
 
+                    b.Navigation("SourcePartner");
+
                     b.Navigation("Target");
+
+                    b.Navigation("TargetPartner");
 
                     b.Navigation("Via");
                 });
@@ -1289,6 +1393,16 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Integration");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Contact", "RelationshipOwner")
+                        .WithMany()
+                        .HasForeignKey("RelationshipOwnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RelationshipOwner");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>
@@ -1438,6 +1552,11 @@ namespace Roadmapper.Data.Migrations
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
                 {
                     b.Navigation("Risks");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>
+                {
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Vendor", b =>

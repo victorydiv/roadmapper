@@ -59,19 +59,42 @@ public static class PortfolioApi
         api.MapGet("/integrations/{id:int}", async (int id, PortfolioService svc) =>
             await svc.GetIntegrationAsync(id) is { } i ? Results.Ok(IntegrationDetailDto.From(i, svc.Today)) : Results.NotFound());
 
-        // Upstream: applications that send data to this one. Downstream: applications it sends data to. depth = 1–5 integrations away.
+        // Upstream: what sends data to this application. Downstream: what it sends data to. depth = 1–5 integrations away.
         api.MapGet("/applications/{id:int}/dependencies", async (int id, PortfolioService svc, int? depth) =>
-            await svc.GetDependenciesAsync(id, depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
+            await svc.GetDependenciesAsync(NodeRef.App(id), depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
 
-        // The integration map as SVG. ?focus={applicationId}&depth=2 draws its dependency view; type, tier (1–3: that tier
-        // and more critical), retired=true and external=false (leave out customers, carriers and other external parties) filter;
-        // download=true saves it as a file.
-        api.MapGet("/map.svg", async (PortfolioService svc, int? focus, int? depth, string? type, string? tier, bool? retired, bool? external, bool? download) =>
+        // Customers, carriers, suppliers. ?type=Customer&status=Active
+        api.MapGet("/partners", async (PortfolioService svc, string? type, string? status) =>
         {
-            var options = new MapOptions(focus, depth ?? 2, Parse<IntegrationType>(type), ParseTier(tier), retired == true, HideExternal: external == false);
+            IEnumerable<TradingPartner> list = await svc.GetPartnersAsync();
+            if (Parse<PartnerType>(type) is { } t) list = list.Where(p => p.Type == t);
+            if (Parse<PartnerStatus>(status) is { } s) list = list.Where(p => p.Status == s);
+            return list.Select(PartnerDto.From).ToList();
+        });
+
+        api.MapGet("/partners/{id:int}", async (int id, PortfolioService svc) =>
+            await svc.GetPartnerAsync(id) is { } p
+                ? Results.Ok(new PartnerDetailDto(PartnerDto.From(p), p.Notes, p.Staff.Select(ContactDto.From).ToList(),
+                    (await svc.GetIntegrationsForPartnerAsync(id)).Select(i => IntegrationDto.From(i, svc.Today)).ToList()))
+                : Results.NotFound());
+
+        // Which of your applications a partner depends on (downstream of its inbound flows, upstream of its outbound ones).
+        api.MapGet("/partners/{id:int}/dependencies", async (int id, PortfolioService svc, int? depth) =>
+            await svc.GetDependenciesAsync(NodeRef.Partner(id), depth ?? 2) is { } view ? Results.Ok(DependencyDto.From(view, svc.Today)) : Results.NotFound());
+
+        // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
+        // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
+        // filter; download=true saves it as a file.
+        api.MapGet("/map.svg", async (PortfolioService svc, int? focus, int? partner, int? depth, string? type, string? tier, bool? retired, bool? partners, bool? download) =>
+        {
+            NodeRef? node = partner is { } pid ? NodeRef.Partner(pid) : focus is { } aid ? NodeRef.App(aid) : null;
+            var options = new MapOptions(node, depth ?? 2, Parse<IntegrationType>(type), ParseTier(tier), retired == true, HidePartners: partners == false);
             var apps = await svc.GetApplicationsAsync();
-            var title = focus is { } f && apps.FirstOrDefault(a => a.Id == f) is { } app ? $"{app.Name}: dependencies" : "Integration map";
-            var picture = IntegrationMapSvg.Render(apps, await svc.GetIntegrationsAsync(), options, svc.Today, title);
+            var partnerList = await svc.GetPartnersAsync();
+            var name = node is { IsPartner: true } pn ? partnerList.FirstOrDefault(p => p.Id == pn.Id)?.Name
+                : node is { } an ? apps.FirstOrDefault(a => a.Id == an.Id)?.Name : null;
+            var title = name is null ? "Integration map" : $"{name}: dependencies";
+            var picture = IntegrationMapSvg.Render(apps, partnerList, await svc.GetIntegrationsAsync(), options, svc.Today, title);
             var bytes = System.Text.Encoding.UTF8.GetBytes(picture.Svg);
             return download == true ? Results.File(bytes, "image/svg+xml", "integration-map.svg") : Results.Bytes(bytes, "image/svg+xml");
         });
@@ -155,12 +178,27 @@ public record RiskDto(int Id, string Description, int Likelihood, int Impact, in
         new(r.Id, r.Description, r.Likelihood, r.Impact, r.Score, r.Status, r.Mitigation, Ref.Of(r.Owner), r.RaisedOn);
 }
 
-public record IntegrationDto(int Id, string Name, Ref Source, Ref Target, Ref? Via, IntegrationType Type, FlowDirection Direction,
+/// <summary>One end of an integration. Kind is "Application" or "Partner".</summary>
+public record EndpointDto(NodeKind Kind, int Id, string Name)
+{
+    public static EndpointDto Of(NodeRef node, string name) => new(node.Kind, node.Id, name);
+}
+
+public record PartnerDto(int Id, string Name, PartnerType Type, PartnerStatus Status, PartnerImportance Importance, string? AccountCode,
+    string? EdiQualifier, string? EdiId, string? GsId, Ref? RelationshipOwner)
+{
+    public static PartnerDto From(TradingPartner p) => new(p.Id, p.Name, p.Type, p.Status, p.Importance, p.AccountCode,
+        p.EdiQualifier, p.EdiId, p.GsId, Ref.Of(p.RelationshipOwner));
+}
+
+public record PartnerDetailDto(PartnerDto Partner, string? Notes, IReadOnlyList<ContactDto> People, IReadOnlyList<IntegrationDto> Integrations);
+
+public record IntegrationDto(int Id, string Name, EndpointDto Source, EndpointDto Target, Ref? Via, IntegrationType Type, FlowDirection Direction,
     IntegrationFrequency Frequency, string? MessageFormat, string BusinessPurpose, Criticality Criticality, LifecycleStatus Status,
     Ref? Owner, DateOnly? LastReviewDate, DateOnly? NextReviewDate, bool ReviewOverdue, RiskLevel RiskLevel, int TopRiskScore, int OpenRiskCount)
 {
     public static IntegrationDto From(Integration i, DateOnly today) => new(i.Id, i.Name,
-        new Ref(i.SourceApplicationId, i.Source?.Name ?? ""), new Ref(i.TargetApplicationId, i.Target?.Name ?? ""),
+        EndpointDto.Of(i.SourceNode, i.SourceName), EndpointDto.Of(i.TargetNode, i.TargetName),
         i.Via is { } v ? new Ref(v.Id, v.Name) : null, i.Type, i.Direction, i.Frequency, i.MessageFormat, i.BusinessPurpose,
         i.Criticality, i.Status, Ref.Of(i.Owner), i.LastReviewDate, i.NextReviewDate, PortfolioRules.ReviewOverdue(i, today),
         PortfolioRules.RiskLevel(i, today), PortfolioRules.TopRiskScore(i), i.Risks.Count(r => r.IsActive));
@@ -172,16 +210,19 @@ public record IntegrationDetailDto(IntegrationDto Integration, int ReviewInterva
         i.Risks.OrderByDescending(r => r.IsActive).ThenByDescending(r => r.Score).Select(RiskDto.From).ToList());
 }
 
-public record DependencyRowDto(Ref Application, AppCategory Category, Criticality Criticality, int Distance, IReadOnlyList<Ref> Integrations);
+/// <summary>An application (with Category and Criticality) or a trading partner (with PartnerType and Importance).</summary>
+public record DependencyRowDto(EndpointDto Node, AppCategory? Category, Criticality? Criticality, PartnerType? PartnerType,
+    PartnerImportance? Importance, int Distance, IReadOnlyList<Ref> Integrations);
 
-public record DependencyDto(Ref Application, int Depth, IReadOnlyList<IntegrationDto> Direct,
+public record DependencyDto(EndpointDto Node, int Depth, IReadOnlyList<IntegrationDto> Direct,
     IReadOnlyList<DependencyRowDto> Upstream, IReadOnlyList<DependencyRowDto> Downstream)
 {
     public static DependencyDto From(DependencyView v, DateOnly today)
     {
-        static DependencyRowDto Row(DependencyRow r) => new(new Ref(r.Application.Id, r.Application.Name), r.Application.Category,
-            r.Application.Criticality, r.Distance, r.Integrations.Select(i => new Ref(i.Id, i.Name)).ToList());
-        return new(new Ref(v.Application.Id, v.Application.Name), v.Depth, v.Direct.Select(i => IntegrationDto.From(i, today)).ToList(),
+        static DependencyRowDto Row(DependencyRow r) => new(EndpointDto.Of(r.Node, r.Name), r.Application?.Category,
+            r.Application?.Criticality, r.Partner?.Type, r.Partner?.Importance, r.Distance,
+            r.Integrations.Select(i => new Ref(i.Id, i.Name)).ToList());
+        return new(EndpointDto.Of(v.Node, v.Name), v.Depth, v.Direct.Select(i => IntegrationDto.From(i, today)).ToList(),
             v.Upstream.Select(Row).ToList(), v.Downstream.Select(Row).ToList());
     }
 }

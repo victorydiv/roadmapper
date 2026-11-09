@@ -16,16 +16,31 @@ public class ContactDraft
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public int? VendorId { get; set; }
+    public int? TradingPartnerId { get; set; }
     public string? Department { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 
     public bool IsNew => Id == 0;
+    public bool IsInternal => VendorId is null && TradingPartnerId is null;
+
+    /// <summary>The company as one select value: "" internal, "v{id}" a vendor, "p{id}" a trading partner.</summary>
+    public string CompanyKey
+    {
+        get => VendorId is { } v ? $"v{v}" : TradingPartnerId is { } p ? $"p{p}" : "";
+        set
+        {
+            static int? IdOf(string k) => k.Length > 1 && int.TryParse(k.AsSpan(1), out var id) ? id : null;
+            var key = value ?? "";
+            VendorId = key.StartsWith('v') ? IdOf(key) : null;
+            TradingPartnerId = key.StartsWith('p') ? IdOf(key) : null;
+        }
+    }
 
     public static ContactDraft From(Contact c) => new()
     {
         Id = c.Id, Name = c.Name, Title = c.Title, Email = c.Email, Phone = c.Phone, VendorId = c.VendorId,
-        Department = c.Department, Notes = c.Notes, IsActive = c.IsActive,
+        TradingPartnerId = c.TradingPartnerId, Department = c.Department, Notes = c.Notes, IsActive = c.IsActive,
     };
 
     public string? Validate()
@@ -33,6 +48,7 @@ public class ContactDraft
         if (string.IsNullOrWhiteSpace(Name)) return "Name is required.";
         if (Name.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
         if (DraftText.Clean(Email) is { } e && (!e.Contains('@') || e.Contains(' '))) return "That email address doesn't look right.";
+        if (VendorId is not null && TradingPartnerId is not null) return "A person works for a vendor or a trading partner, not both.";
         return null;
     }
 
@@ -43,8 +59,9 @@ public class ContactDraft
         c.Email = DraftText.Clean(Email);
         c.Phone = DraftText.Clean(Phone);
         c.VendorId = VendorId;
+        c.TradingPartnerId = TradingPartnerId;
         // Department describes internal staff only.
-        c.Department = VendorId is null ? DraftText.Clean(Department) : null;
+        c.Department = IsInternal ? DraftText.Clean(Department) : null;
         c.Notes = DraftText.Clean(Notes);
         c.IsActive = IsActive;
     }
@@ -206,7 +223,9 @@ public class IntegrationDraft
     /// <summary>Optional: when blank the service names it "Source → Target".</summary>
     public string? Name { get; set; }
     public int? SourceApplicationId { get; set; }
+    public int? SourcePartnerId { get; set; }
     public int? TargetApplicationId { get; set; }
+    public int? TargetPartnerId { get; set; }
     public int? ViaApplicationId { get; set; }
     public IntegrationType Type { get; set; } = IntegrationType.API;
     public FlowDirection Direction { get; set; } = FlowDirection.OneWay;
@@ -222,9 +241,34 @@ public class IntegrationDraft
 
     public bool IsNew => Id == 0;
 
+    public NodeRef? Source => SourceApplicationId is null && SourcePartnerId is null ? null : NodeRef.Of(SourceApplicationId, SourcePartnerId);
+    public NodeRef? Target => TargetApplicationId is null && TargetPartnerId is null ? null : NodeRef.Of(TargetApplicationId, TargetPartnerId);
+
+    /// <summary>The source as one select value ("a12" application, "p3" partner, "" none).</summary>
+    public string SourceKey
+    {
+        get => Source?.Key ?? "";
+        set => (SourceApplicationId, SourcePartnerId) = Split(NodeRef.Parse(value));
+    }
+
+    /// <summary>The target as one select value ("a12" application, "p3" partner, "" none).</summary>
+    public string TargetKey
+    {
+        get => Target?.Key ?? "";
+        set => (TargetApplicationId, TargetPartnerId) = Split(NodeRef.Parse(value));
+    }
+
+    private static (int? App, int? Partner) Split(NodeRef? node) => node switch
+    {
+        { IsPartner: true } n => (null, n.Id),
+        { } n => (n.Id, null),
+        _ => (null, null),
+    };
+
     public static IntegrationDraft From(Integration i) => new()
     {
-        Id = i.Id, Name = i.Name, SourceApplicationId = i.SourceApplicationId, TargetApplicationId = i.TargetApplicationId,
+        Id = i.Id, Name = i.Name, SourceApplicationId = i.SourceApplicationId, SourcePartnerId = i.SourcePartnerId,
+        TargetApplicationId = i.TargetApplicationId, TargetPartnerId = i.TargetPartnerId,
         ViaApplicationId = i.ViaApplicationId, Type = i.Type, Direction = i.Direction, Frequency = i.Frequency,
         MessageFormat = i.MessageFormat, BusinessPurpose = i.BusinessPurpose, Criticality = i.Criticality, OwnerId = i.OwnerId,
         Status = i.Status, LastReviewDate = i.LastReviewDate, ReviewIntervalMonths = i.ReviewIntervalMonths, Notes = i.Notes,
@@ -232,8 +276,11 @@ public class IntegrationDraft
 
     public string? Validate()
     {
-        if (SourceApplicationId is null || TargetApplicationId is null) return "Choose both the source and the target application.";
-        if (SourceApplicationId == TargetApplicationId) return "Source and target must be different applications.";
+        if (Source is not { } source || Target is not { } target) return "Choose both the source and the target.";
+        if ((SourceApplicationId is not null && SourcePartnerId is not null) || (TargetApplicationId is not null && TargetPartnerId is not null))
+            return "Each end is either an application or a trading partner.";
+        if (source == target) return "Source and target must be different.";
+        if (source.IsPartner && target.IsPartner) return "At least one end must be one of your applications.";
         if (ViaApplicationId is { } via && (via == SourceApplicationId || via == TargetApplicationId))
             return "The “via” application must be different from the source and target.";
         if (string.IsNullOrWhiteSpace(BusinessPurpose)) return "Describe the business purpose: what the flow is for.";
@@ -245,8 +292,10 @@ public class IntegrationDraft
     public void ApplyTo(Integration i, string name)
     {
         i.Name = name;
-        i.SourceApplicationId = SourceApplicationId!.Value;
-        i.TargetApplicationId = TargetApplicationId!.Value;
+        i.SourceApplicationId = SourceApplicationId;
+        i.SourcePartnerId = SourcePartnerId;
+        i.TargetApplicationId = TargetApplicationId;
+        i.TargetPartnerId = TargetPartnerId;
         i.ViaApplicationId = ViaApplicationId;
         i.Type = Type;
         i.Direction = Direction;
@@ -302,5 +351,53 @@ public class RiskDraft
         r.Status = Status;
         r.OwnerId = OwnerId;
         r.RaisedOn = RaisedOn;
+    }
+}
+
+public class TradingPartnerDraft
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public PartnerType Type { get; set; } = PartnerType.Customer;
+    public PartnerStatus Status { get; set; } = PartnerStatus.Active;
+    public PartnerImportance Importance { get; set; } = PartnerImportance.Standard;
+    public string? AccountCode { get; set; }
+    public string? EdiQualifier { get; set; }
+    public string? EdiId { get; set; }
+    public string? GsId { get; set; }
+    public int? RelationshipOwnerId { get; set; }
+    public string? Notes { get; set; }
+
+    public bool IsNew => Id == 0;
+
+    public static TradingPartnerDraft From(TradingPartner p) => new()
+    {
+        Id = p.Id, Name = p.Name, Type = p.Type, Status = p.Status, Importance = p.Importance, AccountCode = p.AccountCode,
+        EdiQualifier = p.EdiQualifier, EdiId = p.EdiId, GsId = p.GsId, RelationshipOwnerId = p.RelationshipOwnerId, Notes = p.Notes,
+    };
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) return "Name is required.";
+        if (Name.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
+        if (AccountCode?.Trim().Length > 100) return "Account code can be at most 100 characters.";
+        if (DraftText.Clean(EdiQualifier) is { Length: > 2 }) return "The EDI ID qualifier is 2 characters, e.g. 01, 12 or ZZ.";
+        if (EdiId?.Trim().Length > 35 || GsId?.Trim().Length > 35) return "EDI IDs can be at most 35 characters.";
+        if (DraftText.Clean(EdiQualifier) is not null && DraftText.Clean(EdiId) is null) return "Enter the EDI ID that goes with the qualifier.";
+        return null;
+    }
+
+    public void ApplyTo(TradingPartner p)
+    {
+        p.Name = Name.Trim();
+        p.Type = Type;
+        p.Status = Status;
+        p.Importance = Importance;
+        p.AccountCode = DraftText.Clean(AccountCode);
+        p.EdiQualifier = DraftText.Clean(EdiQualifier)?.ToUpperInvariant();
+        p.EdiId = DraftText.Clean(EdiId);
+        p.GsId = DraftText.Clean(GsId);
+        p.RelationshipOwnerId = RelationshipOwnerId;
+        p.Notes = DraftText.Clean(Notes);
     }
 }

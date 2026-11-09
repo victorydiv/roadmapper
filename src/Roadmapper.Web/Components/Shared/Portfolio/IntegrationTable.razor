@@ -21,13 +21,13 @@
                     <td class="title-cell"><a class="title-link" href="/portfolio/integrations/@i.Id">@i.Name</a></td>
                     <td class="small">
                         <span class="inline-gap">
-                            <AppRef App="i.Source" Id="i.SourceApplicationId" Current="CurrentAppId" />
+                            <EndpointLink Node="i.SourceNode" Name="@i.SourceName" Current="Current" />
                             <span class="muted">@(i.Direction == FlowDirection.Bidirectional ? "⇄" : "→")</span>
-                            <AppRef App="i.Target" Id="i.TargetApplicationId" Current="CurrentAppId" />
+                            <EndpointLink Node="i.TargetNode" Name="@i.TargetName" Current="Current" />
                             @if (i.Via is { } via)
                             {
                                 <span class="muted">via</span>
-                                <AppRef App="via" Id="via.Id" Current="CurrentAppId" />
+                                <EndpointLink Node="NodeRef.App(via.Id)" Name="@via.Name" Current="Current" />
                             }
                         </span>
                     </td>
@@ -52,6 +52,6 @@
 @code {
     [Parameter, EditorRequired] public IEnumerable<Integration> Items { get; set; } = [];
     [Parameter, EditorRequired] public DateOnly Today { get; set; }
-    /// <summary>On an application's page, that application is shown in bold instead of as a link.</summary>
-    [Parameter] public int? CurrentAppId { get; set; }
+    /// <summary>On an application's or partner's page, that node is shown in bold instead of as a link.</summary>
+    [Parameter] public NodeRef? Current { get; set; }
 }

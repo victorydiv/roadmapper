@@ -1,7 +1,7 @@
 namespace Roadmapper.Core.Portfolio;
 
-/// <summary>What kind of system an application is. <see cref="ExternalParty"/> stands for a customer, carrier or trading partner endpoint.</summary>
-public enum AppCategory { WMS, TMS, ERP, EDI, CustomerPortal, Reporting, IntegrationPlatform, Finance, Other, ExternalParty }
+/// <summary>What kind of system an application is. Customers, carriers and other outside companies are <see cref="TradingPartner"/>s, not applications.</summary>
+public enum AppCategory { WMS, TMS, ERP, EDI, CustomerPortal, Reporting, IntegrationPlatform, Finance, Other }
 
 /// <summary>Business criticality. Tier 1 = operations stop without it.</summary>
 public enum Criticality { Tier1 = 1, Tier2 = 2, Tier3 = 3 }
@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -35,3 +35,12 @@ public enum RiskStatus { Open, Mitigated, Accepted, Closed }
 
 /// <summary>An integration's overall risk, from its risks, criticality and review date. See <see cref="PortfolioRules.RiskLevel"/>.</summary>
 public enum RiskLevel { Low, Medium, High }
+
+/// <summary>The kind of outside company a trading partner is.</summary>
+public enum PartnerType { Customer, Carrier, Supplier, Other }
+
+/// <summary>Where the relationship stands. Onboarding partners are being set up (mapping, testing) and not live yet.</summary>
+public enum PartnerStatus { Onboarding, Active, Inactive }
+
+/// <summary>How much it matters when a partner's flows break. Key partners raise the severity of impacts on them.</summary>
+public enum PartnerImportance { Key, Standard }

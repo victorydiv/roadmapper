@@ -147,7 +147,7 @@ public sealed class IntegrationServiceTests : IDisposable
 
         var history = await _svc.GetActivityAsync(PortfolioEntityType.Integration, id);
         Assert.Contains(history, h => h.Action == AuditAction.Created && h.Field is null);
-        Assert.Contains(history, h => h.Field == "Target" && h.OldValue == "TMS" && h.NewValue == "ERP");
+        Assert.Contains(history, h => h.Field == "Target application" && h.OldValue == "TMS" && h.NewValue == "ERP");
         Assert.Contains(history, h => h.Field == "Risk" && h.NewValue!.StartsWith("Timeouts at peak"));
     }
 
