@@ -751,6 +751,8 @@ Each cell has **two ratings**, set together by clicking it on the comparison mat
 
 **Comparison matrix:** features down the side, applications across (the category's own first, then added ones, each alphabetically; Evaluating and added ones are labeled). Each cell shows ✓ / ◐ / ✗ shaded by strength, with a dot when there's a note. **Have it** counts the applications with a Yes (+ partials). **Gap**: no application has the feature fully. **Overlap**: two or more do. The **Coverage** row shows each application's Yes count out of all features and how much of it is rated. **Only gaps** filters to the gaps.
 
+**Compare just some applications:** tick the box above two or more applications' names and click **Compare**. The matrix, heat map, cost tab and Excel export then show only those, with gaps, overlaps, strongest and lowest cost worked out among them. A bar above says which applications you're comparing; **Show all applications** goes back. The selection is in the page address (`?apps=3,7`), so you can bookmark it or send the link to a site.
+
 **Heat map:** applications down the side and features along the bottom, colored by strength (None grey, Low yellow, Medium orange, High red; not rated is white and hatched), with a legend. **Features down the side** swaps them. Hover a cell for its rating and note. **Download SVG** saves a picture you can insert straight into PowerPoint; **Print** prints the page.
 
 **Export to Excel** writes a workbook with a **Comparison** sheet (Yes/Partial/No, coverage, gaps and overlaps) and a **Heat map** sheet (colored strengths), with notes as cell comments. Once anything is priced it adds a **Cost** sheet: every price costed for the selected site profile, and each application's monthly, one-time and first-year totals.
@@ -908,8 +910,8 @@ All portfolio tables live in the same database; enums are stored as text; names 
 | `GET /export/{productId}/roadmap.pdf?depth={Goal\|Initiative\|Feature\|Task}&baseline={snapshotId}` | PDF report, shown in the browser (`inline`) |
 | `GET /export/{productId}/timeline.svg?scale=quarter&depth=…&baseline=…&download=true` | Timeline SVG |
 | `GET /export/portfolio.xlsx` | Portfolio workbook (14 sheets) |
-| `GET /export/capabilities/{category}.xlsx?retired=true&profile={id}` | A category's comparison workbook (Comparison and Heat map sheets, plus Cost once anything is priced, costed for the site profile or the default) |
-| `GET /export/capabilities/{category}/heatmap.svg?transpose=true&retired=true&download=true` | A category's heat map as SVG |
+| `GET /export/capabilities/{category}.xlsx?retired=true&profile={id}&apps={ids}` | A category's comparison workbook (Comparison and Heat map sheets, plus Cost once anything is priced, costed for the site profile or the default); `apps` (comma-separated application ids) narrows it to those applications |
+| `GET /export/capabilities/{category}/heatmap.svg?transpose=true&retired=true&download=true&apps={ids}` | A category's heat map as SVG |
 | `GET /documents/{id}/file` | A document's saved copy on this PC (PDFs, images and text inline; other types download); 404 when it isn't there |
 | `GET /export/portfolio.rpf` | Portfolio file (whole portfolio as JSON) |
 
@@ -929,7 +931,7 @@ Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing cha
 | `/processes?domain=&applicationId=` · `/processes/{id}` | Processes in tree order; detail adds pain points, KPIs, integrations |
 | `/benefits?productId=&itemId=&applicationId=&status=` | Labor rate, totals and benefits with actual, realization, status and dollars |
 | `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
-| `/capabilities` · `/capabilities/{category}?retired=true&profile={id}` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, its applications with coverage and `cost` (priced, complete, monthly, oneTime, firstYear, missing, lines), and the `site` it's costed for |
+| `/capabilities` · `/capabilities/{category}?retired=true&profile={id}&apps={ids}` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, its applications with coverage and `cost` (priced, complete, monthly, oneTime, firstYear, missing, lines), and the `site` it's costed for; `apps` narrows it to those applications |
 | `/capabilities/{category}/profiles` | A category's site profiles |
 | `/documents?productId=&entityType=&entityId=&category=` | Documents with their SharePoint address, file, date, product and what they're attached to (`entityType`: Application, Vendor (includes its contracts'), Contract, RoadmapItem) |
 | `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
@@ -963,7 +965,7 @@ A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and i
 
 ### Page routes
 
-Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|cost|features` (category as its enum name, e.g. `YMS`).
+Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|cost|features&apps={ids}` (category as its enum name, e.g. `YMS`).
 
 Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?product={id}&attach={key}&add=upload|link` (key: `a`/`v`/`c`/`r` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
 

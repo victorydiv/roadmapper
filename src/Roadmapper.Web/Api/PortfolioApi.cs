@@ -139,9 +139,12 @@ public static class PortfolioApi
 
         // Feature comparisons: every category's summary, and one category's matrix (features × applications with ratings).
         api.MapGet("/capabilities", async (PortfolioService svc) => await svc.GetCapabilityOverviewAsync());
-        // ?profile={siteProfileId} costs it for that site profile (default: the category's default profile).
-        api.MapGet("/capabilities/{category}", async (string category, PortfolioService svc, bool? retired, int? profile) =>
-            Parse<AppCategory>(category) is { } c ? Results.Ok(CapabilityDto.From(await svc.GetCapabilityMatrixAsync(c, retired == true, profile))) : Results.NotFound());
+        // ?profile={siteProfileId} costs it for that site profile (default: the category's default profile);
+        // ?apps=1,2,3 narrows it to those applications.
+        api.MapGet("/capabilities/{category}", async (string category, PortfolioService svc, bool? retired, int? profile, string? apps) =>
+            Parse<AppCategory>(category) is { } c
+                ? Results.Ok(CapabilityDto.From(await svc.GetCapabilityMatrixAsync(c, retired == true, profile, only: CapabilityMatrix.ParseIds(apps))))
+                : Results.NotFound());
         api.MapGet("/capabilities/{category}/profiles", async (string category, PortfolioService svc) =>
             Parse<AppCategory>(category) is { } c ? Results.Ok(await svc.GetSiteProfilesAsync(c)) : Results.NotFound());
 

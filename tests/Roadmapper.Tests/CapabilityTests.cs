@@ -40,6 +40,39 @@ public class CapabilityMatrixTests
     }
 
     [Fact]
+    public void Narrowing_to_some_applications_works_out_gaps_overlaps_and_cheapest_among_them()
+    {
+        var apps = new[] { App(1, "A"), App(2, "B"), App(3, "C") };
+        var features = new[] { Feature(10, "Dock scheduling", 0) };
+        var ratings = new[] { Rate(10, 1, FeatureAvailability.Yes), Rate(10, 2, FeatureAvailability.Yes), Rate(10, 3, FeatureAvailability.No) };
+        var pricing = new[]
+        {
+            new PricingLine { Category = AppCategory.YMS, ApplicationId = 1, Label = "Sub", Basis = PricingBasis.Site, UnitPrice = 100 },
+            new PricingLine { Category = AppCategory.YMS, ApplicationId = 3, Label = "Sub", Basis = PricingBasis.Site, UnitPrice = 300 },
+        };
+
+        var all = CapabilityMatrix.Build(AppCategory.YMS, features, apps, [], ratings, pricing: pricing);
+        Assert.False(all.Narrowed);
+        Assert.Equal(1, all.Overlaps);
+        Assert.Equal([1], all.Cheapest);
+
+        var m = CapabilityMatrix.Build(AppCategory.YMS, features, apps, [], ratings, pricing: pricing, only: [3, 2, 42]);
+        Assert.Equal(["B", "C"], m.Apps.Select(a => a.Name));
+        Assert.Equal(3, m.AllApps);
+        Assert.True(m.Narrowed);
+        Assert.Equal(0, m.Overlaps); // only B has it among B and C
+        Assert.Equal([3], m.Cheapest);
+        Assert.Null(m.Cell(10, 1));
+
+        // None of the ids is in the comparison: everything is shown.
+        Assert.Equal(3, CapabilityMatrix.Build(AppCategory.YMS, features, apps, [], ratings, only: [42]).Apps.Count);
+
+        Assert.Equal([3, 7], CapabilityMatrix.ParseIds(" 3,7,x,,3,-1"));
+        Assert.Null(CapabilityMatrix.ParseIds(""));
+        Assert.Null(CapabilityMatrix.ParseIds(null));
+    }
+
+    [Fact]
     public void Coverage_gaps_overlap_and_strongest()
     {
         var apps = new[] { App(1, "A"), App(2, "B"), App(3, "C") };

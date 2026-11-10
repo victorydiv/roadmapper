@@ -41,15 +41,16 @@ public partial class PortfolioService
     /// A category's comparison: its features × its applications and those added to it, with each application's cost
     /// for a site. Retired applications only when asked. The site is <paramref name="site"/> when given (unsaved, "try
     /// your site"), else profile <paramref name="profileId"/>, else the category's default profile, else one site with
-    /// unknown sizes.
+    /// unknown sizes. <paramref name="only"/> narrows it to some of its applications.
     /// </summary>
-    public async Task<CapabilityMatrix> GetCapabilityMatrixAsync(AppCategory category, bool includeRetired = false, int? profileId = null, SiteProfile? site = null)
+    public async Task<CapabilityMatrix> GetCapabilityMatrixAsync(AppCategory category, bool includeRetired = false, int? profileId = null,
+        SiteProfile? site = null, IEnumerable<int>? only = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var (features, apps, members, ratings) = await LoadCapabilitiesAsync(db, category);
         var pricing = await db.PricingLines.AsNoTracking().Where(l => l.Category == category).ToListAsync();
         site ??= await ResolveSiteProfileAsync(db, category, profileId);
-        return CapabilityMatrix.Build(category, features, apps, members.Select(m => m.ApplicationId), ratings, includeRetired, pricing, site);
+        return CapabilityMatrix.Build(category, features, apps, members.Select(m => m.ApplicationId), ratings, includeRetired, pricing, site, only);
     }
 
     private static async Task<SiteProfile> ResolveSiteProfileAsync(RoadmapDbContext db, AppCategory category, int? profileId)

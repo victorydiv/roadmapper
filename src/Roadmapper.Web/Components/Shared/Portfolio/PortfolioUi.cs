@@ -95,7 +95,13 @@ public static class PortfolioUi
     };
 
     /// <summary>A category's page, e.g. "/capabilities/YMS".</summary>
-    public static string CapabilitiesHref(AppCategory c, string? view = null) => $"/capabilities/{c}" + (view is null ? "" : $"?view={view}");
+    public static string CapabilitiesHref(AppCategory c, string? view = null, IEnumerable<int>? apps = null)
+    {
+        var q = new List<string>();
+        if (view is not null) q.Add($"view={view}");
+        if (apps?.ToList() is { Count: > 0 } ids) q.Add($"apps={string.Join(",", ids)}");
+        return $"/capabilities/{c}" + (q.Count == 0 ? "" : "?" + string.Join("&", q));
+    }
 
     /// <summary>A price as quoted: "$1,200 per site / month", "$90,000 one-time", "$0.15 per transaction / month (min $500)".</summary>
     public static string Price(PricingLine l)

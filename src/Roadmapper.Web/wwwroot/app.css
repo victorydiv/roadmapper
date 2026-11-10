@@ -529,6 +529,11 @@ table.matrix tfoot td { background: var(--surface-2); font-size: .78rem; text-al
 .rating-choices label.on { border-color: var(--accent); background: var(--accent-soft); }
 .rating-choices input { display: none; }
 @media print { .matrix-wrap, .heatmap-wrap { overflow: visible; } }
+/* Narrowing a comparison to some applications */
+table.matrix th.app label.pick { display: block; cursor: pointer; margin-bottom: .15rem; }
+table.matrix th.app.picked { background: var(--accent-soft, #e3edfb); }
+.card.narrowed { background: var(--accent-soft, #e3edfb); padding: .5rem .75rem; }
+@media print { table.matrix th.app label.pick { display: none; } }
 /* Cost of adoption */
 table.matrix tr.cost-row td { background: var(--surface); font-variant-numeric: tabular-nums; }
 table.matrix td.cheapest, table.cost-table tr.cheapest td { background: #e6f4ea; }

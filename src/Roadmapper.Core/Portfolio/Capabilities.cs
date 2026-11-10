@@ -158,18 +158,32 @@ public sealed class CapabilityMatrix
         }
     }
 
+    /// <summary>How many applications are in the comparison before narrowing it to <see cref="Apps"/>.</summary>
+    public int AllApps { get; init; }
+    /// <summary>True when the comparison is narrowed to some of its applications.</summary>
+    public bool Narrowed => Apps.Count < AllApps;
+
     public int Gaps => Features.Count(f => ByFeature[f.Id].IsGap);
+
+    /// <summary>Application ids from a comma-separated list such as "3,7,12" (null when there are none).</summary>
+    public static IReadOnlyList<int>? ParseIds(string? ids)
+    {
+        var list = (ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => int.TryParse(s, out var n) ? n : 0).Where(n => n > 0).Distinct().ToList();
+        return list.Count == 0 ? null : list;
+    }
     public int Overlaps => Features.Count(f => ByFeature[f.Id].IsOverlap);
 
     /// <summary>
     /// Builds the comparison. <paramref name="apps"/> may be every application: those of <paramref name="category"/>
     /// and those in <paramref name="addedIds"/> are kept. Retired applications are left out unless
     /// <paramref name="includeRetired"/>. <paramref name="pricing"/> is costed for <paramref name="site"/> (one site
-    /// with unknown sizes when not given).
+    /// with unknown sizes when not given). <paramref name="only"/> narrows the comparison to those applications (ignored
+    /// when none of them is in it); gaps, overlaps, strongest and cheapest are then worked out among them alone.
     /// </summary>
     public static CapabilityMatrix Build(AppCategory category, IEnumerable<CapabilityFeature> features, IEnumerable<Application> apps,
         IEnumerable<int> addedIds, IEnumerable<FeatureAssessment> assessments, bool includeRetired = false,
-        IEnumerable<PricingLine>? pricing = null, SiteProfile? site = null)
+        IEnumerable<PricingLine>? pricing = null, SiteProfile? site = null, IEnumerable<int>? only = null)
     {
         site ??= SiteProfile.OneSite(category);
         var lines = (pricing ?? []).Where(l => l.Category == category).ToLookup(l => l.ApplicationId);
@@ -181,6 +195,9 @@ public sealed class CapabilityMatrix
             .Select(a => new MatrixApp(a, a.Category != category))
             .OrderBy(m => m.Added).ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.Id)
             .ToList();
+        var all = columns.Count;
+        if (only?.ToHashSet() is { Count: > 0 } keep && columns.Any(c => keep.Contains(c.Id)))
+            columns = columns.Where(c => keep.Contains(c.Id)).ToList();
         var rows = features.Where(f => f.Category == category).OrderBy(f => f.SortOrder).ThenBy(f => f.Id).ToList();
         var appIds = columns.Select(c => c.Id).ToHashSet();
         var featureIds = rows.Select(f => f.Id).ToHashSet();
@@ -207,6 +224,7 @@ public sealed class CapabilityMatrix
             Category = category,
             Features = rows,
             Apps = columns,
+            AllApps = all,
             Cells = cells,
             ByApp = columns.ToDictionary(c => c.Id, c => CoverApp(c.Id)),
             ByFeature = rows.ToDictionary(f => f.Id, f => CoverFeature(f.Id)),

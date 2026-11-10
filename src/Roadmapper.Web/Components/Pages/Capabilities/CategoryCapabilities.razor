@@ -15,7 +15,7 @@ else
             <div class="small"><a href="/capabilities">Capabilities</a> /</div>
             <h1>@Title</h1>
             <div class="muted small">
-                @(matrix is null ? "" : $"{matrix.Features.Count} features × {matrix.Apps.Count} applications")
+                @(matrix is null ? "" : $"{matrix.Features.Count} features × {(matrix.Narrowed ? $"{matrix.Apps.Count} of {matrix.AllApps}" : matrix.Apps.Count)} applications")
                 @if (matrix is { Features.Count: > 0, Apps.Count: > 0 })
                 {
                     <span> · @matrix.Gaps gap@(matrix.Gaps == 1 ? "" : "s") · @matrix.Overlaps overlap@(matrix.Overlaps == 1 ? "" : "s")</span>
@@ -27,11 +27,21 @@ else
     </div>
 
     <nav class="tabs">
-        <a class="@(View == "matrix" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat)">Comparison matrix</a>
-        <a class="@(View == "heatmap" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "heatmap")">Heat map</a>
-        <a class="@(View == "cost" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "cost")">Cost</a>
-        <a class="@(View == "features" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "features")">Features &amp; applications</a>
+        <a class="@(View == "matrix" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, null, Only)">Comparison matrix</a>
+        <a class="@(View == "heatmap" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "heatmap", Only)">Heat map</a>
+        <a class="@(View == "cost" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "cost", Only)">Cost</a>
+        <a class="@(View == "features" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "features", Only)">Features &amp; applications</a>
     </nav>
+
+    @if (matrix is { Narrowed: true } && View != "features")
+    {
+        <div class="card row narrowed" style="margin-bottom:.75rem;flex-wrap:wrap">
+            <span>Comparing <b>@matrix.Apps.Count of @matrix.AllApps</b> applications: @string.Join(", ", matrix.Apps.Select(a => a.Name)).</span>
+            <span class="muted small">Gaps, overlaps, strongest and lowest cost are among these only.</span>
+            <span class="spacer"></span>
+            <a class="btn sm" href="@PortfolioUi.CapabilitiesHref(cat, ViewKey)">Show all applications</a>
+        </div>
+    }
 
     @if (error is not null)
     {
@@ -286,7 +296,7 @@ else
             <label class="check"><input type="checkbox" checked="@transpose" @onchange="() => transpose = !transpose" /><span>Features down the side</span></label>
             <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Include retired</span></label>
             <span class="spacer"></span>
-            <a class="btn" href="/export/capabilities/@cat/heatmap.svg?transpose=@transpose&retired=@includeRetired&download=true" download>Download SVG</a>
+            <a class="btn" href="@($"/export/capabilities/{cat}/heatmap.svg?transpose={transpose}&retired={includeRetired}&download=true{AppsQuery}")" download>Download SVG</a>
             <button class="btn" onclick="window.print()">Print</button>
         </div>
         <div class="card heatmap-wrap">
@@ -314,6 +324,11 @@ else
                 </label>
             }
             <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Include retired</span></label>
+            <button class="btn sm primary" disabled="@(Picked.Count < 2)" title="Tick two or more applications' boxes, then compare just those" @onclick="Compare">Compare@(Picked.Count > 0 ? $" {Picked.Count}" : "")</button>
+            @if (Picked.Count > 0)
+            {
+                <button class="btn sm" @onclick="() => picked.Clear()">Clear selection</button>
+            }
             <span class="spacer"></span>
             <span class="small"><span class="av-Yes">✓</span> Yes · <span class="av-Partial">◐</span> Partial · <span class="av-No">✗</span> No · blank: not rated. Shading shows strength. Click a cell to rate it.</span>
         </div>
@@ -324,7 +339,8 @@ else
                         <th class="feature">Feature</th>
                         @foreach (var a in matrix.Apps)
                         {
-                            <th class="app">
+                            <th class="app @(picked.Contains(a.Id) ? "picked" : "")">
+                                <label class="pick" title="Select to compare"><input type="checkbox" checked="@picked.Contains(a.Id)" @onchange="() => TogglePick(a.Id)" /></label>
                                 <a href="/portfolio/applications/@a.Id">@a.Name</a>
                                 @if (a.Application.Status != LifecycleStatus.Active) { <div><LifecycleBadge Status="a.Application.Status" /></div> }
                                 @if (a.Added) { <div><span class="badge added">@PortfolioText.Label(a.Application.Category)</span></div> }
@@ -422,6 +438,8 @@ else
     [Parameter] public string CategoryName { get; set; } = "";
     /// <summary>matrix (default), heatmap, cost or features.</summary>
     [SupplyParameterFromQuery(Name = "view")] public string? ViewParam { get; set; }
+    /// <summary>Comma-separated application ids the comparison is narrowed to (all when empty).</summary>
+    [SupplyParameterFromQuery(Name = "apps")] public string? AppsParam { get; set; }
 
     private AppCategory? category;
     private CapabilityMatrix? matrix;
@@ -439,9 +457,16 @@ else
     private SiteProfileDraft? editingProfile;
     private (PricingLineDraft Draft, string App)? pricing;
     private AppCategory? loadedCategory;
+    /// <summary>Applications ticked on the matrix, to compare.</summary>
+    private readonly HashSet<int> picked = [];
 
     private string View => ViewParam is "heatmap" or "features" or "cost" ? ViewParam : "matrix";
-    private string ExportHref => $"/export/capabilities/{category}.xlsx?retired={includeRetired}" + (profileId > 0 ? $"&profile={profileId}" : "");
+    private string? ViewKey => View == "matrix" ? null : View;
+    /// <summary>The applications the comparison is narrowed to, from the address (null: all).</summary>
+    private IReadOnlyList<int>? Only => CapabilityMatrix.ParseIds(AppsParam);
+    private string AppsQuery => matrix is { Narrowed: true } ? $"&apps={string.Join(",", matrix.Apps.Select(a => a.Id))}" : "";
+    private List<int> Picked => matrix is null ? [] : matrix.Apps.Where(a => picked.Contains(a.Id)).Select(a => a.Id).ToList();
+    private string ExportHref => $"/export/capabilities/{category}.xlsx?retired={includeRetired}" + (profileId > 0 ? $"&profile={profileId}" : "") + AppsQuery;
     private string Title => category is { } c ? PortfolioText.Label(c) : CategoryName;
 
     protected override async Task OnParametersSetAsync()
@@ -460,7 +485,8 @@ else
         profiles = await Svc.GetSiteProfilesAsync(cat);
         if (profileId > 0 && profiles.All(p => p.Id != profileId)) profileId = -1;
         trial.Category = cat;
-        matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired, profileId > 0 ? profileId : null, profileId == 0 ? trial.ToProfile() : null);
+        matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired, profileId > 0 ? profileId : null, profileId == 0 ? trial.ToProfile() : null,
+            View == "features" ? null : Only);
         if (profileId < 0 && matrix.Site.Id > 0) profileId = matrix.Site.Id;
         var inMatrix = matrix.Apps.Select(a => a.Id).ToHashSet();
         others = (await Svc.GetApplicationsAsync())
@@ -510,6 +536,19 @@ else
     }
 
     private void Rate(CapabilityFeature f, MatrixApp a) => rating = (f, a);
+
+    private void TogglePick(int appId)
+    {
+        if (!picked.Remove(appId)) picked.Add(appId);
+    }
+
+    /// <summary>Narrows the comparison to the ticked applications (in the address, so it can be bookmarked or shared).</summary>
+    private void Compare()
+    {
+        if (category is not { } cat || Picked is not { Count: >= 2 } ids) return;
+        picked.Clear();
+        Nav.NavigateTo(PortfolioUi.CapabilitiesHref(cat, ViewKey, ids));
+    }
 
     private async Task OnProfileChanged(ChangeEventArgs e)
     {

@@ -35,15 +35,15 @@ public static class ExportEndpoints
         });
 
         // A category's feature comparison: workbook (comparison + heat map sheets), and the heat map as SVG.
-        app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired, int? profile) =>
+        app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired, int? profile, string? apps) =>
             Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) && Enum.IsDefined(c)
-                ? Results.File(Roadmapper.Data.Portfolio.CapabilityExport.ToXlsx(await svc.GetCapabilityMatrixAsync(c, retired == true, profile)),
+                ? Results.File(Roadmapper.Data.Portfolio.CapabilityExport.ToXlsx(await svc.GetCapabilityMatrixAsync(c, retired == true, profile, only: Roadmapper.Core.Portfolio.CapabilityMatrix.ParseIds(apps))),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{c}-features-{svc.Today:yyyy-MM-dd}.xlsx")
                 : Results.NotFound());
-        app.MapGet("/export/capabilities/{category}/heatmap.svg", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? transpose, bool? retired, bool? download) =>
+        app.MapGet("/export/capabilities/{category}/heatmap.svg", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? transpose, bool? retired, bool? download, string? apps) =>
         {
             if (!Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) || !Enum.IsDefined(c)) return Results.NotFound();
-            var svg = CapabilityHeatmapSvg.Render(await svc.GetCapabilityMatrixAsync(c, retired == true),
+            var svg = CapabilityHeatmapSvg.Render(await svc.GetCapabilityMatrixAsync(c, retired == true, only: Roadmapper.Core.Portfolio.CapabilityMatrix.ParseIds(apps)),
                 $"{Roadmapper.Core.Portfolio.PortfolioText.Label(c)}: feature heat map", transpose == true);
             var bytes = System.Text.Encoding.UTF8.GetBytes(svg);
             return download == true ? Results.File(bytes, "image/svg+xml", $"{c}-heatmap.svg") : Results.Bytes(bytes, "image/svg+xml");
