@@ -62,4 +62,27 @@ public static class PortfolioUi
 
     /// <summary>The detail page of an application or trading partner.</summary>
     public static string Href(NodeRef node) => node.IsPartner ? $"/portfolio/partners/{node.Id}" : $"/portfolio/applications/{node.Id}";
+
+    /// <summary>"1.2 MB", "340 KB"; empty when unknown.</summary>
+    public static string FileSize(long? bytes) => bytes switch
+    {
+        null => "",
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):0.#} GB",
+    };
+
+    /// <summary>Where a document opens: SharePoint when its address is known, else the copy on this PC.</summary>
+    public static string DocumentHref(PortfolioDocument d) => d.Url ?? $"/documents/{d.Id}/file";
+
+    /// <summary>The page of the record a document is attached to.</summary>
+    public static string? TargetHref(PortfolioDocument d) => d.Target is not { } t ? null : t.Kind switch
+    {
+        DocumentTargetKind.Product => $"/products/{t.Id}",
+        DocumentTargetKind.Application => $"/portfolio/applications/{t.Id}",
+        DocumentTargetKind.Vendor => $"/portfolio/vendors/{t.Id}",
+        DocumentTargetKind.Contract => d.Contract is { } c ? $"/portfolio/vendors/{c.VendorId}" : null,
+        _ => d.RoadmapItem is { } i ? $"/products/{i.ProductId}" : null,
+    };
 }

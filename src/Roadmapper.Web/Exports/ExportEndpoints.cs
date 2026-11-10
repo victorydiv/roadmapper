@@ -24,6 +24,16 @@ public static class ExportEndpoints
             Results.File((await svc.ExportPortfolioAsync(typeof(ExportEndpoints).Assembly.GetName().Version?.ToString(3))).ToBytes(),
                 PortfolioFile.ContentType, $"portfolio-{svc.Today:yyyy-MM-dd}{PortfolioFile.Extension}"));
 
+        // A document's copy on this PC (the synced folder), for when SharePoint's address isn't set or you're offline.
+        // PDFs, images and text open in the browser; anything else downloads.
+        app.MapGet("/documents/{id:int}/file", async (int id, Roadmapper.Data.Portfolio.PortfolioService svc) =>
+        {
+            if (await svc.GetDocumentFileAsync(id) is not { } path) return Results.NotFound("That file isn't on this PC any more. Open it from SharePoint instead.");
+            if (!new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider().TryGetContentType(path, out var type)) type = "application/octet-stream";
+            var inline = type.StartsWith("image/") || type is "application/pdf" or "text/plain";
+            return Results.File(path, type, inline ? null : Path.GetFileName(path), enableRangeProcessing: true);
+        });
+
         var export = app.MapGroup("/export/{productId:int}");
 
         export.MapGet("/roadmap.csv", async (int productId, RoadmapService svc) =>

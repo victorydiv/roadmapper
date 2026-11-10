@@ -32,6 +32,7 @@ public sealed class PortfolioFile
     public List<PfProcess> Processes { get; set; } = [];
     public List<PfBenefit> Benefits { get; set; } = [];
     public List<PfDecision> Decisions { get; set; } = [];
+    public List<PfDocument> Documents { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -73,7 +74,8 @@ public sealed class PortfolioFile
 
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
-        Benefits ??= []; Decisions ??= []; History ??= [];
+        Benefits ??= []; Decisions ??= []; Documents ??= []; History ??= [];
+        if (Settings is not null) Settings.DocumentFolders ??= [];
         foreach (var v in Vendors) { v.Contracts ??= []; v.Escalation ??= []; }
         foreach (var a in Applications) { a.Support ??= []; a.Initiatives ??= []; }
         foreach (var i in Integrations) i.Risks ??= [];
@@ -105,6 +107,7 @@ public sealed class PortfolioFile
         Named(Applications.Select(a => a.Name), "application");
         Named(Processes.Select(p => p.Name), "process");
         Named(Decisions.Select(d => d.Title), "decision");
+        Named(Documents.Select(d => d.Title), "document");
         if (errors.Count > 0) return errors;
 
         var contacts = Contacts.Select(c => c.Id).ToHashSet();
@@ -169,6 +172,19 @@ public sealed class PortfolioFile
             Ref(b.ApplicationId, apps, "application", $"Benefit “{b.Description}”");
             Ref(b.KpiId, kpis, "KPI", $"Benefit “{b.Description}”");
         }
+        foreach (var d in Documents)
+        {
+            var where = $"Document “{d.Title}”";
+            if (d.FileName is null && d.Url is null) errors.Add($"{where} has neither a file nor a link.");
+            switch (d.AttachedTo)
+            {
+                case DocumentTargetKind.Application: Ref(d.TargetId ?? 0, apps, "application", where); break;
+                case DocumentTargetKind.Vendor: Ref(d.TargetId ?? 0, vendors, "vendor", where); break;
+                case DocumentTargetKind.Contract: Ref(d.TargetId ?? 0, contracts, "contract", where); break;
+                case DocumentTargetKind.Product when string.IsNullOrWhiteSpace(d.Roadmap): errors.Add($"{where} is attached to a roadmap with no name."); break;
+                case DocumentTargetKind.RoadmapItem when d.Item is null: errors.Add($"{where} is attached to a roadmap item with no path."); break;
+            }
+        }
         foreach (var d in Decisions)
         {
             var where = $"Decision “{d.Title}”";
@@ -201,7 +217,11 @@ public sealed class PfSettings
     public int RenewalWarningDays { get; set; } = 120;
     public int DefaultReviewIntervalMonths { get; set; } = 12;
     public string? JiraBaseUrl { get; set; }
+    public List<PfDocumentFolder> DocumentFolders { get; set; } = [];
 }
+
+/// <summary>Where one document type is kept. The local path is this PC's; on another PC it's ignored unless that folder exists there.</summary>
+public sealed record PfDocumentFolder(DocumentCategory Category, string? LocalPath, string? SharePointUrl);
 
 public sealed class PfContact
 {
@@ -403,3 +423,25 @@ public sealed record PfDecisionLink(DecisionTargetKind Kind, int? Id, PfRoadmapR
 
 public sealed record PfHistory(PortfolioEntityType EntityType, int EntityId, string? EntityName, AuditAction Action, string? Field,
     string? OldValue, string? NewValue, DateTime ChangedAt);
+
+/// <summary>
+/// A document: a saved file (<see cref="FileName"/>, <see cref="LocalPath"/>) and/or its SharePoint <see cref="Url"/>.
+/// Attached by <see cref="TargetId"/> (application, vendor, contract), <see cref="Roadmap"/> (product name) or <see cref="Item"/>.
+/// </summary>
+public sealed class PfDocument
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public DocumentCategory Category { get; set; }
+    public string? FileName { get; set; }
+    public string? LocalPath { get; set; }
+    public string? Url { get; set; }
+    public long? SizeBytes { get; set; }
+    public DateOnly? DocumentDate { get; set; }
+    public string? Notes { get; set; }
+    public DocumentTargetKind? AttachedTo { get; set; }
+    public int? TargetId { get; set; }
+    public string? Roadmap { get; set; }
+    public PfRoadmapRef? Item { get; set; }
+    public DateTime CreatedAt { get; set; }
+}

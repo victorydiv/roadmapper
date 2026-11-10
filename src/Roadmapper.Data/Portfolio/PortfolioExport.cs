@@ -127,6 +127,14 @@ public static class PortfolioExport
                 d.SupersededBy?.Title,
             }));
 
+        Sheet(wb, "Documents",
+            ["Id", "Type", "Title", "Date", "Attached to", "Name", "SharePoint link", "File", "Notes"],
+            (await svc.GetDocumentsAsync()).Select(d => new object?[]
+            {
+                d.Id, PortfolioText.Label(d.Category), d.Title, d.DocumentDate, d.Target is { } t ? PortfolioText.Label(t.Kind) : null,
+                d.TargetName, d.Url, d.FileName, d.Notes,
+            }));
+
         Sheet(wb, "Contacts",
             ["Id", "Name", "Title", "Company", "Department", "Email", "Phone", "Active"],
             contacts.Select(c => new object?[]

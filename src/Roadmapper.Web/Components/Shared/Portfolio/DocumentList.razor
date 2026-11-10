@@ -1,0 +1,69 @@
+@* Documents attached to one record, for its page, with Upload and Link pre-attached to it. *@
+@inject PortfolioService Svc
+
+<div class="card stack @CssClass" style="@(CssClass is null ? "margin-top:1rem" : null)">
+    <div class="row">
+        <h2 style="margin:0">Documents</h2>
+        <span class="muted small">Kept in SharePoint.</span>
+        <span class="spacer"></span>
+        <button class="btn" @onclick="() => New(upload: true)">+ Upload</button>
+        <button class="btn" @onclick="() => New(upload: false)" title="Add a link to a document that's already in SharePoint">+ Link</button>
+    </div>
+    @if (documents is null)
+    {
+        <div class="muted small">Loading…</div>
+    }
+    else if (documents.Count == 0)
+    {
+        <div class="muted small">None for @Name yet.</div>
+    }
+    else
+    {
+        <DocumentTable Documents="documents" ShowTarget="Targets is { Count: > 1 }" OnEdit="Edit" />
+    }
+</div>
+
+@if (editing is not null)
+{
+    <DocumentEditor Draft="editing" Upload="upload" Document="editingDoc" Targets="Choices" OnClose="OnClosed" />
+}
+
+@code {
+    [Parameter, EditorRequired] public DocumentTarget Target { get; set; }
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    /// <summary>Extra classes for the card, e.g. "wide" in a dashboard grid (which also drops its top margin).</summary>
+    [Parameter] public string? CssClass { get; set; }
+    /// <summary>
+    /// What a document added here may be attached to, when there's a choice (a vendor and its contracts). The list
+    /// shows documents attached to any of them; <see cref="Target"/> comes first and is the default.
+    /// </summary>
+    [Parameter] public IReadOnlyList<DocumentTargetOption>? Targets { get; set; }
+
+    private List<PortfolioDocument>? documents;
+    private DocumentDraft? editing;
+    private PortfolioDocument? editingDoc;
+    private bool upload;
+
+    private IReadOnlyList<DocumentTargetOption> Choices => Targets ?? [new DocumentTargetOption(Target, Name)];
+
+    protected override async Task OnParametersSetAsync() => documents = await Svc.GetDocumentsAsync(Target);
+
+    private void New(bool upload)
+    {
+        this.upload = upload;
+        editingDoc = null;
+        editing = DocumentDraft.New(Target);
+    }
+
+    private void Edit(PortfolioDocument d)
+    {
+        editingDoc = d;
+        editing = DocumentDraft.From(d);
+    }
+
+    private async Task OnClosed(int? id)
+    {
+        editing = null;
+        if (id is not null) documents = await Svc.GetDocumentsAsync(Target);
+    }
+}

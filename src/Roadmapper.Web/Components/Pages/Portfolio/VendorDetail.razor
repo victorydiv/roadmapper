@@ -165,6 +165,7 @@ else
         </div>
     </div>
 
+    <DocumentList Target="new DocumentTarget(DocumentTargetKind.Vendor, vendor.Id)" Name="@vendor.Name" Targets="DocumentTargets" />
     <DecisionList Target="new DecisionTarget(DecisionTargetKind.Vendor, vendor.Id)" Name="@vendor.Name" />
 }
 
@@ -192,6 +193,11 @@ else
     private ContractDraft? editingContract;
     private int? newEscalationId;
     private string? newEscalationNote;
+
+    /// <summary>A vendor's documents can go on the vendor or on one of its contracts.</summary>
+    private List<DocumentTargetOption> DocumentTargets => vendor is null ? [] :
+        [new(new DocumentTarget(DocumentTargetKind.Vendor, vendor.Id), vendor.Name),
+         .. vendor.Contracts.OrderBy(c => c.Name).Select(c => new DocumentTargetOption(new DocumentTarget(DocumentTargetKind.Contract, c.Id), c.Name))];
 
     private Contract? next => vendor is null ? null : PortfolioRules.NextRenewal(vendor.Contracts, today);
 

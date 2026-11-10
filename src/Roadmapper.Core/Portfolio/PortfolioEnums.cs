@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -80,3 +80,9 @@ public enum DecisionTargetKind { Application, Integration, Vendor, Contract, Pro
 
 /// <summary>Overall severity of a change impact. See <see cref="ImpactAnalyzer"/>.</summary>
 public enum ImpactSeverity { Low, Medium, High }
+
+/// <summary>What kind of document. Each kind is saved to its own folder (see <see cref="DocumentFolder"/>).</summary>
+public enum DocumentCategory { Roadmap, Contract, Invoice, Sow, Brd, Other }
+
+/// <summary>What a document is attached to.</summary>
+public enum DocumentTargetKind { Product, Application, Vendor, Contract, RoadmapItem }

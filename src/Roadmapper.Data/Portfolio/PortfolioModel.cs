@@ -297,6 +297,41 @@ internal static class PortfolioModel
             e.HasIndex(l => l.TradingPartnerId);
         });
 
+        b.Entity<PortfolioDocument>(e =>
+        {
+            // Attached to at most one record.
+            e.ToTable("Documents", t => t.HasCheckConstraint("CK_Documents_OneTarget",
+                "(\"ProductId\" IS NOT NULL) + (\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL)"
+                + " + (\"RoadmapItemId\" IS NOT NULL) <= 1"));
+            e.Property(d => d.Title).IsRequired().HasMaxLength(300);
+            e.Property(d => d.Category).HasConversion<string>().HasMaxLength(20);
+            e.Property(d => d.FileName).HasMaxLength(DocumentLibrary.MaxFileNameLength + 10);
+            e.Property(d => d.LocalPath).HasMaxLength(1000);
+            e.Property(d => d.Url).HasMaxLength(ExternalLinks.MaxUrlLength + 300);
+            e.Property(d => d.Notes).HasMaxLength(2000);
+            // The file stays in SharePoint when what it's attached to goes; the document just becomes unattached.
+            e.HasOne(d => d.Product).WithMany().HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.Application).WithMany().HasForeignKey(d => d.ApplicationId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.Vendor).WithMany().HasForeignKey(d => d.VendorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.Contract).WithMany().HasForeignKey(d => d.ContractId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.RoadmapItem).WithMany().HasForeignKey(d => d.RoadmapItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(d => d.ProductId);
+            e.HasIndex(d => d.ApplicationId);
+            e.HasIndex(d => d.VendorId);
+            e.HasIndex(d => d.ContractId);
+            e.HasIndex(d => d.RoadmapItemId);
+            e.HasIndex(d => d.Category);
+        });
+
+        b.Entity<DocumentFolder>(e =>
+        {
+            e.ToTable("DocumentFolders");
+            e.HasKey(f => f.Category);
+            e.Property(f => f.Category).HasConversion<string>().HasMaxLength(20);
+            e.Property(f => f.LocalPath).HasMaxLength(1000);
+            e.Property(f => f.SharePointUrl).HasMaxLength(ExternalLinks.MaxUrlLength);
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

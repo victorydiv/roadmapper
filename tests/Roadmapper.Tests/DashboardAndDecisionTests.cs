@@ -236,7 +236,7 @@ public sealed class DecisionAndDashboardTests : IDisposable
 
         using var wb = new XLWorkbook(new MemoryStream(await PortfolioExport.ToXlsxAsync(_svc)));
         Assert.Equal(["Applications", "Vendors", "Contracts", "Trading partners", "Integrations", "Risks", "Processes", "Pain points",
-            "KPIs", "Benefits", "Decisions", "Contacts"], wb.Worksheets.Select(w => w.Name));
+            "KPIs", "Benefits", "Decisions", "Documents", "Contacts"], wb.Worksheets.Select(w => w.Name));
         var apps = wb.Worksheet("Applications");
         Assert.Equal("Health", apps.Cell(1, 17).GetString());
         Assert.Equal(8, apps.LastRowUsed()!.RowNumber()); // header + 7

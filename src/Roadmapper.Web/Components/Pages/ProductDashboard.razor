@@ -236,6 +236,8 @@ else
                 </div>
             }
 
+            <DocumentList Target="new DocumentTarget(DocumentTargetKind.Product, ProductId)" Name="@(Roadmap?.Product.Name ?? "this roadmap")" CssClass="wide" />
+
             <div class="card stack wide">
                 <h2>Recent activity</h2>
                 <ActivityList Entries="activity" ShowItem="true" />

@@ -165,6 +165,20 @@ internal static class PortfolioAuditTrail
             [nameof(Decision.DecidedBy)] = "Decided by",
             [nameof(Decision.SupersededById)] = "Superseded by",
         },
+        [typeof(PortfolioDocument)] = new()
+        {
+            [nameof(PortfolioDocument.Title)] = "Title",
+            [nameof(PortfolioDocument.Category)] = "Type",
+            [nameof(PortfolioDocument.FileName)] = "File",
+            [nameof(PortfolioDocument.Url)] = "Link",
+            [nameof(PortfolioDocument.DocumentDate)] = "Date",
+            [nameof(PortfolioDocument.Notes)] = "Notes",
+            [nameof(PortfolioDocument.ProductId)] = "Roadmap",
+            [nameof(PortfolioDocument.ApplicationId)] = "Application",
+            [nameof(PortfolioDocument.VendorId)] = "Vendor",
+            [nameof(PortfolioDocument.ContractId)] = "Contract",
+            [nameof(PortfolioDocument.RoadmapItemId)] = "Roadmap item",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -185,7 +199,7 @@ internal static class PortfolioAuditTrail
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
-                or Benefit or BenefitMeasurement or Decision or DecisionLink)) continue;
+                or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument)) continue;
 
             switch (entry.State)
             {
@@ -335,6 +349,9 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Created) entry.NewValue = what; else entry.OldValue = what;
                     break;
                 }
+                case PortfolioDocument doc:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Document, doc.Id, doc.Title, field);
+                    break;
                 default:
                     continue;
             }

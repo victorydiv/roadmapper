@@ -29,11 +29,46 @@
         </div>
     </div>
 
+    <div class="card stack" id="documents" style="grid-column: 1 / -1">
+        <h2>Document folders</h2>
+        <div class="muted small">
+            Where each type of document is uploaded. In SharePoint, open the folder and choose <b>Add shortcut to My files</b>
+            (or <b>Sync</b>) so it appears on this PC under your OneDrive folder. Enter that local folder here, and paste the
+            folder's SharePoint address or a <b>Copy link</b> link to it. Roadmapper saves uploads into the local folder,
+            OneDrive puts them in SharePoint, and the SharePoint address is used to open them.
+        </div>
+        @if (folderError is not null)
+        {
+            <div class="alert">@folderError</div>
+        }
+        <div class="folder-grid">
+            <b class="small">Type</b><b class="small">Folder on this PC</b><b class="small">SharePoint address</b><span></span>
+            @foreach (var f in folderRows)
+            {
+                <span>@PortfolioText.Label(f.Category)</span>
+                <input @bind="f.LocalPath" placeholder="@FolderExample(f.Category)" title="@f.LocalPath" />
+                <input @bind="f.SharePointUrl" placeholder="https://yourcompany.sharepoint.com/sites/…" title="@f.SharePointUrl" />
+                <span class="small nowrap">
+                    @if (f.Saved is { } st)
+                    {
+                        @if (st.LocalPath is null) { <span class="muted">Not set</span> }
+                        else if (st.LocalExists) { <span title="The folder is on this PC">✓ Found</span> }
+                        else { <span title="Check the path, and that OneDrive is syncing it">⚠ Not found</span> }
+                    }
+                </span>
+            }
+        </div>
+        <div class="row">
+            <button class="btn primary" @onclick="SaveFoldersAsync">Save folders</button>
+            @if (foldersSaved) { <span class="muted small">Saved.</span> }
+        </div>
+    </div>
+
     <div class="card stack">
         <h2>Back up the portfolio</h2>
         <div class="muted small">
             Downloads a portfolio file (.rpf) with every application, vendor, contract, contact, trading partner, integration,
-            risk, process, pain point, KPI, benefit, decision, these settings and the change history. Roadmaps aren't included:
+            risk, process, pain point, KPI, benefit, decision, the document list, these settings and the change history. Document files stay in SharePoint. Roadmaps aren't included:
             back those up as .rmp files from each product. Links to roadmap items are saved by roadmap name and item path,
             and reconnect when those roadmaps exist.
         </div>
@@ -88,6 +123,24 @@
     private bool saved, importing, empty;
     private PortfolioImportMode mode = PortfolioImportMode.Merge;
     private PortfolioImportResult? result;
+    private List<FolderRow> folderRows = [];
+    private string? folderError;
+    private bool foldersSaved;
+
+    private sealed class FolderRow
+    {
+        public DocumentCategory Category { get; init; }
+        public string? LocalPath { get; set; }
+        public string? SharePointUrl { get; set; }
+        public DocumentFolderStatus? Saved { get; set; }
+    }
+
+    private static string FolderExample(DocumentCategory c) => c switch
+    {
+        DocumentCategory.Roadmap => @"C:\Users\you\OneDrive - Company\Team - Product Roadmaps",
+        DocumentCategory.Other => @"C:\Users\you\OneDrive - Company\Team - Documents",
+        _ => $@"C:\Users\you\OneDrive - Company\Team - {PortfolioText.Label(c)}s",
+    };
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -96,7 +149,36 @@
         var s = await Svc.GetSettingsAsync();
         (laborRate, warningDays, reviewMonths, jiraBaseUrl) = (s.LaborRate, s.RenewalWarningDays, s.DefaultReviewIntervalMonths, s.JiraBaseUrl);
         empty = await Svc.IsEmptyAsync();
+        await LoadFoldersAsync();
         mode = empty ? PortfolioImportMode.Restore : PortfolioImportMode.Merge;
+    }
+
+    private async Task LoadFoldersAsync() =>
+        folderRows = (await Svc.GetDocumentFoldersAsync())
+            .Select(f => new FolderRow { Category = f.Category, LocalPath = f.LocalPath, SharePointUrl = f.SharePointUrl, Saved = f }).ToList();
+
+    private async Task SaveFoldersAsync()
+    {
+        folderError = null;
+        foldersSaved = false;
+        var problems = new List<string>();
+        var failed = new Dictionary<DocumentCategory, FolderRow>();
+        foreach (var f in folderRows)
+        {
+            if (f.LocalPath == f.Saved?.LocalPath && f.SharePointUrl == f.Saved?.SharePointUrl) continue;
+            try { await Svc.SaveDocumentFolderAsync(f.Category, f.LocalPath, f.SharePointUrl); }
+            catch (InvalidOperationException ex)
+            {
+                problems.Add($"{PortfolioText.Label(f.Category)}: {ex.Message}");
+                failed[f.Category] = f;
+            }
+        }
+        await LoadFoldersAsync();
+        // Keep what was typed in rows that didn't save, so it can be fixed.
+        foreach (var f in folderRows)
+            if (failed.TryGetValue(f.Category, out var t)) (f.LocalPath, f.SharePointUrl) = (t.LocalPath, t.SharePointUrl);
+        if (problems.Count > 0) folderError = string.Join(" ", problems);
+        else foldersSaved = true;
     }
 
     private async Task SaveAsync()

@@ -195,6 +195,20 @@ public static class PortfolioText
         _ => k.ToString(),
     };
 
+    public static string Label(DocumentCategory c) => c switch
+    {
+        DocumentCategory.Sow => "SOW",
+        DocumentCategory.Brd => "BRD",
+        _ => c.ToString(),
+    };
+
+    public static string Label(DocumentTargetKind k) => k switch
+    {
+        DocumentTargetKind.RoadmapItem => "Roadmap item",
+        DocumentTargetKind.Product => "Roadmap",
+        _ => k.ToString(),
+    };
+
     public static string Label(BenefitCategory c) => c switch
     {
         BenefitCategory.CostSavings => "Cost savings",
@@ -237,6 +251,7 @@ public static class PortfolioText
         BenefitCategory c => Label(c),
         DecisionStatus s => Label(s),
         BenefitUnit u => Label(u),
+        DocumentCategory c => Label(c),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

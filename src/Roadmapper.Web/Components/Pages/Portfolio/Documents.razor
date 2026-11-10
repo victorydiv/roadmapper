@@ -1,0 +1,115 @@
+@page "/portfolio/documents"
+@inject PortfolioService Svc
+
+<PortfolioHeader Title="Documents" Subtitle="Roadmaps, contracts, invoices, SOWs and BRDs kept in SharePoint. Uploads go to each type's synced folder, and OneDrive puts them in SharePoint.">
+    <button class="btn primary" @onclick="() => New(upload: true)">+ Upload</button>
+    <button class="btn" @onclick="() => New(upload: false)" title="Add a link to a document that's already in SharePoint">+ Link</button>
+</PortfolioHeader>
+
+@if (folders is not null && folders.All(f => f.LocalPath is null))
+{
+    <div class="card notice" style="margin-bottom:1rem">
+        No document folders are set up yet. In <a href="/portfolio/settings#documents">Settings › Document folders</a>, give each type of
+        document a folder that OneDrive syncs to SharePoint. Until then you can still add links to documents already in SharePoint.
+    </div>
+}
+
+@if (documents is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (documents.Count == 0)
+{
+    <div class="card empty">
+        No documents yet. Upload one here, or from the Documents section of an application, vendor, roadmap or roadmap item.
+    </div>
+}
+else
+{
+    <div class="toolbar">
+        <input placeholder="Search documents" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="category">
+            <option value="">Any type</option>
+            @foreach (var c in Enum.GetValues<DocumentCategory>())
+            {
+                <option value="@c">@PortfolioText.Label(c)</option>
+            }
+        </select>
+        <select @bind="attached">
+            <option value="">Attached to anything</option>
+            @foreach (var k in Enum.GetValues<DocumentTargetKind>())
+            {
+                <option value="@k">@PortfolioText.Label(k)</option>
+            }
+            <option value="none">Not attached</option>
+        </select>
+        <span class="muted small">@Shown.Count of @documents.Count</span>
+    </div>
+    <div class="card" style="padding:0; overflow-x:auto">
+        <DocumentTable Documents="Shown" ShowTarget="true" OnEdit="Edit" />
+    </div>
+}
+
+@if (editing is not null)
+{
+    <DocumentEditor Draft="editing" Upload="upload" Document="editingDoc" OnClose="OnClosed" />
+}
+
+@code {
+    private List<PortfolioDocument>? documents;
+    private List<DocumentFolderStatus>? folders;
+    private DocumentDraft? editing;
+    private PortfolioDocument? editingDoc;
+    private bool upload;
+    private string search = "", category = "", attached = "";
+
+    /// <summary>"r12" etc.: open the upload or link dialog attached to that record (from the item editor).</summary>
+    [SupplyParameterFromQuery] public string? Attach { get; set; }
+    /// <summary>"upload" or "link".</summary>
+    [SupplyParameterFromQuery] public string? Add { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (Add is "upload" or "link")
+        {
+            upload = Add == "upload";
+            editing = DocumentDraft.New(DocumentTarget.Parse(Attach));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        documents = await Svc.GetDocumentsAsync();
+        folders = await Svc.GetDocumentFoldersAsync();
+    }
+
+    private List<PortfolioDocument> Shown => (documents ?? [])
+        .Where(d => category == "" || d.Category.ToString() == category)
+        .Where(d => attached == "" || (attached == "none" ? d.Target is null : d.Target?.Kind.ToString() == attached))
+        .Where(d => search.Length == 0
+            || d.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || (d.FileName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (d.Notes?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (d.TargetName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    private void New(bool upload)
+    {
+        this.upload = upload;
+        editingDoc = null;
+        editing = DocumentDraft.New(null, Enum.TryParse<DocumentCategory>(category, out var c) ? c : null);
+    }
+
+    private void Edit(PortfolioDocument d)
+    {
+        editingDoc = d;
+        editing = DocumentDraft.From(d);
+    }
+
+    private async Task OnClosed(int? id)
+    {
+        editing = null;
+        if (id is not null) await LoadAsync();
+    }
+}

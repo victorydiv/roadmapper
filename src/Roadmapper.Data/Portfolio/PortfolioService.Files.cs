@@ -73,6 +73,8 @@ public partial class PortfolioService
             {
                 LaborRate = settings.LaborRate, RenewalWarningDays = settings.RenewalWarningDays,
                 DefaultReviewIntervalMonths = settings.DefaultReviewIntervalMonths, JiraBaseUrl = settings.JiraBaseUrl,
+                DocumentFolders = (await db.DocumentFolders.AsNoTracking().ToListAsync()).OrderBy(f => f.Category)
+                    .Select(f => new PfDocumentFolder(f.Category, f.LocalPath, f.SharePointUrl)).ToList(),
             },
             Contacts = (await db.Contacts.AsNoTracking().OrderBy(c => c.Id).ToListAsync()).Select(c => new PfContact
             {
@@ -157,6 +159,15 @@ public partial class PortfolioService
                     .Select(t => t.Kind == DecisionTargetKind.RoadmapItem ? new PfDecisionLink(t.Kind, null, index.RefOf(t.Id)) : new PfDecisionLink(t.Kind, t.Id, null))
                     .Where(l => l.Kind != DecisionTargetKind.RoadmapItem || l.Item is not null).ToList(),
             }).ToList(),
+            Documents = (await db.Documents.AsNoTracking().OrderBy(d => d.Id).ToListAsync()).Select(d => new PfDocument
+            {
+                Id = d.Id, Title = d.Title, Category = d.Category, FileName = d.FileName, LocalPath = d.LocalPath, Url = d.Url,
+                SizeBytes = d.SizeBytes, DocumentDate = d.DocumentDate, Notes = d.Notes, CreatedAt = d.CreatedAt,
+                AttachedTo = d.Target?.Kind,
+                TargetId = d.ApplicationId ?? d.VendorId ?? d.ContractId,
+                Roadmap = d.ProductId is { } dp ? productNames.GetValueOrDefault(dp) : null,
+                Item = d.RoadmapItemId is { } di ? index.RefOf(di) : null,
+            }).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -205,6 +216,9 @@ public partial class PortfolioService
             settings.RenewalWarningDays = s.RenewalWarningDays;
             settings.DefaultReviewIntervalMonths = s.DefaultReviewIntervalMonths;
             settings.JiraBaseUrl = s.JiraBaseUrl;
+            db.DocumentFolders.RemoveRange(await db.DocumentFolders.ToListAsync());
+            foreach (var f in s.DocumentFolders.GroupBy(f => f.Category).Select(g => g.First()))
+                db.DocumentFolders.Add(new DocumentFolder { Category = f.Category, LocalPath = f.LocalPath, SharePointUrl = f.SharePointUrl });
         }
 
         // Vendors and partners first (contacts belong to them), then contacts, then the people they point at.
@@ -531,6 +545,44 @@ public partial class PortfolioService
         await db.SaveChangesAsync();
         result.Count("decisions", newDecisions.Count);
 
+        // Documents: the files themselves stay in SharePoint; this brings back the list and what each is attached to.
+        var documentMap = new Dictionary<int, int>();
+        var newDocuments = new List<(PfDocument File, PortfolioDocument Row)>();
+        var existingDocuments = await db.Documents.AsNoTracking().ToListAsync();
+        foreach (var d in file.Documents)
+        {
+            if (merge && existingDocuments.FirstOrDefault(x =>
+                    (d.Url is not null && string.Equals(x.Url, d.Url, StringComparison.OrdinalIgnoreCase))
+                    || (d.LocalPath is not null && string.Equals(x.LocalPath, d.LocalPath, StringComparison.OrdinalIgnoreCase))) is { } found)
+            {
+                documentMap[d.Id] = found.Id;
+                result.Skipped.Add($"Document {d.Title} (already here)");
+                continue;
+            }
+            var row = new PortfolioDocument
+            {
+                Title = d.Title.Trim(), Category = d.Category, FileName = d.FileName, LocalPath = d.LocalPath, Url = d.Url, SizeBytes = d.SizeBytes,
+                DocumentDate = d.DocumentDate, Notes = d.Notes, CreatedAt = d.CreatedAt == default ? now : d.CreatedAt, UpdatedAt = now,
+            };
+            if (row.LocalPath is null && row.Url is null) continue;
+            switch (d.AttachedTo)
+            {
+                case DocumentTargetKind.Application: row.ApplicationId = Map(appMap, d.TargetId); break;
+                case DocumentTargetKind.Vendor: row.VendorId = Map(vendorMap, d.TargetId); break;
+                case DocumentTargetKind.Contract: row.ContractId = Map(contractMap, d.TargetId); break;
+                case DocumentTargetKind.RoadmapItem: row.RoadmapItemId = Item(d.Item, $"Document “{d.Title}”"); break;
+                case DocumentTargetKind.Product:
+                    row.ProductId = index.ProductOf(d.Roadmap);
+                    if (row.ProductId is null) result.Unmatched.Add($"Document “{d.Title}”: roadmap {d.Roadmap}");
+                    break;
+            }
+            db.Documents.Add(row);
+            newDocuments.Add((d, row));
+        }
+        await db.SaveChangesAsync();
+        foreach (var (f, row) in newDocuments) documentMap[f.Id] = row.Id;
+        result.Count("documents", newDocuments.Count);
+
         // History, on a restore: re-pointed at the new ids. Entries for records that no longer exist keep id 0.
         if (!merge)
         {
@@ -539,6 +591,7 @@ public partial class PortfolioService
                 [PortfolioEntityType.Application] = appMap, [PortfolioEntityType.Vendor] = vendorMap, [PortfolioEntityType.Contact] = contactMap,
                 [PortfolioEntityType.Integration] = flowMap, [PortfolioEntityType.TradingPartner] = partnerMap, [PortfolioEntityType.Process] = processMap,
                 [PortfolioEntityType.Benefit] = benefitMap, [PortfolioEntityType.Decision] = decisionMap,
+                [PortfolioEntityType.Document] = documentMap,
             };
             foreach (var h in file.History)
                 db.PortfolioAuditEntries.Add(new PortfolioAuditEntry

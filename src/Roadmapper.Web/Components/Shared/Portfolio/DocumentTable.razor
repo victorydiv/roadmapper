@@ -1,0 +1,66 @@
+@* A table of documents: type, title (opens it), date, what it's attached to, size, and Edit. *@
+
+<table class="tree">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Document</th>
+            <th>Date</th>
+            @if (ShowTarget) { <th>Attached to</th> }
+            <th class="num">Size</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var d in Documents)
+        {
+            <tr>
+                <td><span class="badge doc-@d.Category.ToString().ToLowerInvariant()">@PortfolioText.Label(d.Category)</span></td>
+                <td class="title-cell">
+                    <a href="@PortfolioUi.DocumentHref(d)" target="_blank" rel="noopener" title="@(d.Url is null ? "Open the copy on this PC" : "Open in SharePoint")"><b>@d.Title</b> ↗</a>
+                    @if (d.FileName is not null && d.FileName != d.Title)
+                    {
+                        <span class="muted small"> @d.FileName</span>
+                    }
+                    @if (d.Url is not null && d.LocalPath is not null)
+                    {
+                        <a class="small" href="/documents/@d.Id/file" target="_blank" rel="noopener" title="Open the copy on this PC (works offline)"> · local copy</a>
+                    }
+                    @if (d.IsLink)
+                    {
+                        <span class="muted small"> · link</span>
+                    }
+                    @if (d.Notes is not null)
+                    {
+                        <div class="muted small">@d.Notes</div>
+                    }
+                </td>
+                <td class="nowrap small">@(d.DocumentDate is { } dd ? PortfolioUi.Date(dd) : PortfolioUi.Date(DateOnly.FromDateTime(d.CreatedAt.ToLocalTime())))</td>
+                @if (ShowTarget)
+                {
+                    <td class="small">
+                        @if (d.Target is { } t)
+                        {
+                            <span class="muted">@PortfolioText.Label(t.Kind):</span>
+                            @if (PortfolioUi.TargetHref(d) is { } href) { <a href="@href">@d.TargetName</a> } else { @d.TargetName }
+                            @if (d.Contract?.Vendor is { } cv) { <span class="muted"> (@cv.Name)</span> }
+                            @if (d.RoadmapItem?.Product is { } ip) { <span class="muted"> (@ip.Name)</span> }
+                        }
+                        else
+                        {
+                            <span class="muted">–</span>
+                        }
+                    </td>
+                }
+                <td class="num small nowrap">@PortfolioUi.FileSize(d.SizeBytes)</td>
+                <td><button class="btn sm" @onclick="() => OnEdit.InvokeAsync(d)">Edit</button></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PortfolioDocument> Documents { get; set; } = [];
+    [Parameter] public bool ShowTarget { get; set; }
+    [Parameter] public EventCallback<PortfolioDocument> OnEdit { get; set; }
+}

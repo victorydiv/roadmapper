@@ -13,7 +13,8 @@ public partial class PortfolioService
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
-            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync() && !await db.Decisions.AnyAsync();
+            && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync() && !await db.Decisions.AnyAsync()
+            && !await db.Documents.AnyAsync();
     }
 
     /// <summary>

@@ -1,0 +1,202 @@
+@* Upload a document to its SharePoint folder, add a link to one already there, or edit a document's details. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="modal-head">
+                <h2>@(draft.IsNew ? (Upload ? "Upload a document" : "Link a document") : "Edit document")</h2>
+                <span class="spacer"></span>
+                <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(null)">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (error is not null)
+                {
+                    <div class="alert">@error</div>
+                }
+                <div class="grid-3">
+                    <label class="field">Type
+                        <InputSelect @bind-Value="draft.Category" disabled="@(!draft.IsNew && draft.IsFile)">
+                            @foreach (var c in Enum.GetValues<DocumentCategory>())
+                            {
+                                <option value="@c">@PortfolioText.Label(c)</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label class="field" title="The document's own date: an invoice date, the date a contract was signed">Date
+                        <InputDate @bind-Value="draft.DocumentDate" />
+                    </label>
+                    @if (targets is { Count: > 1 } || Targets is null)
+                    {
+                        <label class="field">Attached to
+                            <select @bind="targetKey">
+                                <option value="">— not attached —</option>
+                                @foreach (var g in (targets ?? []).GroupBy(t => t.Target.Kind))
+                                {
+                                    <optgroup label="@PortfolioText.Label(g.Key)">
+                                        @foreach (var o in g)
+                                        {
+                                            <option value="@o.Target.Key">@o.Name@(o.Detail is null ? "" : $" ({o.Detail})")</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </label>
+                    }
+                </div>
+
+                @if (draft.IsNew && Upload)
+                {
+                    var folder = folders?.FirstOrDefault(f => f.Category == draft.Category);
+                    @if (folder is null)
+                    {
+                        <div class="muted small">Loading…</div>
+                    }
+                    else if (!folder.CanUpload)
+                    {
+                        <div class="alert">
+                            @(folder.LocalPath is null
+                                ? $"No folder is set for {PortfolioText.Label(draft.Category)} documents yet."
+                                : $"The {PortfolioText.Label(draft.Category)} folder ({folder.LocalPath}) isn't on this PC. Check that OneDrive is syncing it.")
+                            <a href="/portfolio/settings#documents">Set up document folders</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="muted small">
+                            Saves to <code>@folder.LocalPath</code>; OneDrive then uploads it to SharePoint.
+                            @if (folder.SharePointUrl is null) { <span>No SharePoint address is set for this folder, so the document will open from this PC until you <a href="/portfolio/settings#documents">add one</a>.</span> }
+                        </div>
+                        <label class="btn">
+                            @(file is null ? "Choose file…" : "Choose a different file…")
+                            <InputFile OnChange="OnFileChosen" style="display:none" />
+                        </label>
+                        @if (file is not null)
+                        {
+                            <div class="small"><b>@file.Name</b> <span class="muted">@PortfolioUi.FileSize(file.Size)</span></div>
+                        }
+                        <label class="check">
+                            <input type="checkbox" @bind="replace" />
+                            <span>Replace a file with the same name <span class="muted small">(SharePoint keeps the old one as a previous version)</span></span>
+                        </label>
+                    }
+                }
+                else if (!draft.IsFile)
+                {
+                    <label class="field" title="Open the document in SharePoint and copy its address, or use Copy link">SharePoint link
+                        <InputText @bind-Value="draft.Url" placeholder="https://yourcompany.sharepoint.com/sites/…" />
+                    </label>
+                }
+                else if (Document is { } d)
+                {
+                    <div class="small">
+                        File: <a href="@PortfolioUi.DocumentHref(d)" target="_blank" rel="noopener">@d.FileName</a>
+                        <span class="muted">@PortfolioUi.FileSize(d.SizeBytes) · @d.LocalPath</span>
+                    </div>
+                    <div class="muted small">To change the file, upload it again with “Replace a file with the same name”.</div>
+                }
+
+                <label class="field">Title
+                    <InputText @bind-Value="draft.Title" placeholder="@(file is null ? "e.g. Blue Yonder SOW – Phase 2 rollout" : DocumentLibrary.TitleFromFileName(file.Name))" />
+                </label>
+                <label class="field">Notes
+                    <InputTextArea @bind-Value="draft.Notes" rows="2" />
+                </label>
+            </div>
+
+            <div class="modal-foot">
+                @if (!draft.IsNew)
+                {
+                    @if (confirmingRemove)
+                    {
+                        <span class="small">Take this off Roadmapper's lists? @(draft.IsFile ? "The file stays in SharePoint." : "")</span>
+                        <button type="button" class="btn danger" @onclick="RemoveAsync">Remove</button>
+                        <button type="button" class="btn" @onclick="() => confirmingRemove = false">Keep</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn danger" @onclick="() => confirmingRemove = true">Remove</button>
+                    }
+                }
+                <span class="spacer"></span>
+                <button type="button" class="btn" @onclick="() => CloseAsync(null)">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@(saving || (draft.IsNew && Upload && file is null))">
+                    @(saving ? "Saving…" : draft.IsNew ? (Upload ? "Upload" : "Add") : "Save")
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DocumentDraft Draft { get; set; } = default!;
+    /// <summary>For a new document: upload a file (true) or add a link (false).</summary>
+    [Parameter] public bool Upload { get; set; }
+    /// <summary>The document being edited, to show its file.</summary>
+    [Parameter] public PortfolioDocument? Document { get; set; }
+    /// <summary>What it may be attached to. Null: anything (with a picker); one entry: that, without a picker.</summary>
+    [Parameter] public IReadOnlyList<DocumentTargetOption>? Targets { get; set; }
+    /// <summary>Called with the saved document's id, 0 when it was removed, or null when nothing changed.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private DocumentDraft draft = default!;
+    private IReadOnlyList<DocumentTargetOption>? targets;
+    private List<DocumentFolderStatus>? folders;
+    private IBrowserFile? file;
+    private bool saving, replace, confirmingRemove;
+    private string? error;
+
+    private string targetKey
+    {
+        get => draft.Target?.Key ?? "";
+        set => draft.Target = DocumentTarget.Parse(value);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        targets = Targets ?? await Svc.GetDocumentTargetOptionsAsync();
+        folders = await Svc.GetDocumentFoldersAsync();
+    }
+
+    private void OnFileChosen(InputFileChangeEventArgs e)
+    {
+        error = null;
+        file = e.File;
+        if (file.Size > DocumentLibrary.MaxUploadBytes)
+        {
+            error = $"{file.Name} is larger than {PortfolioUi.FileSize(DocumentLibrary.MaxUploadBytes)}. Upload it in SharePoint, then add it here as a link.";
+            file = null;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            int id;
+            if (draft.IsNew && Upload)
+            {
+                if (file is null) throw new InvalidOperationException("Choose a file to upload.");
+                await using var stream = file.OpenReadStream(DocumentLibrary.MaxUploadBytes);
+                id = await Svc.UploadDocumentAsync(draft, file.Name, stream, replace);
+            }
+            else id = await Svc.SaveDocumentAsync(draft);
+            await CloseAsync(id);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        catch (IOException ex) { error = $"The upload didn't finish: {ex.Message}"; }
+        finally { saving = false; }
+    }
+
+    private async Task RemoveAsync()
+    {
+        await Svc.RemoveDocumentAsync(draft.Id);
+        await CloseAsync(0);
+    }
+
+    private Task CloseAsync(int? result) => OnClose.InvokeAsync(result);
+}

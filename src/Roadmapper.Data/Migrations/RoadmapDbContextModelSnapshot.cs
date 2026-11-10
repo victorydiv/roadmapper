@@ -711,6 +711,25 @@ namespace Roadmapper.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DocumentFolder", b =>
+                {
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalPath")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SharePointUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Category");
+
+                    b.ToTable("DocumentFolders", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
                 {
                     b.Property<int>("Id")
@@ -913,6 +932,85 @@ namespace Roadmapper.Data.Migrations
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("PortfolioAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ContractId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(210)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalPath")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("RoadmapItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(1300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RoadmapItemId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("Documents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Documents_OneTarget", "(\"ProductId\" IS NOT NULL) + (\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1");
+                        });
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioSettings", b =>
@@ -1956,6 +2054,44 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Integration");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.PortfolioDocument", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Contract", "Contract")
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "RoadmapItem")
+                        .WithMany()
+                        .HasForeignKey("RoadmapItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("RoadmapItem");
+
+                    b.Navigation("Vendor");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.ProcessApplication", b =>

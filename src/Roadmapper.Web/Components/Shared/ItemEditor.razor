@@ -451,6 +451,32 @@
                     </fieldset>
 
                     <fieldset>
+                        <legend>Documents</legend>
+                        @if (documents is { Count: > 0 })
+                        {
+                            <ul class="dep-list">
+                                @foreach (var d in documents)
+                                {
+                                    <li>
+                                        <span class="badge doc-@d.Category.ToString().ToLowerInvariant()">@PortfolioText.Label(d.Category)</span>
+                                        <a href="@PortfolioUi.DocumentHref(d)" target="_blank" rel="noopener">@d.Title ↗</a>
+                                        <span class="spacer"></span>
+                                        <span class="small muted nowrap">@(d.DocumentDate is { } dd ? PortfolioUi.Date(dd) : "")</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <span class="muted small">No documents. Attach the SOW, BRD or other papers for this @draft.ItemType.ToString().ToLower(); they're kept in SharePoint.</span>
+                        }
+                        <div class="row">
+                            <a class="btn sm" href="/portfolio/documents?attach=r@(draft.Id)&add=upload">+ Upload</a>
+                            <a class="btn sm" href="/portfolio/documents?attach=r@(draft.Id)&add=link">+ Link</a>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
                         <legend>History</legend>
                         @if (history is null)
                         {
@@ -582,13 +608,15 @@
     // ---- Benefits (portfolio) ----
     private List<Benefit>? benefits;
     private DateOnly benefitsToday;
+    private List<PortfolioDocument>? documents;
 
     private string? jiraBaseUrl;
 
     private async Task LoadAppLinksAsync()
     {
         jiraBaseUrl = (await Portfolio.GetSettingsAsync()).JiraBaseUrl;
-        if (draft.IsNew) { appLinks = []; benefits = []; return; }
+        if (draft.IsNew) { appLinks = []; benefits = []; documents = []; return; }
+        documents = await Portfolio.GetDocumentsAsync(new DocumentTarget(DocumentTargetKind.RoadmapItem, draft.Id));
         benefitsToday = Portfolio.Today;
         benefits = await Portfolio.GetBenefitsAsync(itemId: draft.Id);
         appLinks = await Portfolio.GetLinksForItemAsync(draft.Id);
