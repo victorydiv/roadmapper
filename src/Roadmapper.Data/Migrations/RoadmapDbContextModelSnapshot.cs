@@ -713,7 +713,12 @@ namespace Roadmapper.Data.Migrations
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.DocumentFolder", b =>
                 {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Category")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
@@ -721,11 +726,21 @@ namespace Roadmapper.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SharePointUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Category");
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category")
+                        .IsUnique()
+                        .HasFilter("\"ProductId\" IS NULL");
+
+                    b.HasIndex("ProductId", "Category")
+                        .IsUnique();
 
                     b.ToTable("DocumentFolders", (string)null);
                 });
@@ -1009,7 +1024,7 @@ namespace Roadmapper.Data.Migrations
 
                     b.ToTable("Documents", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Documents_OneTarget", "(\"ProductId\" IS NOT NULL) + (\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1");
+                            t.HasCheckConstraint("CK_Documents_OneTarget", "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1");
                         });
                 });
 
@@ -1991,6 +2006,14 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("TradingPartner");
 
                     b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DocumentFolder", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>

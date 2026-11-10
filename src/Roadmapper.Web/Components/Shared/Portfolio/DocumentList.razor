@@ -1,4 +1,4 @@
-@* Documents attached to one record, for its page, with Upload and Link pre-attached to it. *@
+@* Documents for one record's page: those attached to it (Target), or those belonging to a product (ProductId only). Upload and Link start from there. *@
 @inject PortfolioService Svc
 
 <div class="card stack @CssClass" style="@(CssClass is null ? "margin-top:1rem" : null)">
@@ -6,6 +6,10 @@
         <h2 style="margin:0">Documents</h2>
         <span class="muted small">Kept in SharePoint.</span>
         <span class="spacer"></span>
+        @if (Target is null && ProductId is { } pid)
+        {
+            <a class="small" href="/portfolio/documents?product=@pid">All →</a>
+        }
         <button class="btn" @onclick="() => New(upload: true)">+ Upload</button>
         <button class="btn" @onclick="() => New(upload: false)" title="Add a link to a document that's already in SharePoint">+ Link</button>
     </div>
@@ -19,7 +23,7 @@
     }
     else
     {
-        <DocumentTable Documents="documents" ShowTarget="Targets is { Count: > 1 }" OnEdit="Edit" />
+        <DocumentTable Documents="documents" ShowTarget="Target is null || Targets is { Count: > 1 }" ShowProduct="Target is not null" OnEdit="Edit" />
     }
 </div>
 
@@ -29,7 +33,10 @@
 }
 
 @code {
-    [Parameter, EditorRequired] public DocumentTarget Target { get; set; }
+    /// <summary>The record whose documents these are. Null: a product's documents (<see cref="ProductId"/>).</summary>
+    [Parameter] public DocumentTarget? Target { get; set; }
+    /// <summary>The product new documents belong to by default; without a <see cref="Target"/>, the product whose documents are listed.</summary>
+    [Parameter] public int? ProductId { get; set; }
     [Parameter, EditorRequired] public string Name { get; set; } = "";
     /// <summary>Extra classes for the card, e.g. "wide" in a dashboard grid (which also drops its top margin).</summary>
     [Parameter] public string? CssClass { get; set; }
@@ -44,15 +51,19 @@
     private PortfolioDocument? editingDoc;
     private bool upload;
 
-    private IReadOnlyList<DocumentTargetOption> Choices => Targets ?? [new DocumentTargetOption(Target, Name)];
+    /// <summary>On a product's page: anything, with a picker. On a record's page: that record (or the given choices).</summary>
+    private IReadOnlyList<DocumentTargetOption>? Choices => Target is { } t ? Targets ?? [new DocumentTargetOption(t, Name, null, ProductId)] : null;
 
-    protected override async Task OnParametersSetAsync() => documents = await Svc.GetDocumentsAsync(Target);
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync() =>
+        documents = Target is { } t ? await Svc.GetDocumentsAsync(t) : await Svc.GetDocumentsAsync(productId: ProductId ?? -1);
 
     private void New(bool upload)
     {
         this.upload = upload;
         editingDoc = null;
-        editing = DocumentDraft.New(Target);
+        editing = DocumentDraft.New(Target, ProductId);
     }
 
     private void Edit(PortfolioDocument d)
@@ -64,6 +75,6 @@
     private async Task OnClosed(int? id)
     {
         editing = null;
-        if (id is not null) documents = await Svc.GetDocumentsAsync(Target);
+        if (id is not null) await LoadAsync();
     }
 }

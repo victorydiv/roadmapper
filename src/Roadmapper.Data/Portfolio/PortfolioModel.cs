@@ -299,10 +299,9 @@ internal static class PortfolioModel
 
         b.Entity<PortfolioDocument>(e =>
         {
-            // Attached to at most one record.
+            // Attached to at most one record. (The product it belongs to is separate.)
             e.ToTable("Documents", t => t.HasCheckConstraint("CK_Documents_OneTarget",
-                "(\"ProductId\" IS NOT NULL) + (\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL)"
-                + " + (\"RoadmapItemId\" IS NOT NULL) <= 1"));
+                "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1"));
             e.Property(d => d.Title).IsRequired().HasMaxLength(300);
             e.Property(d => d.Category).HasConversion<string>().HasMaxLength(20);
             e.Property(d => d.FileName).HasMaxLength(DocumentLibrary.MaxFileNameLength + 10);
@@ -326,7 +325,10 @@ internal static class PortfolioModel
         b.Entity<DocumentFolder>(e =>
         {
             e.ToTable("DocumentFolders");
-            e.HasKey(f => f.Category);
+            // One folder per type per product, and one shared folder per type.
+            e.HasOne<Product>().WithMany().HasForeignKey(f => f.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(f => new { f.ProductId, f.Category }).IsUnique();
+            e.HasIndex(f => f.Category).IsUnique().HasFilter("\"ProductId\" IS NULL");
             e.Property(f => f.Category).HasConversion<string>().HasMaxLength(20);
             e.Property(f => f.LocalPath).HasMaxLength(1000);
             e.Property(f => f.SharePointUrl).HasMaxLength(ExternalLinks.MaxUrlLength);

@@ -1,5 +1,6 @@
-@* Upload a document to its SharePoint folder, add a link to one already there, or edit a document's details. *@
+@* Upload a document to its product's SharePoint folder, add a link to one already there, or edit a document's details. *@
 @inject PortfolioService Svc
+@inject RoadmapService Roadmaps
 
 <div class="modal-backdrop">
     <div class="modal">
@@ -17,56 +18,65 @@
                 }
                 <div class="grid-3">
                     <label class="field">Type
-                        <InputSelect @bind-Value="draft.Category" disabled="@(!draft.IsNew && draft.IsFile)">
+                        <select @bind="draft.Category" @bind:after="RefreshFolderAsync">
                             @foreach (var c in Enum.GetValues<DocumentCategory>())
                             {
                                 <option value="@c">@PortfolioText.Label(c)</option>
                             }
-                        </InputSelect>
+                        </select>
+                    </label>
+                    <label class="field" title="Uploads go to this product's folders. A roadmap item's documents always belong to its product.">Product
+                        <select @bind="productKey" @bind:after="RefreshFolderAsync" disabled="@(draft.Target?.Kind == DocumentTargetKind.RoadmapItem)">
+                            <option value="">— shared (no product) —</option>
+                            @foreach (var p in products)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
                     </label>
                     <label class="field" title="The document's own date: an invoice date, the date a contract was signed">Date
                         <InputDate @bind-Value="draft.DocumentDate" />
                     </label>
-                    @if (targets is { Count: > 1 } || Targets is null)
-                    {
-                        <label class="field">Attached to
-                            <select @bind="targetKey">
-                                <option value="">— not attached —</option>
-                                @foreach (var g in (targets ?? []).GroupBy(t => t.Target.Kind))
-                                {
-                                    <optgroup label="@PortfolioText.Label(g.Key)">
-                                        @foreach (var o in g)
-                                        {
-                                            <option value="@o.Target.Key">@o.Name@(o.Detail is null ? "" : $" ({o.Detail})")</option>
-                                        }
-                                    </optgroup>
-                                }
-                            </select>
-                        </label>
-                    }
                 </div>
+                @if (targets is { Count: > 1 } || Targets is null)
+                {
+                    <label class="field">Attached to
+                        <select @bind="targetKey" @bind:after="OnTargetChangedAsync">
+                            <option value="">— nothing else —</option>
+                            @foreach (var g in (targets ?? []).GroupBy(t => t.Target.Kind))
+                            {
+                                <optgroup label="@PortfolioText.Label(g.Key)">
+                                    @foreach (var o in g)
+                                    {
+                                        <option value="@o.Target.Key">@o.Name@(o.Detail is null ? "" : $" ({o.Detail})")</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </label>
+                }
 
                 @if (draft.IsNew && Upload)
                 {
-                    var folder = folders?.FirstOrDefault(f => f.Category == draft.Category);
-                    @if (folder is null)
+                    @if (!folderLoaded)
                     {
                         <div class="muted small">Loading…</div>
                     }
-                    else if (!folder.CanUpload)
+                    else if (folder is null || !folder.CanUpload)
                     {
                         <div class="alert">
-                            @(folder.LocalPath is null
-                                ? $"No folder is set for {PortfolioText.Label(draft.Category)} documents yet."
+                            @(folder is null
+                                ? $"No {PortfolioText.Label(draft.Category)} folder is set{(ProductName is { } pn ? $" for {pn} or shared" : " for shared documents")}."
                                 : $"The {PortfolioText.Label(draft.Category)} folder ({folder.LocalPath}) isn't on this PC. Check that OneDrive is syncing it.")
-                            <a href="/portfolio/settings#documents">Set up document folders</a>
+                            <a href="@SettingsHref">Set up document folders</a>
                         </div>
                     }
                     else
                     {
                         <div class="muted small">
-                            Saves to <code>@folder.LocalPath</code>; OneDrive then uploads it to SharePoint.
-                            @if (folder.SharePointUrl is null) { <span>No SharePoint address is set for this folder, so the document will open from this PC until you <a href="/portfolio/settings#documents">add one</a>.</span> }
+                            Saves to <code>@folder.LocalPath</code>@(folder.IsShared && draft.ProductId is not null ? " (the shared folder: this product has none of its own for this type)" : "");
+                            OneDrive then uploads it to SharePoint.
+                            @if (folder.SharePointUrl is null) { <span>No SharePoint address is set for this folder, so the document will open from this PC until you <a href="@SettingsHref">add one</a>.</span> }
                         </div>
                         <label class="btn">
                             @(file is null ? "Choose file…" : "Choose a different file…")
@@ -94,7 +104,7 @@
                         File: <a href="@PortfolioUi.DocumentHref(d)" target="_blank" rel="noopener">@d.FileName</a>
                         <span class="muted">@PortfolioUi.FileSize(d.SizeBytes) · @d.LocalPath</span>
                     </div>
-                    <div class="muted small">To change the file, upload it again with “Replace a file with the same name”.</div>
+                    <div class="muted small">Changing the type or product here doesn't move the file. To change the file, upload it again with “Replace a file with the same name”.</div>
                 }
 
                 <label class="field">Title
@@ -142,10 +152,15 @@
 
     private DocumentDraft draft = default!;
     private IReadOnlyList<DocumentTargetOption>? targets;
-    private List<DocumentFolderStatus>? folders;
+    private List<ProductSummary> products = [];
+    private DocumentFolderStatus? folder;
+    private bool folderLoaded;
     private IBrowserFile? file;
     private bool saving, replace, confirmingRemove;
     private string? error;
+
+    private string? ProductName => products.FirstOrDefault(p => p.Id == draft.ProductId)?.Name;
+    private string SettingsHref => draft.ProductId is { } pid ? $"/products/{pid}/settings#documents" : "/portfolio/settings#documents";
 
     private string targetKey
     {
@@ -153,11 +168,34 @@
         set => draft.Target = DocumentTarget.Parse(value);
     }
 
+    private string productKey
+    {
+        get => draft.ProductId?.ToString() ?? "";
+        set => draft.ProductId = int.TryParse(value, out var id) ? id : null;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         draft = Draft;
+        products = (await Roadmaps.GetProductsAsync()).OrderBy(p => p.Name).ToList();
         targets = Targets ?? await Svc.GetDocumentTargetOptionsAsync();
-        folders = await Svc.GetDocumentFoldersAsync();
+        // A roadmap item's document belongs to its product; an application's defaults to its own roadmap's.
+        if (draft.IsNew && draft.ProductId is null && draft.Target is { } t && targets.FirstOrDefault(o => o.Target == t)?.ProductId is { } pid)
+            draft.ProductId = pid;
+        await RefreshFolderAsync();
+    }
+
+    private async Task OnTargetChangedAsync()
+    {
+        if (draft.Target is { } t && targets?.FirstOrDefault(o => o.Target == t)?.ProductId is { } pid) draft.ProductId = pid;
+        await RefreshFolderAsync();
+    }
+
+    private async Task RefreshFolderAsync()
+    {
+        if (!(draft.IsNew && Upload)) return;
+        folder = await Svc.ResolveDocumentFolderAsync(draft.ProductId, draft.Category);
+        folderLoaded = true;
     }
 
     private void OnFileChosen(InputFileChangeEventArgs e)

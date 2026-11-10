@@ -295,7 +295,7 @@ else
         </div>
     }
 
-    <DocumentList Target="new DocumentTarget(DocumentTargetKind.Application, app.Id)" Name="@app.Name" />
+    <DocumentList Target="new DocumentTarget(DocumentTargetKind.Application, app.Id)" ProductId="app.ProductId" Name="@app.Name" />
     <DecisionList Target="new DecisionTarget(DecisionTargetKind.Application, app.Id)" Name="@app.Name" />
 
     <div class="card stack" style="margin-top:1rem">

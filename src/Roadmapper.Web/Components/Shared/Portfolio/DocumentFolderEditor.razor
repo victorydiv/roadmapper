@@ -1,0 +1,116 @@
+@* The synced folder and SharePoint address for each document type: a product's own (ProductId) or the shared ones. *@
+@inject PortfolioService Svc
+
+<div class="card stack" id="documents" style="grid-column: 1 / -1">
+    <h2>Document folders</h2>
+    <div class="muted small">
+        @if (ProductId is null)
+        {
+            <span>
+                Shared folders, used for documents that don't belong to a product, and by any product that has no folder of its own for that type.
+                Each product's own folders are in its Settings tab.
+            </span>
+        }
+        else
+        {
+            <span>
+                Where this product's documents are uploaded. A type left blank uses the <a href="/portfolio/settings#documents">shared folder</a> for that type, if there is one.
+            </span>
+        }
+        In SharePoint, open the folder and choose <b>Add shortcut to My files</b> (or <b>Sync</b>) so it appears on this PC under
+        your OneDrive folder. Enter that local folder here, and paste the folder's SharePoint address or a <b>Copy link</b> link to it.
+        Roadmapper saves uploads into the local folder, OneDrive puts them in SharePoint, and the SharePoint address is used to open them.
+    </div>
+    @if (error is not null)
+    {
+        <div class="alert">@error</div>
+    }
+    <div class="folder-grid">
+        <b class="small">Type</b><b class="small">Folder on this PC</b><b class="small">SharePoint address</b><span></span>
+        @foreach (var f in rows)
+        {
+            <span>@PortfolioText.Label(f.Category)</span>
+            <input @bind="f.LocalPath" placeholder="@Example(f.Category)" title="@f.LocalPath" />
+            <input @bind="f.SharePointUrl" placeholder="https://yourcompany.sharepoint.com/sites/…" title="@f.SharePointUrl" />
+            <span class="small nowrap">
+                @if (f.Saved is { } st)
+                {
+                    @if (st.LocalPath is null)
+                    {
+                        <span class="muted">@(ProductId is null ? "Not set" : shared.FirstOrDefault(s => s.Category == f.Category)?.LocalPath is null ? "Not set" : "Uses shared")</span>
+                    }
+                    else if (st.LocalExists) { <span title="The folder is on this PC">✓ Found</span> }
+                    else { <span title="Check the path, and that OneDrive is syncing it">⚠ Not found</span> }
+                }
+            </span>
+        }
+    </div>
+    <div class="row">
+        <button class="btn primary" @onclick="SaveAsync">Save folders</button>
+        @if (saved) { <span class="muted small">Saved.</span> }
+    </div>
+</div>
+
+@code {
+    /// <summary>The product whose folders these are; null for the shared folders.</summary>
+    [Parameter] public int? ProductId { get; set; }
+    /// <summary>Used in the example paths, e.g. "Synapse".</summary>
+    [Parameter] public string? ProductName { get; set; }
+
+    private List<Row> rows = [];
+    private List<DocumentFolderStatus> shared = [];
+    private string? error;
+    private bool saved;
+
+    private sealed class Row
+    {
+        public DocumentCategory Category { get; init; }
+        public string? LocalPath { get; set; }
+        public string? SharePointUrl { get; set; }
+        public DocumentFolderStatus? Saved { get; set; }
+    }
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        rows = (await Svc.GetDocumentFoldersAsync(ProductId))
+            .Select(f => new Row { Category = f.Category, LocalPath = f.LocalPath, SharePointUrl = f.SharePointUrl, Saved = f }).ToList();
+        shared = ProductId is null ? [] : await Svc.GetDocumentFoldersAsync(null);
+    }
+
+    private string Example(DocumentCategory c)
+    {
+        var what = c switch
+        {
+            DocumentCategory.Roadmap => "Roadmaps",
+            DocumentCategory.Other => "Documents",
+            _ => PortfolioText.Label(c) + "s",
+        };
+        return $@"C:\Users\you\OneDrive - Company\Team - {(ProductName is null ? "" : ProductName + " ")}{what}";
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        saved = false;
+        var problems = new List<string>();
+        var failed = new Dictionary<DocumentCategory, Row>();
+        foreach (var f in rows)
+        {
+            if (f.LocalPath == f.Saved?.LocalPath && f.SharePointUrl == f.Saved?.SharePointUrl) continue;
+            try { await Svc.SaveDocumentFolderAsync(ProductId, f.Category, f.LocalPath, f.SharePointUrl); }
+            catch (InvalidOperationException ex)
+            {
+                problems.Add($"{PortfolioText.Label(f.Category)}: {ex.Message}");
+                failed[f.Category] = f;
+            }
+        }
+        await LoadAsync();
+        // Keep what was typed in rows that didn't save, so it can be fixed.
+        foreach (var f in rows)
+            if (failed.TryGetValue(f.Category, out var t)) (f.LocalPath, f.SharePointUrl) = (t.LocalPath, t.SharePointUrl);
+        if (problems.Count > 0) error = string.Join(" ", problems);
+        else saved = true;
+    }
+}

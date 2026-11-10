@@ -128,12 +128,13 @@ public static class PortfolioApi
         api.MapGet("/decisions/{id:int}", async (int id, PortfolioService svc) =>
             await svc.GetDecisionAsync(id) is { } d ? Results.Ok(DecisionDto.From(d)) : Results.NotFound());
 
-        // Documents kept in SharePoint, newest first. ?entityType=Application&entityId=3 (Product, Application, Vendor,
-        // Contract, RoadmapItem) &category=Contract (Roadmap, Contract, Invoice, Sow, Brd, Other).
-        api.MapGet("/documents", async (PortfolioService svc, string? entityType, int? entityId, string? category) =>
+        // Documents kept in SharePoint, newest first. ?productId=5 (documents belonging to that product)
+        // &entityType=Application&entityId=3 (Application, Vendor, Contract, RoadmapItem) &category=Contract
+        // (Roadmap, Contract, Invoice, Sow, Brd, Other).
+        api.MapGet("/documents", async (PortfolioService svc, int? productId, string? entityType, int? entityId, string? category) =>
         {
             DocumentTarget? target = Parse<DocumentTargetKind>(entityType) is { } k && entityId is { } id ? new DocumentTarget(k, id) : null;
-            return (await svc.GetDocumentsAsync(target, Parse<DocumentCategory>(category))).Select(DocumentDto.From).ToList();
+            return (await svc.GetDocumentsAsync(target, Parse<DocumentCategory>(category), productId)).Select(DocumentDto.From).ToList();
         });
 
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
@@ -418,8 +419,8 @@ public record DashboardDto(DateOnly AsOf, IReadOnlyDictionary<HealthRating, int>
 }
 
 public record DocumentDto(int Id, string Title, DocumentCategory Category, string? Url, string? FileName, string? LocalPath, long? SizeBytes,
-    DateOnly? DocumentDate, string? Notes, DocumentTargetKind? AttachedTo, int? AttachedId, string? AttachedName, DateTime CreatedAt, DateTime UpdatedAt)
+    DateOnly? DocumentDate, string? Notes, Ref? Product, DocumentTargetKind? AttachedTo, int? AttachedId, string? AttachedName, DateTime CreatedAt, DateTime UpdatedAt)
 {
     public static DocumentDto From(PortfolioDocument d) => new(d.Id, d.Title, d.Category, d.Url, d.FileName, d.LocalPath, d.SizeBytes,
-        d.DocumentDate, d.Notes, d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
+        d.DocumentDate, d.Notes, Ref.Of(d.Product), d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
 }

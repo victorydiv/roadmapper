@@ -205,7 +205,6 @@ public static class PortfolioText
     public static string Label(DocumentTargetKind k) => k switch
     {
         DocumentTargetKind.RoadmapItem => "Roadmap item",
-        DocumentTargetKind.Product => "Roadmap",
         _ => k.ToString(),
     };
 

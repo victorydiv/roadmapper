@@ -173,7 +173,7 @@ internal static class PortfolioAuditTrail
             [nameof(PortfolioDocument.Url)] = "Link",
             [nameof(PortfolioDocument.DocumentDate)] = "Date",
             [nameof(PortfolioDocument.Notes)] = "Notes",
-            [nameof(PortfolioDocument.ProductId)] = "Roadmap",
+            [nameof(PortfolioDocument.ProductId)] = "Product",
             [nameof(PortfolioDocument.ApplicationId)] = "Application",
             [nameof(PortfolioDocument.VendorId)] = "Vendor",
             [nameof(PortfolioDocument.ContractId)] = "Contract",

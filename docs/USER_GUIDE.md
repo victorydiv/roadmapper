@@ -700,21 +700,32 @@ The Benefits page groups benefits by roadmap item with totals; the product's Das
 
 ### Documents (SharePoint)
 
-Roadmaps, contracts, invoices, SOWs and BRDs stay in SharePoint; Roadmapper keeps a list of them, attached to the records they belong to, and can upload new ones. It doesn't sign in to SharePoint. Instead, each type of document has a folder on your PC that **OneDrive syncs** to a SharePoint folder: Roadmapper saves the file there and OneDrive uploads it.
+Roadmaps, contracts, invoices, SOWs and BRDs stay in SharePoint. Roadmapper keeps a list of them, organized by product and attached to the records they belong to, and can upload new ones. It doesn't sign in to SharePoint. Instead, each type of document has a folder on your PC that **OneDrive syncs** to a SharePoint folder: Roadmapper saves the file there and OneDrive uploads it.
 
-**Set up the folders once** (Portfolio › Settings › **Document folders**):
+**Folders per product.** Each product has its own folder for each type (**Roadmap, Contract, Invoice, SOW, BRD, Other**), set on that product's **Settings › Document folders**. There's also a set of **shared** folders in Portfolio › Settings, for documents that don't belong to one product (a vendor's master agreement, say) and for any product that hasn't set a folder of its own for that type. An upload goes to the product's own folder for its type; if the product has none, to the shared one; if neither is set, the upload asks you to set one up.
 
-1. In SharePoint, open the folder for a type of document (for example *Product Roadmaps*) and choose **Add shortcut to My files** (or **Sync**). After a moment it appears on your PC, e.g. `C:\Users\you\OneDrive - Company\Team - Product Roadmaps`.
-2. In Document folders, enter that path as the type's **Folder on this PC**. It must already exist: Roadmapper never creates it, so a typo can't collect files that never reach SharePoint.
+**Setting up a folder:**
+
+1. In SharePoint, open the folder (for example *Synapse › Roadmaps*) and choose **Add shortcut to My files** (or **Sync**). After a moment it appears on your PC, e.g. `C:\Users\you\OneDrive - Company\Team - Synapse Roadmaps`.
+2. On the product's Settings tab, under **Document folders**, enter that path as the type's **Folder on this PC**. It must already exist: Roadmapper never creates it, so a typo can't collect files that never reach SharePoint.
 3. Paste the same folder's **SharePoint address**: the browser's address bar, or **Copy link** (a link with `/:f:/r/` in it). Roadmapper turns either into the folder's plain address and uses it to open the files. A "people in your organization" sharing link (`/:f:/s/…`) hides the folder's path and is refused; copy the address bar instead.
-4. Repeat for **Roadmap, Contract, Invoice, SOW, BRD** and **Other** as needed. Each type can be a different SharePoint folder (or site). The status column shows **✓ Found** or **⚠ Not found** for each folder on this PC.
+4. **Save folders.** Each row shows **✓ Found**, **⚠ Not found**, **Uses shared** (blank here, but a shared folder is set) or **Not set**.
 
-**Adding documents.** The **Documents** tab lists every document, with search and filters by type and by what it's attached to. A **Documents** section on each application, vendor (with its contracts), roadmap (its Dashboard) and roadmap item shows that record's documents.
+**Which product a document belongs to.** The upload and link dialogs have a **Product** picker, filled in from where you started:
 
-- **+ Upload:** pick the type, an optional date (an invoice date, a signing date), what it's attached to, and the file. The title defaults to the file name. The file is saved into that type's folder under its own name (characters SharePoint doesn't allow are replaced with `_`). If a file with that name is already there, the upload stops unless you tick **Replace a file with the same name**; SharePoint keeps the old one as a previous version. Files up to 250 MB.
+- From a product's **Dashboard**: that product.
+- From a **roadmap item** (the item editor's Documents section): the item's product. This can't be changed; an item's documents always belong to its product.
+- From an **application**: the application's own roadmap, if it has one.
+- From a **vendor** or **contract**, or the Documents tab: you choose (or leave it shared), since one vendor can serve several products.
+
+The dialog shows exactly which folder the file will be saved to, and says when that's the shared folder.
+
+**Adding documents.** The **Documents** tab lists every document, with search and filters by product, type and what it's attached to. A **Documents** section on each product's Dashboard (its documents), each application, vendor (with its contracts) and roadmap item shows the documents for that record.
+
+- **+ Upload:** pick the type, product, an optional date (an invoice date, a signing date), what it's attached to, and the file. The title defaults to the file name. The file is saved under its own name (characters SharePoint doesn't allow are replaced with `_`). If a file with that name is already in the folder, the upload stops unless you tick **Replace a file with the same name**; SharePoint keeps the old one as a previous version. Files up to 250 MB.
 - **+ Link:** for documents already in SharePoint. Open the document there, copy its address, and paste it with a title.
 - **Open:** a document's title opens it in SharePoint (Office files open in the browser). **local copy** opens the synced copy on this PC, which works offline. Without a SharePoint address for its folder, the title opens the local copy.
-- **Edit** changes the title, type, date, notes or what it's attached to. It doesn't move or rename the file. **Remove** takes it off Roadmapper's lists; the file stays in SharePoint. Deleting a record that has documents leaves them unattached.
+- **Edit** changes the title, type, product, date, notes or what it's attached to. It doesn't move or rename the file. **Remove** takes it off Roadmapper's lists; the file stays in SharePoint. Deleting a record that has documents leaves them unattached; deleting a product removes its folder settings and makes its documents shared.
 
 Uploads appear in SharePoint once OneDrive has synced them (usually seconds). If OneDrive is paused or signed out, files wait in the folder and upload later.
 
@@ -726,9 +737,9 @@ Uploads appear in SharePoint once OneDrive has synced them (usually seconds). If
 - **Renewal warning (days):** how far ahead notice deadlines count as upcoming (default 120). Affects the dashboard, renewal lists and health.
 - **Integration review interval (months):** the starting interval for new integrations (default 12).
 - **Jira site:** e.g. `https://yourcompany.atlassian.net`. Roadmap items with a [Jira key](#linking-roadmap-items-to-jira) link to `{site}/browse/{key}`.
-- **Document folders:** the synced folder and SharePoint address for each type of document. See [Documents](#documents-sharepoint).
+- **Document folders:** the shared folders, used for documents without a product and by products with no folder of their own for that type. Each product's folders are on its Settings tab. See [Documents](#documents-sharepoint).
 
-**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, the document list (not the files, which stay in SharePoint), the settings including document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
+**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, the document list (not the files, which stay in SharePoint), the settings including every product's and the shared document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
 
 **Import a portfolio file:**
 
@@ -796,8 +807,8 @@ All portfolio tables live in the same database; enums are stored as text; names 
 - `BusinessProcess` (unique name): `Description, Domain, ProcessOwnerId, ParentProcessId (Restrict), SortOrder`. `ProcessApplication` (key `ProcessId, ApplicationId`): `Usage, IsPrimary`. `ProcessIntegration` (key `ProcessId, IntegrationId`). `ProcessPainPoint`: `Description, Severity, ApplicationId (SetNull), AddressedByItemId (SetNull), Status`. `ProcessKpi`: `Name, Unit, Direction, Baseline, Target, Current, MeasuredOn`.
 - `Benefit`: `RoadmapItemId (cascade), ApplicationId (SetNull), KpiId (SetNull), Category, Description, Unit, ExpectedValue, ExpectedBy, Baseline, Notes`. `BenefitMeasurement` (unique `BenefitId, MeasuredOn`): `Value, Source, Note`.
 - `Decision`: `Title, DecidedOn, Status, Context, DecisionText (column "Decision"), Outcome, DecidedBy, SupersededById (SetNull)`. `DecisionAlternative`: `Option, Pros, Cons, WhyRejected, SortOrder`. `DecisionLink`: exactly one of `ApplicationId, IntegrationId, VendorId, ContractId, ProcessId, RoadmapItemId, TradingPartnerId` (CHECK `CK_DecisionLinks_OneTarget`); each cascades with its target.
-- `PortfolioDocument` (table `Documents`): `Title, Category (Roadmap, Contract, Invoice, Sow, Brd, Other), FileName, LocalPath, Url, SizeBytes, DocumentDate, Notes`; at most one of `ProductId, ApplicationId, VendorId, ContractId, RoadmapItemId` (CHECK `CK_Documents_OneTarget`), each SetNull. An uploaded file has `LocalPath` (and `Url` when its folder's address is set); a link has only `Url`.
-- `DocumentFolder` (key `Category`): `LocalPath, SharePointUrl`.
+- `PortfolioDocument` (table `Documents`): `Title, Category (Roadmap, Contract, Invoice, Sow, Brd, Other), FileName, LocalPath, Url, SizeBytes, DocumentDate, Notes`; `ProductId` (the product it belongs to, null = shared, SetNull); at most one of `ApplicationId, VendorId, ContractId, RoadmapItemId` (CHECK `CK_Documents_OneTarget`), each SetNull. An uploaded file has `LocalPath` (and `Url` when its folder's address is set); a link has only `Url`.
+- `DocumentFolder`: `Id, ProductId (null = shared; cascade), Category, LocalPath, SharePointUrl`; unique `(ProductId, Category)` and unique `Category` where `ProductId` is null.
 - `PortfolioSettings` (one row, Id 1): `LaborRate, RenewalWarningDays (120), DefaultReviewIntervalMonths (12), JiraBaseUrl`.
 - `PortfolioAuditEntry`: `EntityType, EntityId, EntityName (snapshot), Action, Field, OldValue, NewValue, ChangedAt`; no foreign keys. Contracts and escalation are filed under the vendor; support contacts and initiative links under the application; risks under the integration; process links, pain points and KPIs under the process; measurements under the benefit; links under the decision.
 
@@ -830,7 +841,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 22. **Benefits** (`BenefitMath`): actual = latest measurement, else the KPI's current; baseline = own, else the KPI's; gain and realization as in [Benefits](#benefits); realized $ = max(0, gain) in dollars; at risk below 50% after `ExpectedBy`. Measurements can't be in the future.
 23. **Processes:** no parent loops (`PortfolioRules.ParentError`); a process with sub-processes can't be deleted. KPI drafts reject a target on the wrong side of the baseline.
 24. **Decisions:** `SupersededById` only with status Superseded; no loops; deleting a decision clears "superseded by" on those it replaced.
-25. **Documents** (`DocumentLibrary`, `PortfolioService.Documents.cs`): a folder's local path must be fully qualified and exist (never created). SharePoint addresses: https only; `/:x:/r/` sharing links lose the prefix and query; `.aspx` views use the `id` (or `RootFolder`) parameter; other `/:x:/?/` sharing links are refused; segments are unescaped and re-escaped. File URL = folder URL + `/` + escaped name, plus `?web=1` for Office files. File names: folder part dropped, `"*:<>?|#%` and control characters → `_`, trimmed, leading `~$` removed, ≤ 200 characters keeping the extension. Upload writes `~$roadmapper-{guid}.tmp` in the folder (OneDrive ignores `~$` files) and then renames it; an existing name is refused unless replacing, and replacing a listed file updates that row. Removing a document never deletes the file.
+25. **Documents** (`DocumentLibrary`, `PortfolioService.Documents.cs`): the upload folder is `DocumentLibrary.Resolve`: the product's folder of that type with a local path, else the shared one. A document attached to a roadmap item always gets the item's `ProductId`. A folder's local path must be fully qualified and exist (never created). SharePoint addresses: https only; `/:x:/r/` sharing links lose the prefix and query; `.aspx` views use the `id` (or `RootFolder`) parameter; other `/:x:/?/` sharing links are refused; segments are unescaped and re-escaped. File URL = folder URL + `/` + escaped name, plus `?web=1` for Office files. File names: folder part dropped, `"*:<>?|#%` and control characters → `_`, trimmed, leading `~$` removed, ≤ 200 characters keeping the extension. Upload writes `~$roadmapper-{guid}.tmp` in the folder (OneDrive ignores `~$` files) and then renames it; an existing name is refused unless replacing, and replacing a listed file updates that row. Removing a document never deletes the file.
 
 ### HTTP endpoints (file downloads)
 
@@ -862,7 +873,7 @@ Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing cha
 | `/processes?domain=&applicationId=` · `/processes/{id}` | Processes in tree order; detail adds pain points, KPIs, integrations |
 | `/benefits?productId=&itemId=&applicationId=&status=` | Labor rate, totals and benefits with actual, realization, status and dollars |
 | `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
-| `/documents?entityType=&entityId=&category=` | Documents with their SharePoint address, file, date and what they're attached to (`entityType`: Product, Application, Vendor (includes its contracts'), Contract, RoadmapItem) |
+| `/documents?productId=&entityType=&entityId=&category=` | Documents with their SharePoint address, file, date, product and what they're attached to (`entityType`: Application, Vendor (includes its contracts'), Contract, RoadmapItem) |
 | `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
 
 ### Roadmapper file format
@@ -887,14 +898,14 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and import are in `Data/Portfolio/PortfolioService.Files.cs` (`ExportPortfolioAsync` / `ImportPortfolioAsync`). Same JSON conventions as `.rmp`.
 
-- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl }`. Missing lists are treated as empty.
-- **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`. A document has `attachedTo` with `targetId` (application, vendor, contract), `roadmap` (product name) or `item`.
+- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
+- **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`. A document has `product` (a product name; absent = shared) and `attachedTo` with `targetId` (application, vendor, contract) or `item`. Folders and documents whose product doesn't match are listed as unmatched; the document is kept as shared.
 - **Validation** (before anything is written): format and version, unique ids per kind, names present, every id reference present in the file, exactly one source and target per integration. A `.rmp` is recognized and refused with a pointer to the Products page.
 - **Import:** one transaction, staged saves with old→new id maps. Restore requires `IsEmptyAsync()`, imports settings and history (history re-pointed to new ids; unmapped ids become 0) with audit capture off. Merge keeps audit on, keeps settings, skips existing records by the matching rule in [Portfolio settings, backup and export](#portfolio-settings-backup-and-export) and maps references to them; children of skipped records are skipped, except that contracts and KPIs of existing parents are matched by name for references. Unmatched roadmap references are dropped and listed (`PortfolioImportResult.Unmatched`); a benefit whose item doesn't match is skipped.
 
 ### Page routes
 
-Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?attach={key}&add=upload|link` (key: `p`/`a`/`v`/`c`/`r` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
+Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?product={id}&attach={key}&add=upload|link` (key: `a`/`v`/`c`/`r` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
 
 Roadmaps: `/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/snapshots`, `/exchange`, `/settings`.
 
@@ -1009,11 +1020,14 @@ The import lists links whose roadmap or item path didn't match. Open those roadm
 **A Jira key shows but isn't clickable.**
 Set the Jira site in Portfolio › Settings.
 
+**A product's upload went to the shared folder.**
+That product has no folder of its own for that type. Set one on the product's Settings › Document folders; documents already uploaded stay where they are.
+
 **I uploaded a document but it isn't in SharePoint yet.**
 OneDrive uploads it. Check the OneDrive icon in the taskbar: it may be paused, signed out, or still syncing. The file is safe in the folder meanwhile, and **local copy** opens it.
 
 **Upload says the folder "isn't on this PC".**
-The shortcut was removed or OneDrive stopped syncing it. Add the shortcut again in SharePoint (**Add shortcut to My files**), then check the path in Portfolio › Settings › Document folders.
+The shortcut was removed or OneDrive stopped syncing it. Add the shortcut again in SharePoint (**Add shortcut to My files**), then check the path in the product's Settings › Document folders (or Portfolio › Settings for shared folders).
 
 **Opening a document says it can't be found.**
 The file was moved or renamed in SharePoint after it was added. For a link, edit it and paste the new address. For an uploaded file, remove it and add it again as a link, or upload it again.

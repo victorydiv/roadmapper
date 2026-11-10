@@ -9,7 +9,7 @@ using Roadmapper.Data.Portfolio;
 
 namespace Roadmapper.Tests;
 
-/// <summary>SharePoint addresses, file names and targets (no database).</summary>
+/// <summary>SharePoint addresses, file names, folders and targets (no database).</summary>
 public class DocumentLibraryTests
 {
     private const string Folder = "https://kencogroup1.sharepoint.com/sites/DistributionTechnologyTeam/Shared%20Documents/General/Product%20Roadmaps";
@@ -54,6 +54,22 @@ public class DocumentLibraryTests
     }
 
     [Fact]
+    public void A_products_own_folder_wins_and_the_shared_one_fills_in()
+    {
+        DocumentFolder F(int? product, DocumentCategory c, string? path) => new() { ProductId = product, Category = c, LocalPath = path };
+        var folders = new[]
+        {
+            F(null, DocumentCategory.Roadmap, "C:\\shared"), F(1, DocumentCategory.Roadmap, "C:\\synapse"),
+            F(null, DocumentCategory.Contract, "C:\\contracts"), F(2, DocumentCategory.Contract, null), // product 2: blank row
+        };
+        Assert.Equal("C:\\synapse", DocumentLibrary.Resolve(folders, 1, DocumentCategory.Roadmap)!.LocalPath);
+        Assert.Equal("C:\\shared", DocumentLibrary.Resolve(folders, 2, DocumentCategory.Roadmap)!.LocalPath);
+        Assert.Equal("C:\\shared", DocumentLibrary.Resolve(folders, null, DocumentCategory.Roadmap)!.LocalPath);
+        Assert.Equal("C:\\contracts", DocumentLibrary.Resolve(folders, 2, DocumentCategory.Contract)!.LocalPath);
+        Assert.Null(DocumentLibrary.Resolve(folders, 1, DocumentCategory.Invoice));
+    }
+
+    [Fact]
     public void Targets_round_trip_through_their_keys_and_suggest_a_type()
     {
         foreach (var kind in Enum.GetValues<DocumentTargetKind>())
@@ -63,20 +79,21 @@ public class DocumentLibraryTests
         }
         Assert.Null(DocumentTarget.Parse("x1"));
         Assert.Null(DocumentTarget.Parse("a0"));
-        Assert.Equal(DocumentCategory.Roadmap, new DocumentTarget(DocumentTargetKind.Product, 1).DefaultCategory);
         Assert.Equal(DocumentCategory.Contract, new DocumentTarget(DocumentTargetKind.Contract, 1).DefaultCategory);
         Assert.Equal(DocumentCategory.Sow, new DocumentTarget(DocumentTargetKind.RoadmapItem, 1).DefaultCategory);
+        Assert.Equal(DocumentCategory.Roadmap, DocumentDraft.New(null, productId: 3).Category);
+        Assert.Equal(DocumentCategory.Other, DocumentDraft.New(null).Category);
     }
 }
 
-/// <summary>Uploading into synced folders, links, attachments and backups.</summary>
+/// <summary>Uploading into synced folders, per-product folders, links, attachments and backups.</summary>
 public sealed class DocumentServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
     private readonly PortfolioService _svc;
     private readonly RoadmapService _roadmaps;
     private readonly string _root = Path.Combine(Path.GetTempPath(), "roadmapper-doc-tests-" + Guid.NewGuid().ToString("N"));
-    private readonly string _roadmapFolder, _contractFolder;
+    private readonly string _sharedRoadmaps, _contracts;
 
     public DocumentServiceTests()
     {
@@ -86,8 +103,8 @@ public sealed class DocumentServiceTests : IDisposable
         var clock = new FixedClock(new DateTimeOffset(2026, 11, 10, 12, 0, 0, TimeSpan.Zero));
         _svc = new PortfolioService(factory, clock);
         _roadmaps = new RoadmapService(factory, clock);
-        _roadmapFolder = Directory.CreateDirectory(Path.Combine(_root, "Team - Product Roadmaps")).FullName;
-        _contractFolder = Directory.CreateDirectory(Path.Combine(_root, "Team - Contracts")).FullName;
+        _sharedRoadmaps = Folder("Team - Product Roadmaps");
+        _contracts = Folder("Team - Contracts");
     }
 
     public void Dispose()
@@ -96,59 +113,110 @@ public sealed class DocumentServiceTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
     }
 
+    private string Folder(string name) => Directory.CreateDirectory(Path.Combine(_root, name)).FullName;
+
     private static MemoryStream Content(string text) => new(Encoding.UTF8.GetBytes(text));
 
-    private async Task SetUpFoldersAsync()
+    private async Task SetUpSharedFoldersAsync()
     {
-        await _svc.SaveDocumentFolderAsync(DocumentCategory.Roadmap, _roadmapFolder,
+        await _svc.SaveDocumentFolderAsync(null, DocumentCategory.Roadmap, _sharedRoadmaps,
             "https://acme.sharepoint.com/:f:/r/sites/Team/Shared%20Documents/General/Product%20Roadmaps?d=w1&csf=1&web=1&e=X");
-        await _svc.SaveDocumentFolderAsync(DocumentCategory.Contract, $"\"{_contractFolder}\\\"", null);
+        await _svc.SaveDocumentFolderAsync(null, DocumentCategory.Contract, $"\"{_contracts}\\\"", null);
     }
 
     [Fact]
     public async Task Folders_are_checked_and_their_addresses_cleaned_up()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
         var folders = await _svc.GetDocumentFoldersAsync();
         Assert.Equal(Enum.GetValues<DocumentCategory>().Length, folders.Count);
         var roadmap = folders.Single(f => f.Category == DocumentCategory.Roadmap);
         Assert.True(roadmap.LocalExists);
+        Assert.True(roadmap.IsShared);
         Assert.Equal("https://acme.sharepoint.com/sites/Team/Shared%20Documents/General/Product%20Roadmaps", roadmap.SharePointUrl);
         // Quotes and a trailing slash from a pasted path are dropped.
-        Assert.Equal(_contractFolder, folders.Single(f => f.Category == DocumentCategory.Contract).LocalPath);
+        Assert.Equal(_contracts, folders.Single(f => f.Category == DocumentCategory.Contract).LocalPath);
         Assert.Null(folders.Single(f => f.Category == DocumentCategory.Invoice).LocalPath);
+        Assert.True(await _svc.HasDocumentFoldersAsync());
 
         // A folder that isn't there is refused, not created.
         var missing = Path.Combine(_root, "Not synced");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.SaveDocumentFolderAsync(DocumentCategory.Invoice, missing, null));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.SaveDocumentFolderAsync(null, DocumentCategory.Invoice, missing, null));
         Assert.False(Directory.Exists(missing));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.SaveDocumentFolderAsync(DocumentCategory.Invoice, "relative\\path", null));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.SaveDocumentFolderAsync(null, DocumentCategory.Invoice, "relative\\path", null));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.SaveDocumentFolderAsync(999, DocumentCategory.Invoice, _contracts, null));
 
         // Clearing both removes the setting.
-        await _svc.SaveDocumentFolderAsync(DocumentCategory.Contract, " ", "");
+        await _svc.SaveDocumentFolderAsync(null, DocumentCategory.Contract, " ", "");
         Assert.Null((await _svc.GetDocumentFoldersAsync()).Single(f => f.Category == DocumentCategory.Contract).LocalPath);
     }
 
     [Fact]
-    public async Task Uploading_saves_the_file_into_its_types_folder_and_links_it_to_sharepoint()
+    public async Task Each_product_uploads_to_its_own_folders_and_falls_back_to_the_shared_ones()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
+        var synapse = await _roadmaps.CreateProductAsync("Synapse", null, ScoringModel.Wsjf);
+        var byc = await _roadmaps.CreateProductAsync("BYC", null, ScoringModel.Wsjf);
+        var synapseRoadmaps = Folder("Team - Synapse Roadmaps");
+        var synapseSows = Folder("Team - Synapse SOWs");
+        await _svc.SaveDocumentFolderAsync(synapse.Id, DocumentCategory.Roadmap, synapseRoadmaps, "https://acme.sharepoint.com/sites/Synapse/Shared Documents/Roadmaps");
+        await _svc.SaveDocumentFolderAsync(synapse.Id, DocumentCategory.Sow, synapseSows, null);
+
+        // The product's own folders are listed separately from the shared ones.
+        var own = await _svc.GetDocumentFoldersAsync(synapse.Id);
+        Assert.Equal(synapseRoadmaps, own.Single(f => f.Category == DocumentCategory.Roadmap).LocalPath);
+        Assert.Null(own.Single(f => f.Category == DocumentCategory.Contract).LocalPath);
+        Assert.Equal(_sharedRoadmaps, (await _svc.GetDocumentFoldersAsync()).Single(f => f.Category == DocumentCategory.Roadmap).LocalPath);
+
+        // Synapse's roadmap goes to Synapse's folder; BYC has none, so its roadmap goes to the shared one.
+        var a = await _svc.UploadDocumentAsync(DocumentDraft.New(null, synapse.Id), "roadmap.pdf", Content("synapse"));
+        var b = await _svc.UploadDocumentAsync(DocumentDraft.New(null, byc.Id), "roadmap.pdf", Content("byc"));
+        Assert.Equal("synapse", await File.ReadAllTextAsync(Path.Combine(synapseRoadmaps, "roadmap.pdf")));
+        Assert.Equal("byc", await File.ReadAllTextAsync(Path.Combine(_sharedRoadmaps, "roadmap.pdf")));
+        Assert.Equal("https://acme.sharepoint.com/sites/Synapse/Shared%20Documents/Roadmaps/roadmap.pdf", (await _svc.GetDocumentAsync(a))!.Url);
+        Assert.StartsWith("https://acme.sharepoint.com/sites/Team/", (await _svc.GetDocumentAsync(b))!.Url);
+
+        // Synapse's contracts use the shared folder too.
+        await _svc.UploadDocumentAsync(DocumentDraft.New(null, synapse.Id, DocumentCategory.Contract), "msa.pdf", Content("msa"));
+        Assert.True(File.Exists(Path.Combine(_contracts, "msa.pdf")));
+
+        // A roadmap item's document belongs to the item's product, whatever was picked.
+        var goal = await _roadmaps.SaveItemAsync(new ItemDraft { ProductId = synapse.Id, ItemType = ItemType.Goal, Title = "Retire Synapse" });
+        var sowDraft = DocumentDraft.New(new DocumentTarget(DocumentTargetKind.RoadmapItem, goal), productId: byc.Id);
+        var sow = await _svc.UploadDocumentAsync(sowDraft, "sow.docx", Content("sow"));
+        Assert.True(File.Exists(Path.Combine(synapseSows, "sow.docx")));
+        var sowDoc = (await _svc.GetDocumentAsync(sow))!;
+        Assert.Equal(synapse.Id, sowDoc.ProductId);
+        Assert.Equal("Retire Synapse", sowDoc.TargetName);
+
+        // Each product lists its own.
+        Assert.Equal(["msa", "roadmap", "sow"], (await _svc.GetDocumentsAsync(productId: synapse.Id)).Select(d => d.Title).Order());
+        Assert.Equal(b, Assert.Single(await _svc.GetDocumentsAsync(productId: byc.Id)).Id);
+
+        // Deleting a product drops its folders and leaves its documents shared.
+        await _roadmaps.DeleteProductAsync(byc.Id);
+        Assert.Null((await _svc.GetDocumentAsync(b))!.ProductId);
+    }
+
+    [Fact]
+    public async Task Uploading_saves_the_file_and_links_it_to_sharepoint()
+    {
+        await SetUpSharedFoldersAsync();
         var product = await _roadmaps.CreateProductAsync("Synapse", null, ScoringModel.Wsjf);
 
-        var id = await _svc.UploadDocumentAsync(DocumentDraft.New(new DocumentTarget(DocumentTargetKind.Product, product.Id)),
-            "Synapse roadmap 2027.pptx", Content("deck v1"));
+        var id = await _svc.UploadDocumentAsync(DocumentDraft.New(null, product.Id), "Synapse roadmap 2027.pptx", Content("deck v1"));
 
-        var path = Path.Combine(_roadmapFolder, "Synapse roadmap 2027.pptx");
+        var path = Path.Combine(_sharedRoadmaps, "Synapse roadmap 2027.pptx");
         Assert.Equal("deck v1", await File.ReadAllTextAsync(path));
-        Assert.Empty(Directory.GetFiles(_roadmapFolder, DocumentLibrary.TempPrefix + "*"));
+        Assert.Empty(Directory.GetFiles(_sharedRoadmaps, DocumentLibrary.TempPrefix + "*"));
         var doc = (await _svc.GetDocumentAsync(id))!;
         Assert.Equal("Synapse roadmap 2027", doc.Title);
         Assert.Equal(DocumentCategory.Roadmap, doc.Category);
         Assert.Equal(7, doc.SizeBytes);
         Assert.Equal("https://acme.sharepoint.com/sites/Team/Shared%20Documents/General/Product%20Roadmaps/Synapse%20roadmap%202027.pptx?web=1", doc.Url);
-        Assert.Equal("Synapse", doc.TargetName);
+        Assert.Equal("Synapse", doc.Product?.Name);
+        Assert.Null(doc.Target);
         Assert.Equal(path, await _svc.GetDocumentFileAsync(id));
-        Assert.Single(await _svc.GetDocumentsAsync(new DocumentTarget(DocumentTargetKind.Product, product.Id)));
 
         // History is kept like any other portfolio record.
         Assert.Contains(await _svc.GetActivityAsync(PortfolioEntityType.Document, id), a => a.Action == AuditAction.Created && a.EntityName == "Synapse roadmap 2027");
@@ -157,20 +225,20 @@ public sealed class DocumentServiceTests : IDisposable
     [Fact]
     public async Task A_file_of_the_same_name_is_only_replaced_when_asked()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
         var draft = () => new DocumentDraft { Category = DocumentCategory.Roadmap, Title = "WMS roadmap" };
         var first = await _svc.UploadDocumentAsync(draft(), "wms.pdf", Content("v1"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _svc.UploadDocumentAsync(draft(), "wms.pdf", Content("v2")));
         Assert.Contains("already a file named", ex.Message);
-        Assert.Equal("v1", await File.ReadAllTextAsync(Path.Combine(_roadmapFolder, "wms.pdf")));
+        Assert.Equal("v1", await File.ReadAllTextAsync(Path.Combine(_sharedRoadmaps, "wms.pdf")));
 
         var second = await _svc.UploadDocumentAsync(draft(), "wms.pdf", Content("v2!"), replace: true);
         Assert.Equal(first, second);
-        Assert.Equal("v2!", await File.ReadAllTextAsync(Path.Combine(_roadmapFolder, "wms.pdf")));
+        Assert.Equal("v2!", await File.ReadAllTextAsync(Path.Combine(_sharedRoadmaps, "wms.pdf")));
         var doc = Assert.Single(await _svc.GetDocumentsAsync());
         Assert.Equal(3, doc.SizeBytes);
-        Assert.Empty(Directory.GetFiles(_roadmapFolder, DocumentLibrary.TempPrefix + "*"));
+        Assert.Empty(Directory.GetFiles(_sharedRoadmaps, DocumentLibrary.TempPrefix + "*"));
     }
 
     [Fact]
@@ -181,8 +249,8 @@ public sealed class DocumentServiceTests : IDisposable
         Assert.Contains("No folder is set for Invoice", ex.Message);
 
         // Set, then OneDrive stops syncing it.
-        var folder = Directory.CreateDirectory(Path.Combine(_root, "Invoices")).FullName;
-        await _svc.SaveDocumentFolderAsync(DocumentCategory.Invoice, folder, null);
+        var folder = Folder("Invoices");
+        await _svc.SaveDocumentFolderAsync(null, DocumentCategory.Invoice, folder, null);
         Directory.Delete(folder);
         ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _svc.UploadDocumentAsync(new DocumentDraft { Category = DocumentCategory.Invoice }, "inv.pdf", Content("x")));
@@ -193,13 +261,13 @@ public sealed class DocumentServiceTests : IDisposable
     [Fact]
     public async Task Without_a_sharepoint_address_the_file_opens_from_this_pc()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
         var vendor = await _svc.SaveVendorAsync(new VendorDraft { Name = "Blue Yonder" });
         var id = await _svc.UploadDocumentAsync(DocumentDraft.New(new DocumentTarget(DocumentTargetKind.Vendor, vendor)), "MSA.pdf", Content("msa"));
         var doc = (await _svc.GetDocumentAsync(id))!;
         Assert.Null(doc.Url);
         Assert.Equal(DocumentCategory.Contract, doc.Category);
-        Assert.True(File.Exists(Path.Combine(_contractFolder, "MSA.pdf")));
+        Assert.True(File.Exists(Path.Combine(_contracts, "MSA.pdf")));
     }
 
     [Fact]
@@ -244,8 +312,7 @@ public sealed class DocumentServiceTests : IDisposable
 
         // Deleting what a document is attached to leaves the document, unattached.
         await _svc.DeleteVendorAsync(vendor);
-        var orphan = (await _svc.GetDocumentAsync(invoice))!;
-        Assert.Null(orphan.Target);
+        Assert.Null((await _svc.GetDocumentAsync(invoice))!.Target);
 
         await _svc.RemoveDocumentAsync(invoice);
         Assert.Null(await _svc.GetDocumentAsync(invoice));
@@ -254,29 +321,31 @@ public sealed class DocumentServiceTests : IDisposable
     [Fact]
     public async Task Removing_an_uploaded_document_keeps_the_file()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
         var id = await _svc.UploadDocumentAsync(new DocumentDraft { Category = DocumentCategory.Roadmap }, "keep.pdf", Content("k"));
         await _svc.RemoveDocumentAsync(id);
         Assert.Empty(await _svc.GetDocumentsAsync());
-        Assert.True(File.Exists(Path.Combine(_roadmapFolder, "keep.pdf")));
+        Assert.True(File.Exists(Path.Combine(_sharedRoadmaps, "keep.pdf")));
     }
 
     [Fact]
     public async Task Documents_and_folders_travel_in_the_portfolio_file()
     {
-        await SetUpFoldersAsync();
+        await SetUpSharedFoldersAsync();
         var product = await _roadmaps.CreateProductAsync("Synapse", null, ScoringModel.Wsjf);
         var goal = await _roadmaps.SaveItemAsync(new ItemDraft { ProductId = product.Id, ItemType = ItemType.Goal, Title = "Retire Synapse" });
+        await _svc.SaveDocumentFolderAsync(product.Id, DocumentCategory.Roadmap, Folder("Synapse Roadmaps"), "https://acme.sharepoint.com/sites/Synapse/Roadmaps");
         var vendor = await _svc.SaveVendorAsync(new VendorDraft { Name = "Blue Yonder" });
         var contract = await _svc.SaveContractAsync(new ContractDraft { VendorId = vendor, Name = "BYC subscription" });
-        await _svc.UploadDocumentAsync(DocumentDraft.New(new DocumentTarget(DocumentTargetKind.Product, product.Id)), "roadmap.pdf", Content("r"));
+        await _svc.UploadDocumentAsync(DocumentDraft.New(null, product.Id), "roadmap.pdf", Content("r"));
         await _svc.SaveDocumentAsync(new DocumentDraft { Title = "SOW", Category = DocumentCategory.Sow, Url = "https://acme.sharepoint.com/sow.docx", Target = new DocumentTarget(DocumentTargetKind.RoadmapItem, goal) });
-        await _svc.SaveDocumentAsync(new DocumentDraft { Title = "Order form", Category = DocumentCategory.Contract, Url = "https://acme.sharepoint.com/of.pdf", Target = new DocumentTarget(DocumentTargetKind.Contract, contract) });
+        await _svc.SaveDocumentAsync(new DocumentDraft { Title = "Order form", Category = DocumentCategory.Contract, Url = "https://acme.sharepoint.com/of.pdf", ProductId = product.Id, Target = new DocumentTarget(DocumentTargetKind.Contract, contract) });
 
         using var buffer = new MemoryStream((await _svc.ExportPortfolioAsync()).ToBytes());
         var file = PortfolioFile.Read(buffer);
         Assert.Equal(3, file.Documents.Count);
-        Assert.Equal(2, file.Settings!.DocumentFolders.Count);
+        Assert.Equal(3, file.Settings!.DocumentFolders.Count);
+        Assert.Equal("Synapse", file.Settings.DocumentFolders.Single(f => f.Product is not null).Product);
 
         // Restore into a fresh database that has the same roadmap.
         using var other = new SqliteConnection("DataSource=:memory:");
@@ -292,7 +361,9 @@ public sealed class DocumentServiceTests : IDisposable
         Assert.Equal(3, result.Added["documents"]);
         Assert.Empty(result.Unmatched);
         var docs = await target.GetDocumentsAsync();
-        Assert.Equal(["BYC subscription", "Retire Synapse", "Synapse"], docs.Select(d => d.TargetName!).Order());
+        Assert.All(docs, d => Assert.Equal(p2.Id, d.ProductId));
+        Assert.Equal(["BYC subscription", "Retire Synapse"], docs.Where(d => d.Target is not null).Select(d => d.TargetName!).Order());
+        Assert.NotNull((await target.GetDocumentFoldersAsync(p2.Id)).Single(f => f.Category == DocumentCategory.Roadmap).LocalPath);
         Assert.Equal(2, (await target.GetDocumentFoldersAsync()).Count(f => f.LocalPath is not null));
 
         // Merging the same file again adds nothing.

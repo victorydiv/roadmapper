@@ -73,8 +73,10 @@ public partial class PortfolioService
             {
                 LaborRate = settings.LaborRate, RenewalWarningDays = settings.RenewalWarningDays,
                 DefaultReviewIntervalMonths = settings.DefaultReviewIntervalMonths, JiraBaseUrl = settings.JiraBaseUrl,
-                DocumentFolders = (await db.DocumentFolders.AsNoTracking().ToListAsync()).OrderBy(f => f.Category)
-                    .Select(f => new PfDocumentFolder(f.Category, f.LocalPath, f.SharePointUrl)).ToList(),
+                DocumentFolders = (await db.DocumentFolders.AsNoTracking().ToListAsync())
+                    .Where(f => f.ProductId is null || productNames.ContainsKey(f.ProductId.Value))
+                    .OrderBy(f => f.ProductId is { } fp ? productNames[fp] : "").ThenBy(f => f.Category)
+                    .Select(f => new PfDocumentFolder(f.Category, f.LocalPath, f.SharePointUrl, f.ProductId is { } fp ? productNames[fp] : null)).ToList(),
             },
             Contacts = (await db.Contacts.AsNoTracking().OrderBy(c => c.Id).ToListAsync()).Select(c => new PfContact
             {
@@ -165,7 +167,7 @@ public partial class PortfolioService
                 SizeBytes = d.SizeBytes, DocumentDate = d.DocumentDate, Notes = d.Notes, CreatedAt = d.CreatedAt,
                 AttachedTo = d.Target?.Kind,
                 TargetId = d.ApplicationId ?? d.VendorId ?? d.ContractId,
-                Roadmap = d.ProductId is { } dp ? productNames.GetValueOrDefault(dp) : null,
+                Product = d.ProductId is { } dp ? productNames.GetValueOrDefault(dp) : null,
                 Item = d.RoadmapItemId is { } di ? index.RefOf(di) : null,
             }).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
@@ -217,8 +219,18 @@ public partial class PortfolioService
             settings.DefaultReviewIntervalMonths = s.DefaultReviewIntervalMonths;
             settings.JiraBaseUrl = s.JiraBaseUrl;
             db.DocumentFolders.RemoveRange(await db.DocumentFolders.ToListAsync());
-            foreach (var f in s.DocumentFolders.GroupBy(f => f.Category).Select(g => g.First()))
-                db.DocumentFolders.Add(new DocumentFolder { Category = f.Category, LocalPath = f.LocalPath, SharePointUrl = f.SharePointUrl });
+            var folders = new HashSet<(int?, DocumentCategory)>();
+            foreach (var f in s.DocumentFolders)
+            {
+                int? product = null;
+                if (f.Product is not null && (product = index.ProductOf(f.Product)) is null)
+                {
+                    result.Unmatched.Add($"{PortfolioText.Label(f.Category)} document folder: roadmap {f.Product}");
+                    continue;
+                }
+                if (folders.Add((product, f.Category)))
+                    db.DocumentFolders.Add(new DocumentFolder { ProductId = product, Category = f.Category, LocalPath = f.LocalPath, SharePointUrl = f.SharePointUrl });
+            }
         }
 
         // Vendors and partners first (contacts belong to them), then contacts, then the people they point at.
@@ -565,15 +577,19 @@ public partial class PortfolioService
                 DocumentDate = d.DocumentDate, Notes = d.Notes, CreatedAt = d.CreatedAt == default ? now : d.CreatedAt, UpdatedAt = now,
             };
             if (row.LocalPath is null && row.Url is null) continue;
+            if (d.Product is not null)
+            {
+                row.ProductId = index.ProductOf(d.Product);
+                if (row.ProductId is null) result.Unmatched.Add($"Document “{d.Title}”: roadmap {d.Product}");
+            }
             switch (d.AttachedTo)
             {
                 case DocumentTargetKind.Application: row.ApplicationId = Map(appMap, d.TargetId); break;
                 case DocumentTargetKind.Vendor: row.VendorId = Map(vendorMap, d.TargetId); break;
                 case DocumentTargetKind.Contract: row.ContractId = Map(contractMap, d.TargetId); break;
-                case DocumentTargetKind.RoadmapItem: row.RoadmapItemId = Item(d.Item, $"Document “{d.Title}”"); break;
-                case DocumentTargetKind.Product:
-                    row.ProductId = index.ProductOf(d.Roadmap);
-                    if (row.ProductId is null) result.Unmatched.Add($"Document “{d.Title}”: roadmap {d.Roadmap}");
+                case DocumentTargetKind.RoadmapItem:
+                    row.RoadmapItemId = Item(d.Item, $"Document “{d.Title}”");
+                    if (row.RoadmapItemId is { } ri) row.ProductId = await db.Items.Where(i => i.Id == ri).Select(i => (int?)i.ProductId).FirstAsync();
                     break;
             }
             db.Documents.Add(row);

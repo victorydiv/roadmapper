@@ -210,6 +210,8 @@ else
             </div>
         </div>
 
+        <DocumentFolderEditor ProductId="ProductId" ProductName="@product.Name" />
+
         <div class="card stack">
             <h2>Danger zone</h2>
             <div class="muted small">Deleting a product removes its whole roadmap: @Roadmap.Items.Count items, themes, tags and dependencies@(benefitCount > 0 ? $", and the {benefitCount} benefit{(benefitCount == 1 ? "" : "s")} its items carry in the portfolio" : "").</div>

@@ -6,6 +6,7 @@
             <th>Type</th>
             <th>Document</th>
             <th>Date</th>
+            @if (ShowProduct) { <th>Product</th> }
             @if (ShowTarget) { <th>Attached to</th> }
             <th class="num">Size</th>
             <th></th>
@@ -36,6 +37,12 @@
                     }
                 </td>
                 <td class="nowrap small">@(d.DocumentDate is { } dd ? PortfolioUi.Date(dd) : PortfolioUi.Date(DateOnly.FromDateTime(d.CreatedAt.ToLocalTime())))</td>
+                @if (ShowProduct)
+                {
+                    <td class="small">
+                        @if (d.Product is { } p) { <a href="/products/@p.Id/dashboard">@p.Name</a> } else { <span class="muted">Shared</span> }
+                    </td>
+                }
                 @if (ShowTarget)
                 {
                     <td class="small">
@@ -44,7 +51,6 @@
                             <span class="muted">@PortfolioText.Label(t.Kind):</span>
                             @if (PortfolioUi.TargetHref(d) is { } href) { <a href="@href">@d.TargetName</a> } else { @d.TargetName }
                             @if (d.Contract?.Vendor is { } cv) { <span class="muted"> (@cv.Name)</span> }
-                            @if (d.RoadmapItem?.Product is { } ip) { <span class="muted"> (@ip.Name)</span> }
                         }
                         else
                         {
@@ -62,5 +68,6 @@
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<PortfolioDocument> Documents { get; set; } = [];
     [Parameter] public bool ShowTarget { get; set; }
+    [Parameter] public bool ShowProduct { get; set; }
     [Parameter] public EventCallback<PortfolioDocument> OnEdit { get; set; }
 }

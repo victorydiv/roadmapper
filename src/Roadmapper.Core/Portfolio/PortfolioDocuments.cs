@@ -3,12 +3,15 @@ using System.Text.RegularExpressions;
 namespace Roadmapper.Core.Portfolio;
 
 /// <summary>
-/// Where one kind of document is kept: a folder on this PC that OneDrive syncs to a SharePoint folder, and that
-/// SharePoint folder's web address. Saving a file into <see cref="LocalPath"/> is what uploads it; Roadmapper never
-/// talks to SharePoint itself.
+/// Where one kind of document is kept, for one product (or shared, when <see cref="ProductId"/> is null): a folder on
+/// this PC that OneDrive syncs to a SharePoint folder, and that SharePoint folder's web address. Saving a file into
+/// <see cref="LocalPath"/> is what uploads it; Roadmapper never talks to SharePoint itself.
 /// </summary>
 public class DocumentFolder
 {
+    public int Id { get; set; }
+    /// <summary>The product whose documents go here; null for the shared folders.</summary>
+    public int? ProductId { get; set; }
     public DocumentCategory Category { get; set; }
     /// <summary>The synced folder, e.g. "C:\Users\me\OneDrive - Acme\Team - Product Roadmaps".</summary>
     public string? LocalPath { get; set; }
@@ -19,7 +22,8 @@ public class DocumentFolder
 /// <summary>
 /// A document kept in SharePoint: a roadmap, contract, invoice, SOW, BRD. Either a file Roadmapper saved into a synced
 /// folder (<see cref="LocalPath"/>, plus its SharePoint <see cref="Url"/> when the folder's address is set), or just a
-/// link to something already in SharePoint (<see cref="Url"/> only). Attached to at most one record.
+/// link to something already in SharePoint (<see cref="Url"/> only). It belongs to a product (<see cref="ProductId"/>,
+/// whose folders it's uploaded to) or is shared, and is attached to at most one record (<see cref="Target"/>).
 /// </summary>
 public class PortfolioDocument
 {
@@ -37,6 +41,7 @@ public class PortfolioDocument
     public DateOnly? DocumentDate { get; set; }
     public string? Notes { get; set; }
 
+    /// <summary>The product this document belongs to; null when it's shared.</summary>
     public int? ProductId { get; set; }
     public Product? Product { get; set; }
     public int? ApplicationId { get; set; }
@@ -56,15 +61,15 @@ public class PortfolioDocument
     public DocumentTarget? Target => DocumentTarget.Of(this);
 
     /// <summary>The attached record's name (needs its navigation loaded).</summary>
-    public string? TargetName => Product?.Name ?? Application?.Name ?? Vendor?.Name ?? Contract?.Name ?? RoadmapItem?.Title;
+    public string? TargetName => Application?.Name ?? Vendor?.Name ?? Contract?.Name ?? RoadmapItem?.Title;
 }
 
-/// <summary>What a document is attached to. <see cref="Key"/> ("p3", "a12", "v2", "c5", "r9") is used in select lists.</summary>
+/// <summary>What a document is attached to. <see cref="Key"/> ("a12", "v2", "c5", "r9") is used in select lists and URLs.</summary>
 public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
 {
     private static readonly (DocumentTargetKind Kind, string Prefix)[] Prefixes =
     [
-        (DocumentTargetKind.Product, "p"), (DocumentTargetKind.Application, "a"), (DocumentTargetKind.Vendor, "v"),
+        (DocumentTargetKind.Application, "a"), (DocumentTargetKind.Vendor, "v"),
         (DocumentTargetKind.Contract, "c"), (DocumentTargetKind.RoadmapItem, "r"),
     ];
 
@@ -80,8 +85,7 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
     }
 
     public static DocumentTarget? Of(PortfolioDocument d) =>
-        d.ProductId is { } p ? new(DocumentTargetKind.Product, p)
-        : d.ApplicationId is { } a ? new(DocumentTargetKind.Application, a)
+        d.ApplicationId is { } a ? new(DocumentTargetKind.Application, a)
         : d.VendorId is { } v ? new(DocumentTargetKind.Vendor, v)
         : d.ContractId is { } c ? new(DocumentTargetKind.Contract, c)
         : d.RoadmapItemId is { } r ? new(DocumentTargetKind.RoadmapItem, r)
@@ -90,11 +94,10 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
     /// <summary>Points the document at <paramref name="target"/>, or at nothing.</summary>
     public static void Apply(DocumentTarget? target, PortfolioDocument d)
     {
-        (d.ProductId, d.ApplicationId, d.VendorId, d.ContractId, d.RoadmapItemId) = (null, null, null, null, null);
+        (d.ApplicationId, d.VendorId, d.ContractId, d.RoadmapItemId) = (null, null, null, null);
         if (target is not { } t) return;
         switch (t.Kind)
         {
-            case DocumentTargetKind.Product: d.ProductId = t.Id; break;
             case DocumentTargetKind.Application: d.ApplicationId = t.Id; break;
             case DocumentTargetKind.Vendor: d.VendorId = t.Id; break;
             case DocumentTargetKind.Contract: d.ContractId = t.Id; break;
@@ -105,7 +108,6 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
     /// <summary>The usual kind of document for this kind of record, to preselect when adding one.</summary>
     public DocumentCategory DefaultCategory => Kind switch
     {
-        DocumentTargetKind.Product => DocumentCategory.Roadmap,
         DocumentTargetKind.Vendor or DocumentTargetKind.Contract => DocumentCategory.Contract,
         DocumentTargetKind.RoadmapItem => DocumentCategory.Sow,
         _ => DocumentCategory.Brd,
@@ -125,18 +127,24 @@ public class DocumentDraft
     public DateOnly? DocumentDate { get; set; }
     public string? Notes { get; set; }
     public DocumentTarget? Target { get; set; }
+    /// <summary>The product it belongs to (whose folders an upload goes to); null for shared.</summary>
+    public int? ProductId { get; set; }
     /// <summary>Set when editing an uploaded file.</summary>
     public bool IsFile { get; set; }
 
     public bool IsNew => Id == 0;
 
-    public static DocumentDraft New(DocumentTarget? target, DocumentCategory? category = null) =>
-        new() { Target = target, Category = category ?? target?.DefaultCategory ?? DocumentCategory.Other };
+    /// <summary>A new document. Without a target or category, one added for a product defaults to Roadmap.</summary>
+    public static DocumentDraft New(DocumentTarget? target, int? productId = null, DocumentCategory? category = null) => new()
+    {
+        Target = target, ProductId = productId,
+        Category = category ?? target?.DefaultCategory ?? (productId is null ? DocumentCategory.Other : DocumentCategory.Roadmap),
+    };
 
     public static DocumentDraft From(PortfolioDocument d) => new()
     {
         Id = d.Id, Title = d.Title, Category = d.Category, Url = d.Url, DocumentDate = d.DocumentDate, Notes = d.Notes,
-        Target = d.Target, IsFile = !d.IsLink,
+        Target = d.Target, ProductId = d.ProductId, IsFile = !d.IsLink,
     };
 
     /// <summary>Checks the details. <paramref name="uploading"/>: a file comes with it, so the title may be blank (the file name is used) and no link is needed.</summary>
@@ -161,6 +169,7 @@ public class DocumentDraft
         if (!IsFile) d.Url = Url?.Trim();
         d.DocumentDate = DocumentDate;
         d.Notes = DraftText.Clean(Notes);
+        d.ProductId = ProductId;
         DocumentTarget.Apply(Target, d);
     }
 }
@@ -246,6 +255,16 @@ public static partial class DocumentLibrary
         }
         if (clean.Length == 0 || clean.Trim('.', '_', ' ').Length == 0) throw new InvalidOperationException("That file name can't be used. Rename the file and try again.");
         return clean;
+    }
+
+    /// <summary>
+    /// The folder a product's document of this type goes to: the product's own folder when one is set, else the
+    /// shared folder of that type (null when neither is set).
+    /// </summary>
+    public static DocumentFolder? Resolve(IEnumerable<DocumentFolder> folders, int? productId, DocumentCategory category)
+    {
+        var ofType = folders.Where(f => f.Category == category && f.LocalPath is not null).ToList();
+        return (productId is null ? null : ofType.FirstOrDefault(f => f.ProductId == productId)) ?? ofType.FirstOrDefault(f => f.ProductId is null);
     }
 
     /// <summary>The title to use when none was given: the file name without its extension.</summary>

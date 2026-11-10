@@ -79,7 +79,6 @@ public static class PortfolioUi
     /// <summary>The page of the record a document is attached to.</summary>
     public static string? TargetHref(PortfolioDocument d) => d.Target is not { } t ? null : t.Kind switch
     {
-        DocumentTargetKind.Product => $"/products/{t.Id}",
         DocumentTargetKind.Application => $"/portfolio/applications/{t.Id}",
         DocumentTargetKind.Vendor => $"/portfolio/vendors/{t.Id}",
         DocumentTargetKind.Contract => d.Contract is { } c ? $"/portfolio/vendors/{c.VendorId}" : null,

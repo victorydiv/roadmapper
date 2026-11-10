@@ -181,7 +181,6 @@ public sealed class PortfolioFile
                 case DocumentTargetKind.Application: Ref(d.TargetId ?? 0, apps, "application", where); break;
                 case DocumentTargetKind.Vendor: Ref(d.TargetId ?? 0, vendors, "vendor", where); break;
                 case DocumentTargetKind.Contract: Ref(d.TargetId ?? 0, contracts, "contract", where); break;
-                case DocumentTargetKind.Product when string.IsNullOrWhiteSpace(d.Roadmap): errors.Add($"{where} is attached to a roadmap with no name."); break;
                 case DocumentTargetKind.RoadmapItem when d.Item is null: errors.Add($"{where} is attached to a roadmap item with no path."); break;
             }
         }
@@ -220,8 +219,11 @@ public sealed class PfSettings
     public List<PfDocumentFolder> DocumentFolders { get; set; } = [];
 }
 
-/// <summary>Where one document type is kept. The local path is this PC's; on another PC it's ignored unless that folder exists there.</summary>
-public sealed record PfDocumentFolder(DocumentCategory Category, string? LocalPath, string? SharePointUrl);
+/// <summary>
+/// Where one document type is kept, for the product named <see cref="Product"/> or shared (null). The local path is
+/// this PC's; on another PC it only works if that folder exists there too.
+/// </summary>
+public sealed record PfDocumentFolder(DocumentCategory Category, string? LocalPath, string? SharePointUrl, string? Product = null);
 
 public sealed class PfContact
 {
@@ -426,7 +428,8 @@ public sealed record PfHistory(PortfolioEntityType EntityType, int EntityId, str
 
 /// <summary>
 /// A document: a saved file (<see cref="FileName"/>, <see cref="LocalPath"/>) and/or its SharePoint <see cref="Url"/>.
-/// Attached by <see cref="TargetId"/> (application, vendor, contract), <see cref="Roadmap"/> (product name) or <see cref="Item"/>.
+/// <see cref="Product"/> is the name of the product it belongs to (null: shared). Attached by <see cref="TargetId"/>
+/// (application, vendor, contract) or <see cref="Item"/> (roadmap item).
 /// </summary>
 public sealed class PfDocument
 {
@@ -441,7 +444,7 @@ public sealed class PfDocument
     public string? Notes { get; set; }
     public DocumentTargetKind? AttachedTo { get; set; }
     public int? TargetId { get; set; }
-    public string? Roadmap { get; set; }
+    public string? Product { get; set; }
     public PfRoadmapRef? Item { get; set; }
     public DateTime CreatedAt { get; set; }
 }

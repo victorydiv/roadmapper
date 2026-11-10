@@ -1,16 +1,18 @@
 @page "/portfolio/documents"
 @inject PortfolioService Svc
+@inject RoadmapService Roadmaps
 
-<PortfolioHeader Title="Documents" Subtitle="Roadmaps, contracts, invoices, SOWs and BRDs kept in SharePoint. Uploads go to each type's synced folder, and OneDrive puts them in SharePoint.">
+<PortfolioHeader Title="Documents" Subtitle="Roadmaps, contracts, invoices, SOWs and BRDs kept in SharePoint. Uploads go to the product's folder for that type of document, and OneDrive puts them in SharePoint.">
     <button class="btn primary" @onclick="() => New(upload: true)">+ Upload</button>
     <button class="btn" @onclick="() => New(upload: false)" title="Add a link to a document that's already in SharePoint">+ Link</button>
 </PortfolioHeader>
 
-@if (folders is not null && folders.All(f => f.LocalPath is null))
+@if (noFolders)
 {
     <div class="card notice" style="margin-bottom:1rem">
-        No document folders are set up yet. In <a href="/portfolio/settings#documents">Settings › Document folders</a>, give each type of
-        document a folder that OneDrive syncs to SharePoint. Until then you can still add links to documents already in SharePoint.
+        No document folders are set up yet. Give each product its folders in its <b>Settings › Document folders</b>, or set
+        shared ones in <a href="/portfolio/settings#documents">Portfolio › Settings</a>. Each folder is one OneDrive syncs
+        to SharePoint. Until then you can still add links to documents already in SharePoint.
     </div>
 }
 
@@ -21,13 +23,21 @@
 else if (documents.Count == 0)
 {
     <div class="card empty">
-        No documents yet. Upload one here, or from the Documents section of an application, vendor, roadmap or roadmap item.
+        No documents yet. Upload one here, or from the Documents section of a product's Dashboard, an application, a vendor or a roadmap item.
     </div>
 }
 else
 {
     <div class="toolbar">
         <input placeholder="Search documents" @bind="search" @bind:event="oninput" style="max-width:260px" />
+        <select @bind="productFilter">
+            <option value="">Any product</option>
+            @foreach (var p in products)
+            {
+                <option value="@p.Id">@p.Name</option>
+            }
+            <option value="shared">Shared (no product)</option>
+        </select>
         <select @bind="category">
             <option value="">Any type</option>
             @foreach (var c in Enum.GetValues<DocumentCategory>())
@@ -46,7 +56,7 @@ else
         <span class="muted small">@Shown.Count of @documents.Count</span>
     </div>
     <div class="card" style="padding:0; overflow-x:auto">
-        <DocumentTable Documents="Shown" ShowTarget="true" OnEdit="Edit" />
+        <DocumentTable Documents="Shown" ShowProduct="true" ShowTarget="true" OnEdit="Edit" />
     </div>
 }
 
@@ -56,49 +66,57 @@ else
 }
 
 @code {
-    private List<PortfolioDocument>? documents;
-    private List<DocumentFolderStatus>? folders;
-    private DocumentDraft? editing;
-    private PortfolioDocument? editingDoc;
-    private bool upload;
-    private string search = "", category = "", attached = "";
-
+    /// <summary>Start filtered to this product.</summary>
+    [SupplyParameterFromQuery] public int? Product { get; set; }
     /// <summary>"r12" etc.: open the upload or link dialog attached to that record (from the item editor).</summary>
     [SupplyParameterFromQuery] public string? Attach { get; set; }
     /// <summary>"upload" or "link".</summary>
     [SupplyParameterFromQuery] public string? Add { get; set; }
 
+    private List<PortfolioDocument>? documents;
+    private List<ProductSummary> products = [];
+    private bool noFolders;
+    private DocumentDraft? editing;
+    private PortfolioDocument? editingDoc;
+    private bool upload;
+    private string search = "", category = "", attached = "", productFilter = "";
+
     protected override async Task OnInitializedAsync()
     {
+        products = (await Roadmaps.GetProductsAsync()).OrderBy(p => p.Name).ToList();
+        if (Product is { } pid) productFilter = pid.ToString();
         await LoadAsync();
         if (Add is "upload" or "link")
         {
             upload = Add == "upload";
-            editing = DocumentDraft.New(DocumentTarget.Parse(Attach));
+            editing = DocumentDraft.New(DocumentTarget.Parse(Attach), Product);
         }
     }
 
     private async Task LoadAsync()
     {
         documents = await Svc.GetDocumentsAsync();
-        folders = await Svc.GetDocumentFoldersAsync();
+        noFolders = !await Svc.HasDocumentFoldersAsync();
     }
 
     private List<PortfolioDocument> Shown => (documents ?? [])
+        .Where(d => productFilter == "" || (productFilter == "shared" ? d.ProductId is null : d.ProductId?.ToString() == productFilter))
         .Where(d => category == "" || d.Category.ToString() == category)
         .Where(d => attached == "" || (attached == "none" ? d.Target is null : d.Target?.Kind.ToString() == attached))
         .Where(d => search.Length == 0
             || d.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
             || (d.FileName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
             || (d.Notes?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (d.TargetName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            || (d.TargetName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (d.Product?.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
         .ToList();
 
     private void New(bool upload)
     {
         this.upload = upload;
         editingDoc = null;
-        editing = DocumentDraft.New(null, Enum.TryParse<DocumentCategory>(category, out var c) ? c : null);
+        editing = DocumentDraft.New(null, int.TryParse(productFilter, out var pid) ? pid : null,
+            Enum.TryParse<DocumentCategory>(category, out var c) ? c : null);
     }
 
     private void Edit(PortfolioDocument d)

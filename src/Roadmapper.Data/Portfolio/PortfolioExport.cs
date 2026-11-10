@@ -128,10 +128,10 @@ public static class PortfolioExport
             }));
 
         Sheet(wb, "Documents",
-            ["Id", "Type", "Title", "Date", "Attached to", "Name", "SharePoint link", "File", "Notes"],
+            ["Id", "Type", "Title", "Date", "Product", "Attached to", "Name", "SharePoint link", "File", "Notes"],
             (await svc.GetDocumentsAsync()).Select(d => new object?[]
             {
-                d.Id, PortfolioText.Label(d.Category), d.Title, d.DocumentDate, d.Target is { } t ? PortfolioText.Label(t.Kind) : null,
+                d.Id, PortfolioText.Label(d.Category), d.Title, d.DocumentDate, d.Product?.Name ?? "Shared", d.Target is { } t ? PortfolioText.Label(t.Kind) : null,
                 d.TargetName, d.Url, d.FileName, d.Notes,
             }));
 

@@ -85,4 +85,4 @@ public enum ImpactSeverity { Low, Medium, High }
 public enum DocumentCategory { Roadmap, Contract, Invoice, Sow, Brd, Other }
 
 /// <summary>What a document is attached to.</summary>
-public enum DocumentTargetKind { Product, Application, Vendor, Contract, RoadmapItem }
+public enum DocumentTargetKind { Application, Vendor, Contract, RoadmapItem }
