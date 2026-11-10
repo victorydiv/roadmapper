@@ -33,12 +33,12 @@ else
     <div class="tiles" style="margin-bottom:1rem">
         <div class="card tile">
             <span class="tile-label">Applications</span>
-            <span class="tile-value">@apps.Count(a => a.Status != LifecycleStatus.Retired)</span>
-            <span class="muted small">@apps.Count(a => a.Criticality == Criticality.Tier1 && a.Status != LifecycleStatus.Retired) Tier 1</span>
+            <span class="tile-value">@apps.Count(PortfolioRules.CountsInPortfolio)</span>
+            <span class="muted small">@apps.Count(a => a.Criticality == Criticality.Tier1 && PortfolioRules.CountsInPortfolio(a)) Tier 1</span>
         </div>
         <div class="card tile">
             <span class="tile-label">Annual run cost</span>
-            <span class="tile-value">@PortfolioUi.MoneyShort(apps.Where(a => a.Status != LifecycleStatus.Retired).Sum(a => a.AnnualCost ?? 0))</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(apps.Where(PortfolioRules.CountsInPortfolio).Sum(a => a.AnnualCost ?? 0))</span>
             <span class="muted small">active, planned &amp; retiring</span>
         </div>
         <div class="card tile">

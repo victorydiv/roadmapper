@@ -34,6 +34,21 @@ public static class ExportEndpoints
             return Results.File(path, type, inline ? null : Path.GetFileName(path), enableRangeProcessing: true);
         });
 
+        // A category's feature comparison: workbook (comparison + heat map sheets), and the heat map as SVG.
+        app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired) =>
+            Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) && Enum.IsDefined(c)
+                ? Results.File(Roadmapper.Data.Portfolio.CapabilityExport.ToXlsx(await svc.GetCapabilityMatrixAsync(c, retired == true)),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{c}-features-{svc.Today:yyyy-MM-dd}.xlsx")
+                : Results.NotFound());
+        app.MapGet("/export/capabilities/{category}/heatmap.svg", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? transpose, bool? retired, bool? download) =>
+        {
+            if (!Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) || !Enum.IsDefined(c)) return Results.NotFound();
+            var svg = CapabilityHeatmapSvg.Render(await svc.GetCapabilityMatrixAsync(c, retired == true),
+                $"{Roadmapper.Core.Portfolio.PortfolioText.Label(c)}: feature heat map", transpose == true);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(svg);
+            return download == true ? Results.File(bytes, "image/svg+xml", $"{c}-heatmap.svg") : Results.Bytes(bytes, "image/svg+xml");
+        });
+
         var export = app.MapGroup("/export/{productId:int}");
 
         export.MapGet("/roadmap.csv", async (int productId, RoadmapService svc) =>

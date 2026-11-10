@@ -179,6 +179,17 @@ internal static class PortfolioAuditTrail
             [nameof(PortfolioDocument.ContractId)] = "Contract",
             [nameof(PortfolioDocument.RoadmapItemId)] = "Roadmap item",
         },
+        [typeof(CapabilityFeature)] = new()
+        {
+            [nameof(CapabilityFeature.Name)] = "Name",
+            [nameof(CapabilityFeature.Description)] = "Description",
+        },
+        [typeof(FeatureAssessment)] = new()
+        {
+            [nameof(FeatureAssessment.Availability)] = "Availability",
+            [nameof(FeatureAssessment.Strength)] = "Strength",
+            [nameof(FeatureAssessment.Note)] = "Note",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -199,7 +210,8 @@ internal static class PortfolioAuditTrail
             if (entity is not (Application or Vendor or Contact or Contract or ApplicationInitiative
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
-                or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument)) continue;
+                or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument
+                or CapabilityFeature or FeatureAssessment or ComparisonMember)) continue;
 
             switch (entry.State)
             {
@@ -349,6 +361,29 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Created) entry.NewValue = what; else entry.OldValue = what;
                     break;
                 }
+                case CapabilityFeature cf:
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Feature, cf.Id, $"{PortfolioText.Label(cf.Category)}: {cf.Name}");
+                    entry.Field = field;
+                    break;
+                case FeatureAssessment fa:
+                {
+                    // Ratings are filed under the application.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Application, fa.ApplicationId, await AppNameAsync(db, fa.ApplicationId, ct));
+                    var feature = await FeatureNameAsync(db, fa.FeatureId, ct);
+                    entry.Field = field is null ? $"Feature “{feature}”" : $"Feature “{feature}” · {field}";
+                    var rating = string.Join(" · ", new[] { fa.Availability is { } av ? PortfolioText.Label(av) : null, fa.Strength is { } st ? $"strength {PortfolioText.Label(st)}" : null }.Where(x => x is not null));
+                    if (p.Action == AuditAction.Created) entry.NewValue = rating;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = rating;
+                    break;
+                }
+                case ComparisonMember cm:
+                {
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Application, cm.ApplicationId, await AppNameAsync(db, cm.ApplicationId, ct));
+                    entry.Field = "Compared with";
+                    var what = $"{PortfolioText.Label(cm.Category)} applications";
+                    if (p.Action == AuditAction.Created) entry.NewValue = what; else entry.OldValue = what;
+                    break;
+                }
                 case PortfolioDocument doc:
                     (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Document, doc.Id, doc.Title, field);
                     break;
@@ -449,6 +484,11 @@ internal static class PortfolioAuditTrail
     private static async Task<string> ProcessNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
         db.BusinessProcesses.Local.FirstOrDefault(p => p.Id == id)?.Name
         ?? await db.BusinessProcesses.AsNoTracking().Where(p => p.Id == id).Select(p => p.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
+
+    private static async Task<string> FeatureNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.CapabilityFeatures.Local.FirstOrDefault(f => f.Id == id)?.Name
+        ?? await db.CapabilityFeatures.AsNoTracking().Where(f => f.Id == id).Select(f => f.Name).FirstOrDefaultAsync(ct)
         ?? $"#{id}";
 
     private static async Task<string> ItemTitleAsync(RoadmapDbContext db, int id, CancellationToken ct) =>

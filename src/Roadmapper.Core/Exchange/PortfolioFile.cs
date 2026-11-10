@@ -33,6 +33,8 @@ public sealed class PortfolioFile
     public List<PfBenefit> Benefits { get; set; } = [];
     public List<PfDecision> Decisions { get; set; } = [];
     public List<PfDocument> Documents { get; set; } = [];
+    public List<PfFeature> Features { get; set; } = [];
+    public List<PfComparisonMember> ComparisonMembers { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -74,7 +76,8 @@ public sealed class PortfolioFile
 
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
-        Benefits ??= []; Decisions ??= []; Documents ??= []; History ??= [];
+        Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; History ??= [];
+        foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
         foreach (var v in Vendors) { v.Contracts ??= []; v.Escalation ??= []; }
         foreach (var a in Applications) { a.Support ??= []; a.Initiatives ??= []; }
@@ -108,6 +111,8 @@ public sealed class PortfolioFile
         Named(Processes.Select(p => p.Name), "process");
         Named(Decisions.Select(d => d.Title), "decision");
         Named(Documents.Select(d => d.Title), "document");
+        Named(Features.Select(f => f.Name), "feature");
+        Unique(Features.Select(f => f.Id), "feature");
         if (errors.Count > 0) return errors;
 
         var contacts = Contacts.Select(c => c.Id).ToHashSet();
@@ -172,6 +177,9 @@ public sealed class PortfolioFile
             Ref(b.ApplicationId, apps, "application", $"Benefit “{b.Description}”");
             Ref(b.KpiId, kpis, "KPI", $"Benefit “{b.Description}”");
         }
+        foreach (var f in Features)
+            foreach (var r in f.Ratings) Ref(r.ApplicationId, apps, "application", $"Feature “{f.Name}”");
+        foreach (var m in ComparisonMembers) Ref(m.ApplicationId, apps, "application", $"The {m.Category} comparison");
         foreach (var d in Documents)
         {
             var where = $"Document “{d.Title}”";
@@ -448,3 +456,19 @@ public sealed class PfDocument
     public PfRoadmapRef? Item { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>A feature applications of one category are compared on, with each application's rating.</summary>
+public sealed class PfFeature
+{
+    public int Id { get; set; }
+    public AppCategory Category { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public int SortOrder { get; set; }
+    public List<PfRating> Ratings { get; set; } = [];
+}
+
+public sealed record PfRating(int ApplicationId, FeatureAvailability? Availability, FeatureStrength? Strength, string? Note);
+
+/// <summary>An application from another category added to a category's comparison.</summary>
+public sealed record PfComparisonMember(AppCategory Category, int ApplicationId);

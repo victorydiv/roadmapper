@@ -286,6 +286,7 @@ public class IntegrationDraft
         if (string.IsNullOrWhiteSpace(BusinessPurpose)) return "Describe the business purpose: what the flow is for.";
         if (Name?.Trim().Length > PortfolioRules.MaxNameLength) return $"Name can be at most {PortfolioRules.MaxNameLength} characters.";
         if (ReviewIntervalMonths is < 1 or > 60) return "Review interval must be between 1 and 60 months.";
+        if (Status == LifecycleStatus.Evaluating) return "Evaluating is for applications being considered, not integrations. Use Planned.";
         return null;
     }
 

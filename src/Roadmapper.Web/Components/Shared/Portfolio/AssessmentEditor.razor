@@ -1,0 +1,91 @@
+@* Rate one application on one feature: availability (matrix), strength (heat map) and a note. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal" style="max-width:520px">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">@AppName</h2>
+                <div class="muted small">@FeatureName</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            @if (FeatureDescription is not null)
+            {
+                <div class="muted small">@FeatureDescription</div>
+            }
+            <div class="field">Does it have it? <span class="muted small">(comparison matrix)</span>
+                <div class="rating-choices">
+                    <label class="@(availability is null ? "on" : "")"><input type="radio" name="av" checked="@(availability is null)" @onchange="() => availability = null" />Not rated</label>
+                    @foreach (var a in Enum.GetValues<FeatureAvailability>())
+                    {
+                        <label class="@(availability == a ? "on" : "")"><input type="radio" name="av" checked="@(availability == a)" @onchange="() => SetAvailability(a)" /><span class="av-@a">@PortfolioUi.Symbol(a)</span> @PortfolioText.Label(a)</label>
+                    }
+                </div>
+            </div>
+            <div class="field">How strong is it? <span class="muted small">(heat map)</span>
+                <div class="rating-choices">
+                    <label class="@(strength is null ? "on" : "")"><input type="radio" name="st" checked="@(strength is null)" @onchange="() => strength = null" />Not rated</label>
+                    @foreach (var s in Enum.GetValues<FeatureStrength>())
+                    {
+                        <label class="@(strength == s ? "on" : "")" style="@(availability == FeatureAvailability.No && s != FeatureStrength.None ? "opacity:.4" : null)">
+                            <input type="radio" name="st" checked="@(strength == s)" disabled="@(availability == FeatureAvailability.No && s != FeatureStrength.None)" @onchange="() => strength = s" />
+                            <span class="legend-swatch" style="background:@Roadmapper.Web.Exports.CapabilityHeatmapSvg.StrengthColor(s);margin:0"></span> @PortfolioText.Label(s)
+                        </label>
+                    }
+                </div>
+            </div>
+            <label class="field">Note
+                <textarea rows="2" @bind="note" placeholder="e.g. through an add-on module; on the 2027 roadmap"></textarea>
+            </label>
+        </div>
+        <div class="modal-foot">
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int FeatureId { get; set; }
+    [Parameter, EditorRequired] public int ApplicationId { get; set; }
+    [Parameter] public string AppName { get; set; } = "";
+    [Parameter] public string FeatureName { get; set; } = "";
+    [Parameter] public string? FeatureDescription { get; set; }
+    [Parameter] public FeatureAssessment? Current { get; set; }
+    /// <summary>Called with true when the rating was saved.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private FeatureAvailability? availability;
+    private FeatureStrength? strength;
+    private string? note, error;
+    private bool saving;
+
+    protected override void OnInitialized() => (availability, strength, note) = (Current?.Availability, Current?.Strength, Current?.Note);
+
+    private void SetAvailability(FeatureAvailability a)
+    {
+        availability = a;
+        if (a == FeatureAvailability.No) strength = FeatureStrength.None;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveAssessmentAsync(FeatureId, ApplicationId, availability, strength, note);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+}

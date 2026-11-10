@@ -28,7 +28,7 @@ public static class PortfolioHealth
     /// <param name="integrations">Integrations the application is the source, target or middle hop of; retired ones are ignored.</param>
     public static AppHealth? Assess(Application app, IEnumerable<Integration> integrations, DateOnly today, int renewalWarningDays)
     {
-        if (app.Status == LifecycleStatus.Retired) return null;
+        if (!PortfolioRules.CountsInPortfolio(app)) return null;
         var live = integrations.Where(i => i.Status != LifecycleStatus.Retired).ToList();
         var factors = new List<(string Reason, int Points)>();
 

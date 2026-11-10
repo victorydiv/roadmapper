@@ -6,8 +6,8 @@ public enum AppCategory { WMS, TMS, YMS, ERP, EDI, CustomerPortal, Reporting, In
 /// <summary>Business criticality. Tier 1 = operations stop without it.</summary>
 public enum Criticality { Tier1 = 1, Tier2 = 2, Tier3 = 3 }
 
-/// <summary>Where an application or integration is in its life.</summary>
-public enum LifecycleStatus { Planned, Active, Retiring, Retired }
+/// <summary>Where an application or integration is in its life. Evaluating (applications only): a candidate being compared, not yet chosen; it stays out of portfolio totals.</summary>
+public enum LifecycleStatus { Planned, Active, Retiring, Retired, Evaluating }
 
 public enum Hosting { SaaS, Hosted, OnPrem }
 
@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document, Feature }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -86,3 +86,9 @@ public enum DocumentCategory { Roadmap, Contract, Invoice, Sow, Brd, Other }
 
 /// <summary>What a document is attached to.</summary>
 public enum DocumentTargetKind { Application, Vendor, Contract, RoadmapItem }
+
+/// <summary>Whether an application has a feature, for the comparison matrix.</summary>
+public enum FeatureAvailability { Yes, Partial, No }
+
+/// <summary>How strong an application is at a feature, for the heat map. No ⇒ None.</summary>
+public enum FeatureStrength { None, Low, Medium, High }

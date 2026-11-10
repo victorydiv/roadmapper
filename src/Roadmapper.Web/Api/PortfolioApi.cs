@@ -137,6 +137,11 @@ public static class PortfolioApi
             return (await svc.GetDocumentsAsync(target, Parse<DocumentCategory>(category), productId)).Select(DocumentDto.From).ToList();
         });
 
+        // Feature comparisons: every category's summary, and one category's matrix (features × applications with ratings).
+        api.MapGet("/capabilities", async (PortfolioService svc) => await svc.GetCapabilityOverviewAsync());
+        api.MapGet("/capabilities/{category}", async (string category, PortfolioService svc, bool? retired) =>
+            Parse<AppCategory>(category) is { } c ? Results.Ok(CapabilityDto.From(await svc.GetCapabilityMatrixAsync(c, retired == true))) : Results.NotFound());
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -423,4 +428,25 @@ public record DocumentDto(int Id, string Title, DocumentCategory Category, strin
 {
     public static DocumentDto From(PortfolioDocument d) => new(d.Id, d.Title, d.Category, d.Url, d.FileName, d.LocalPath, d.SizeBytes,
         d.DocumentDate, d.Notes, Ref.Of(d.Product), d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
+}
+
+public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.FeatureRow> Features, IReadOnlyList<CapabilityDto.AppColumn> Applications)
+{
+    public record AppColumn(int Id, string Name, AppCategory Category, LifecycleStatus Status, bool Added, int Yes, int Partial, int No, int NotRated);
+    public record Rating(int ApplicationId, FeatureAvailability? Availability, FeatureStrength? Strength, string? Note);
+    public record FeatureRow(int Id, string Name, string? Description, int Yes, int Partial, bool Gap, bool Overlap, IReadOnlyList<Rating> Ratings);
+
+    public static CapabilityDto From(CapabilityMatrix m) => new(m.Category,
+        m.Features.Select(f =>
+        {
+            var c = m.ByFeature[f.Id];
+            return new FeatureRow(f.Id, f.Name, f.Description, c.Yes, c.Partial, c.IsGap, c.IsOverlap,
+                m.Apps.Select(a => m.Cell(f.Id, a.Id)).Where(x => x is not null)
+                    .Select(x => new Rating(x!.ApplicationId, x.Availability, x.Strength, x.Note)).ToList());
+        }).ToList(),
+        m.Apps.Select(a =>
+        {
+            var c = m.ByApp[a.Id];
+            return new AppColumn(a.Id, a.Name, a.Application.Category, a.Application.Status, a.Added, c.Yes, c.Partial, c.No, c.Unassessed);
+        }).ToList());
 }

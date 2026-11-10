@@ -39,6 +39,14 @@ public static class PortfolioRules
     public static bool NoticeMissed(Contract c, DateOnly today) =>
         c.NoticeDeadline is { } d && d < today && c.RenewalDate >= today;
 
+    // ---- Applications ----
+
+    /// <summary>
+    /// Whether an application counts in portfolio totals, health and the integration map: not retired, and not a
+    /// candidate still being evaluated.
+    /// </summary>
+    public static bool CountsInPortfolio(Application a) => a.Status is not (LifecycleStatus.Retired or LifecycleStatus.Evaluating);
+
     // ---- Integrations ----
 
     /// <summary>Risk scores (likelihood × impact) at or above this make an integration high risk.</summary>
@@ -127,6 +135,10 @@ public static class PortfolioText
     public static string Label(Criticality c) => $"Tier {(int)c}";
 
     public static string Label(LifecycleStatus s) => s.ToString();
+
+    public static string Label(FeatureAvailability a) => a.ToString();
+
+    public static string Label(FeatureStrength s) => s.ToString();
 
     public static string Label(Hosting h) => h switch { Hosting.OnPrem => "On-premises", _ => h.ToString() };
 
@@ -251,6 +263,8 @@ public static class PortfolioText
         DecisionStatus s => Label(s),
         BenefitUnit u => Label(u),
         DocumentCategory c => Label(c),
+        FeatureAvailability a => Label(a),
+        FeatureStrength f => Label(f),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

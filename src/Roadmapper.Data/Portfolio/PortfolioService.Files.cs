@@ -170,6 +170,14 @@ public partial class PortfolioService
                 Product = d.ProductId is { } dp ? productNames.GetValueOrDefault(dp) : null,
                 Item = d.RoadmapItemId is { } di ? index.RefOf(di) : null,
             }).ToList(),
+            Features = (await db.CapabilityFeatures.AsNoTracking().Include(f => f.Assessments).OrderBy(f => f.Category).ThenBy(f => f.SortOrder).ThenBy(f => f.Id).ToListAsync())
+                .Select(f => new PfFeature
+                {
+                    Id = f.Id, Category = f.Category, Name = f.Name, Description = f.Description, SortOrder = f.SortOrder,
+                    Ratings = f.Assessments.OrderBy(a => a.ApplicationId).Select(a => new PfRating(a.ApplicationId, a.Availability, a.Strength, a.Note)).ToList(),
+                }).ToList(),
+            ComparisonMembers = (await db.ComparisonMembers.AsNoTracking().ToListAsync()).OrderBy(m => m.Category).ThenBy(m => m.ApplicationId)
+                .Select(m => new PfComparisonMember(m.Category, m.ApplicationId)).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -599,6 +607,56 @@ public partial class PortfolioService
         foreach (var (f, row) in newDocuments) documentMap[f.Id] = row.Id;
         result.Count("documents", newDocuments.Count);
 
+        // Feature comparisons: features (matched by category and name on a merge), their ratings, and added applications.
+        var featureMap = new Dictionary<int, int>();
+        var newFeatures = new List<(PfFeature File, CapabilityFeature Row)>();
+        var existingFeatures = await db.CapabilityFeatures.AsNoTracking().ToListAsync();
+        foreach (var f in file.Features)
+        {
+            if (merge && existingFeatures.FirstOrDefault(x => x.Category == f.Category && string.Equals(x.Name, f.Name.Trim(), StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                featureMap[f.Id] = found.Id;
+                result.Skipped.Add($"{PortfolioText.Label(f.Category)} feature {f.Name} (already here)");
+                continue;
+            }
+            var row = new CapabilityFeature
+            {
+                Category = f.Category, Name = f.Name.Trim(), Description = f.Description, CreatedAt = now, UpdatedAt = now,
+                SortOrder = f.SortOrder + (merge ? existingFeatures.Where(x => x.Category == f.Category).Select(x => x.SortOrder + 1).DefaultIfEmpty(0).Max() : 0),
+            };
+            db.CapabilityFeatures.Add(row);
+            newFeatures.Add((f, row));
+        }
+        await db.SaveChangesAsync();
+        foreach (var (f, row) in newFeatures) featureMap[f.Id] = row.Id;
+        result.Count("features", newFeatures.Count);
+
+        var appCategories = await db.Applications.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Category);
+        var members = (await db.ComparisonMembers.AsNoTracking().ToListAsync()).Select(m => (m.Category, m.ApplicationId)).ToHashSet();
+        foreach (var m in file.ComparisonMembers)
+            if (Map(appMap, m.ApplicationId) is { } aid && appCategories.GetValueOrDefault(aid) != m.Category && members.Add((m.Category, aid)))
+                db.ComparisonMembers.Add(new ComparisonMember { Category = m.Category, ApplicationId = aid });
+
+        var rated = (await db.FeatureAssessments.AsNoTracking().Select(a => new { a.FeatureId, a.ApplicationId }).ToListAsync())
+            .Select(a => (a.FeatureId, a.ApplicationId)).ToHashSet();
+        var ratingCount = 0;
+        foreach (var f in file.Features)
+        {
+            if (!featureMap.TryGetValue(f.Id, out var fid)) continue;
+            foreach (var r in f.Ratings)
+            {
+                if (Map(appMap, r.ApplicationId) is not { } aid || !rated.Add((fid, aid))) continue;
+                FeatureAvailability? av = r.Availability;
+                FeatureStrength? st = r.Strength;
+                string? note = r.Note;
+                if (CapabilityRules.Normalize(ref av, ref st, ref note) is not null || CapabilityRules.IsEmpty(av, st, note)) continue;
+                db.FeatureAssessments.Add(new FeatureAssessment { FeatureId = fid, ApplicationId = aid, Availability = av, Strength = st, Note = note, UpdatedAt = now });
+                ratingCount++;
+            }
+        }
+        await db.SaveChangesAsync();
+        result.Count("feature ratings", ratingCount);
+
         // History, on a restore: re-pointed at the new ids. Entries for records that no longer exist keep id 0.
         if (!merge)
         {
@@ -607,7 +665,7 @@ public partial class PortfolioService
                 [PortfolioEntityType.Application] = appMap, [PortfolioEntityType.Vendor] = vendorMap, [PortfolioEntityType.Contact] = contactMap,
                 [PortfolioEntityType.Integration] = flowMap, [PortfolioEntityType.TradingPartner] = partnerMap, [PortfolioEntityType.Process] = processMap,
                 [PortfolioEntityType.Benefit] = benefitMap, [PortfolioEntityType.Decision] = decisionMap,
-                [PortfolioEntityType.Document] = documentMap,
+                [PortfolioEntityType.Document] = documentMap, [PortfolioEntityType.Feature] = featureMap,
             };
             foreach (var h in file.History)
                 db.PortfolioAuditEntries.Add(new PortfolioAuditEntry

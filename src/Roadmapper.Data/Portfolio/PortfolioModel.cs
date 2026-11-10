@@ -334,6 +334,37 @@ internal static class PortfolioModel
             e.Property(f => f.SharePointUrl).HasMaxLength(ExternalLinks.MaxUrlLength);
         });
 
+        b.Entity<CapabilityFeature>(e =>
+        {
+            e.ToTable("CapabilityFeatures");
+            e.Property(f => f.Category).HasConversion<string>().HasMaxLength(30);
+            e.Property(f => f.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
+            e.Property(f => f.Description).HasMaxLength(1000);
+            // One feature of a name per category.
+            e.HasIndex(f => new { f.Category, f.Name }).IsUnique();
+        });
+
+        b.Entity<ComparisonMember>(e =>
+        {
+            e.ToTable("ComparisonMembers");
+            e.HasKey(m => new { m.Category, m.ApplicationId });
+            e.Property(m => m.Category).HasConversion<string>().HasMaxLength(30);
+            e.HasOne(m => m.Application).WithMany().HasForeignKey(m => m.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(m => m.ApplicationId);
+        });
+
+        b.Entity<FeatureAssessment>(e =>
+        {
+            e.ToTable("FeatureAssessments");
+            e.HasKey(a => new { a.FeatureId, a.ApplicationId });
+            e.Property(a => a.Availability).HasConversion<string>().HasMaxLength(10);
+            e.Property(a => a.Strength).HasConversion<string>().HasMaxLength(10);
+            e.Property(a => a.Note).HasMaxLength(CapabilityRules.MaxNoteLength);
+            e.HasOne(a => a.Feature).WithMany(f => f.Assessments).HasForeignKey(a => a.FeatureId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Application).WithMany().HasForeignKey(a => a.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(a => a.ApplicationId);
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

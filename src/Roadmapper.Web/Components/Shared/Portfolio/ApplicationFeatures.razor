@@ -1,0 +1,69 @@
+@* An application's ratings in each category comparison it's part of, for its detail page. *@
+@inject PortfolioService Svc
+
+@if (groups is { Count: > 0 })
+{
+    <div class="card stack" style="margin-top:1rem">
+        <div class="row">
+            <h2 style="margin:0">Features</h2>
+            <span class="muted small">How @Name compares. Click a row to rate it.</span>
+        </div>
+        @foreach (var g in groups)
+        {
+            var yes = g.Features.Count(f => f.Rating?.Availability == FeatureAvailability.Yes);
+            <div class="row">
+                <b>@PortfolioText.Label(g.Category) comparison</b>
+                @if (g.Added) { <span class="badge added">added</span> }
+                <span class="muted small">@yes of @g.Features.Count features</span>
+                <span class="spacer"></span>
+                <a class="small" href="@PortfolioUi.CapabilitiesHref(g.Category)">Matrix →</a>
+                <a class="small" href="@PortfolioUi.CapabilitiesHref(g.Category, "heatmap")">Heat map →</a>
+            </div>
+            <table class="tree">
+                <thead><tr><th>Feature</th><th>Has it</th><th>Strength</th><th>Note</th></tr></thead>
+                <tbody>
+                    @foreach (var (f, r) in g.Features)
+                    {
+                        <tr style="cursor:pointer" @onclick="() => editing = (f, r)">
+                            <td>@f.Name</td>
+                            <td class="nowrap"><span class="@(r?.Availability is { } av ? $"av-{av}" : "")">@PortfolioUi.Symbol(r?.Availability)</span> @(r?.Availability is { } a ? PortfolioText.Label(a) : "")</td>
+                            <td class="nowrap">
+                                @if (r?.Strength is { } s)
+                                {
+                                    <span class="legend-swatch" style="background:@Roadmapper.Web.Exports.CapabilityHeatmapSvg.StrengthColor(s);margin:0 .3rem 0 0"></span>@PortfolioText.Label(s)
+                                }
+                                else
+                                {
+                                    <span class="muted small">not rated</span>
+                                }
+                            </td>
+                            <td class="small">@r?.Note</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@if (editing is { } e)
+{
+    <AssessmentEditor FeatureId="e.Feature.Id" ApplicationId="ApplicationId" AppName="@Name" FeatureName="@e.Feature.Name"
+                      FeatureDescription="@e.Feature.Description" Current="e.Rating" OnClose="OnClosed" />
+}
+
+@code {
+    [Parameter, EditorRequired] public int ApplicationId { get; set; }
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    private List<AppFeatureGroup>? groups;
+    private (CapabilityFeature Feature, FeatureAssessment? Rating)? editing;
+
+    protected override async Task OnParametersSetAsync() => groups = await Svc.GetFeaturesForApplicationAsync(ApplicationId);
+
+    private async Task OnClosed(bool saved)
+    {
+        editing = null;
+        if (saved) groups = await Svc.GetFeaturesForApplicationAsync(ApplicationId);
+    }
+}

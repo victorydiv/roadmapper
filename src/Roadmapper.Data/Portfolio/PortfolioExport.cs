@@ -135,6 +135,22 @@ public static class PortfolioExport
                 d.TargetName, d.Url, d.FileName, d.Notes,
             }));
 
+        var features = (await svc.GetCapabilityOverviewAsync()).Where(o => o.Features > 0).Select(o => o.Category).ToList();
+        var featureRows = new List<object?[]>();
+        foreach (var c in features)
+        {
+            var m = await svc.GetCapabilityMatrixAsync(c, includeRetired: true);
+            foreach (var f in m.Features)
+                foreach (var a in m.Apps)
+                {
+                    var r = m.Cell(f.Id, a.Id);
+                    featureRows.Add([PortfolioText.Label(c), f.Name, a.Name, a.Added ? "Yes" : "", r?.Availability is { } av ? PortfolioText.Label(av) : null,
+                        r?.Strength is { } st ? PortfolioText.Label(st) : null, r?.Note]);
+                }
+        }
+        Sheet(wb, "Features",
+            ["Category", "Feature", "Application", "Added from another category", "Has it", "Strength", "Note"], featureRows);
+
         Sheet(wb, "Contacts",
             ["Id", "Name", "Title", "Company", "Department", "Email", "Phone", "Active"],
             contacts.Select(c => new object?[]

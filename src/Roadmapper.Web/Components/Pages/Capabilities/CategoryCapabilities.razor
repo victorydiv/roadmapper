@@ -1,0 +1,326 @@
+@page "/capabilities/{CategoryName}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+
+<PageTitle>@Title · Capabilities</PageTitle>
+
+@if (category is not { } cat)
+{
+    <div class="card empty">There's no application category called “@CategoryName”. <a href="/capabilities">All categories</a></div>
+}
+else
+{
+    <div class="product-header">
+        <div>
+            <div class="small"><a href="/capabilities">Capabilities</a> /</div>
+            <h1>@Title</h1>
+            <div class="muted small">
+                @(matrix is null ? "" : $"{matrix.Features.Count} features × {matrix.Apps.Count} applications")
+                @if (matrix is { Features.Count: > 0, Apps.Count: > 0 })
+                {
+                    <span> · @matrix.Gaps gap@(matrix.Gaps == 1 ? "" : "s") · @matrix.Overlaps overlap@(matrix.Overlaps == 1 ? "" : "s")</span>
+                }
+            </div>
+        </div>
+        <span class="spacer"></span>
+        <a class="btn" href="/export/capabilities/@(cat).xlsx" download>Export to Excel</a>
+    </div>
+
+    <nav class="tabs">
+        <a class="@(View == "matrix" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat)">Comparison matrix</a>
+        <a class="@(View == "heatmap" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "heatmap")">Heat map</a>
+        <a class="@(View == "features" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "features")">Features &amp; applications</a>
+    </nav>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@error</div>
+    }
+
+    @if (matrix is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (View == "features")
+    {
+        <div class="settings">
+            <div class="card stack">
+                <h2>Features</h2>
+                <div class="muted small">What @Title applications are compared on, in the order they're shown. Renaming keeps the ratings; deleting a feature deletes its ratings.</div>
+                @if (matrix.Features.Count == 0)
+                {
+                    <div class="muted small">No features yet. Add the first below, e.g. “Dock scheduling”.</div>
+                }
+                <ul class="dep-list">
+                    @foreach (var (f, n) in matrix.Features.Select((f, n) => (f, n)))
+                    {
+                        <li>
+                            @if (editingFeature?.Id == f.Id)
+                            {
+                                <div class="stack" style="flex:1">
+                                    <input @bind="editingFeature.Name" />
+                                    <input @bind="editingFeature.Description" placeholder="Description (optional): what counts as having it" />
+                                    <div class="row">
+                                        <button class="btn sm primary" @onclick="SaveFeatureAsync">Save</button>
+                                        <button class="btn sm" @onclick="() => editingFeature = null">Cancel</button>
+                                    </div>
+                                </div>
+                            }
+                            else if (deletingFeatureId == f.Id)
+                            {
+                                <span class="small">Delete “@f.Name” and its @matrix.Apps.Count(a => matrix.Cell(f.Id, a.Id) is not null) rating(s)?</span>
+                                <span class="spacer"></span>
+                                <button class="btn sm danger" @onclick="() => RunAsync(() => Svc.DeleteFeatureAsync(f.Id))">Delete</button>
+                                <button class="btn sm" @onclick="() => deletingFeatureId = null">Keep</button>
+                            }
+                            else
+                            {
+                                <span><b>@f.Name</b>@if (f.Description is not null) { <span class="muted small"> · @f.Description</span> }</span>
+                                <span class="spacer"></span>
+                                <button class="btn icon sm" title="Move up" disabled="@(n == 0)" @onclick="() => RunAsync(() => Svc.MoveFeatureAsync(f.Id, -1))">↑</button>
+                                <button class="btn icon sm" title="Move down" disabled="@(n == matrix.Features.Count - 1)" @onclick="() => RunAsync(() => Svc.MoveFeatureAsync(f.Id, 1))">↓</button>
+                                <button class="btn sm" @onclick="() => editingFeature = FeatureDraft.From(f)">Edit</button>
+                                <button class="btn sm danger" @onclick="() => deletingFeatureId = f.Id">Delete</button>
+                            }
+                        </li>
+                    }
+                </ul>
+                <div class="row">
+                    <input placeholder="New feature, e.g. Gate security" @bind="newFeature" @onkeydown="OnNewFeatureKey" style="flex:1" />
+                    <button class="btn primary" disabled="@string.IsNullOrWhiteSpace(newFeature)" @onclick="AddFeatureAsync">Add</button>
+                </div>
+            </div>
+
+            <div class="card stack">
+                <h2>Compared applications</h2>
+                <div class="muted small">
+                    Every @Title application is included. Add applications from other categories that cover some of the same ground
+                    (e.g. a WMS with yard features). Candidates you're only considering: add them as applications with status
+                    <b>Evaluating</b>; they're left out of portfolio totals.
+                </div>
+                <ul class="dep-list">
+                    @foreach (var a in matrix.Apps)
+                    {
+                        <li>
+                            <a href="/portfolio/applications/@a.Id">@a.Name</a>
+                            <LifecycleBadge Status="a.Application.Status" />
+                            @if (a.Added) { <span class="badge added">@PortfolioText.Label(a.Application.Category)</span> }
+                            <span class="spacer"></span>
+                            @if (a.Added)
+                            {
+                                <button class="btn sm" title="Take it out of this comparison (its ratings are kept)" @onclick="() => RunAsync(() => Svc.RemoveComparisonMemberAsync(cat, a.Id))">Remove</button>
+                            }
+                            else
+                            {
+                                <span class="muted small">@Title</span>
+                            }
+                        </li>
+                    }
+                </ul>
+                @if (matrix.Apps.Count == 0)
+                {
+                    <div class="muted small">No @Title applications yet. <a href="/portfolio/applications">Add applications</a> with category @Title, or add some from other categories here.</div>
+                }
+                <div class="row">
+                    <select @bind="addAppId" style="flex:1">
+                        <option value="0">— add an application from another category —</option>
+                        @foreach (var a in others)
+                        {
+                            <option value="@a.Id">@a.Name (@PortfolioText.Label(a.Category)@(a.Status == LifecycleStatus.Active ? "" : $", {PortfolioText.Label(a.Status)}"))</option>
+                        }
+                    </select>
+                    <button class="btn" disabled="@(addAppId == 0)" @onclick="AddMemberAsync">Add</button>
+                </div>
+                <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Show retired applications</span></label>
+            </div>
+        </div>
+    }
+    else if (matrix.Features.Count == 0 || matrix.Apps.Count == 0)
+    {
+        <div class="card empty">
+            @(matrix.Features.Count == 0 ? $"No features defined for {Title} yet." : $"No applications to compare yet.")
+            <a href="@PortfolioUi.CapabilitiesHref(cat, "features")">Set up features and applications →</a>
+        </div>
+    }
+    else if (View == "heatmap")
+    {
+        <div class="toolbar">
+            <label class="check"><input type="checkbox" checked="@transpose" @onchange="() => transpose = !transpose" /><span>Features down the side</span></label>
+            <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Include retired</span></label>
+            <span class="spacer"></span>
+            <a class="btn" href="/export/capabilities/@cat/heatmap.svg?transpose=@transpose&retired=@includeRetired&download=true" download>Download SVG</a>
+            <button class="btn" onclick="window.print()">Print</button>
+        </div>
+        <div class="card heatmap-wrap">
+            @((MarkupString)Roadmapper.Web.Exports.CapabilityHeatmapSvg.Render(matrix, $"{Title}: feature heat map", transpose))
+        </div>
+        <div class="muted small" style="margin-top:.5rem">
+            Strength of each application at each feature. Hover a cell for its rating and note; rate cells on the
+            <a href="@PortfolioUi.CapabilitiesHref(cat)">comparison matrix</a>. The SVG can be inserted straight into PowerPoint.
+        </div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="check"><input type="checkbox" @bind="gapsOnly" /><span>Only gaps</span></label>
+            <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Include retired</span></label>
+            <span class="spacer"></span>
+            <span class="small"><span class="av-Yes">✓</span> Yes · <span class="av-Partial">◐</span> Partial · <span class="av-No">✗</span> No · blank: not rated. Shading shows strength. Click a cell to rate it.</span>
+        </div>
+        <div class="card matrix-wrap" style="padding:0">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th class="feature">Feature</th>
+                        @foreach (var a in matrix.Apps)
+                        {
+                            <th class="app">
+                                <a href="/portfolio/applications/@a.Id">@a.Name</a>
+                                @if (a.Application.Status != LifecycleStatus.Active) { <div><LifecycleBadge Status="a.Application.Status" /></div> }
+                                @if (a.Added) { <div><span class="badge added">@PortfolioText.Label(a.Application.Category)</span></div> }
+                            </th>
+                        }
+                        <th title="Applications that have it (Yes)">Have it</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in matrix.Features.Where(f => !gapsOnly || matrix.ByFeature[f.Id].IsGap))
+                    {
+                        var cover = matrix.ByFeature[f.Id];
+                        <tr>
+                            <th class="feature" title="@f.Description">@f.Name</th>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                var c = matrix.Cell(f.Id, a.Id);
+                                <td class="cell @(c?.Strength is { } st ? $"st-{st}" : "")" title="@CellTip(a, f, c)" @onclick="() => Rate(f, a)">
+                                    <span class="@(c?.Availability is { } av ? $"av-{av}" : "")">@PortfolioUi.Symbol(c?.Availability)</span>@if (c?.Note is not null) { <span class="note-dot">●</span> }
+                                </td>
+                            }
+                            <td class="num">@cover.Yes@if (cover.Partial > 0) { <span class="muted small"> +@cover.Partial ◐</span> }</td>
+                            <td class="nowrap">
+                                @if (cover.IsGap) { <span class="badge gap" title="No application has it fully">Gap</span> }
+                                @if (cover.IsOverlap) { <span class="badge overlap" title="Two or more applications have it">Overlap</span> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td style="text-align:left"><b>Coverage</b></td>
+                        @foreach (var a in matrix.Apps)
+                        {
+                            var cv = matrix.ByApp[a.Id];
+                            <td title="@cv.Yes yes, @cv.Partial partial, @cv.No no, @cv.Unassessed not rated">
+                                <b>@cv.Yes</b>/@cv.Total@if (cv.Partial > 0) { <span> +@cv.Partial◐</span> }
+                                <div class="muted">@cv.AssessedPct% rated</div>
+                            </td>
+                        }
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+
+    @if (rating is { } r)
+    {
+        <AssessmentEditor FeatureId="r.Feature.Id" ApplicationId="r.App.Id" AppName="@r.App.Name" FeatureName="@r.Feature.Name"
+                          FeatureDescription="@r.Feature.Description" Current="matrix?.Cell(r.Feature.Id, r.App.Id)" OnClose="OnRated" />
+    }
+}
+
+@code {
+    [Parameter] public string CategoryName { get; set; } = "";
+    /// <summary>matrix (default), heatmap or features.</summary>
+    [SupplyParameterFromQuery(Name = "view")] public string? ViewParam { get; set; }
+
+    private AppCategory? category;
+    private CapabilityMatrix? matrix;
+    private List<Application> others = [];
+    private FeatureDraft? editingFeature;
+    private int? deletingFeatureId;
+    private string? newFeature, error;
+    private int addAppId;
+    private bool includeRetired, transpose, gapsOnly;
+    private (CapabilityFeature Feature, MatrixApp App)? rating;
+
+    private string View => ViewParam is "heatmap" or "features" ? ViewParam : "matrix";
+    private string Title => category is { } c ? PortfolioText.Label(c) : CategoryName;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        category = Enum.TryParse<AppCategory>(CategoryName, ignoreCase: true, out var c) && Enum.IsDefined(c) ? c : null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (category is not { } cat) return;
+        matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired);
+        var inMatrix = matrix.Apps.Select(a => a.Id).ToHashSet();
+        others = (await Svc.GetApplicationsAsync())
+            .Where(a => a.Category != cat && !inMatrix.Contains(a.Id) && a.Status != LifecycleStatus.Retired)
+            .OrderBy(a => a.Name).ToList();
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        deletingFeatureId = null;
+        await LoadAsync();
+    }
+
+    private async Task AddFeatureAsync()
+    {
+        if (category is not { } cat || string.IsNullOrWhiteSpace(newFeature)) return;
+        var name = newFeature;
+        await RunAsync(async () => { await Svc.SaveFeatureAsync(new FeatureDraft { Category = cat, Name = name }); newFeature = null; });
+    }
+
+    private async Task OnNewFeatureKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddFeatureAsync();
+    }
+
+    private async Task SaveFeatureAsync()
+    {
+        if (editingFeature is not { } d) return;
+        await RunAsync(async () => { await Svc.SaveFeatureAsync(d); editingFeature = null; });
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (category is not { } cat || addAppId == 0) return;
+        var id = addAppId;
+        await RunAsync(() => Svc.AddComparisonMemberAsync(cat, id));
+        addAppId = 0;
+    }
+
+    private async Task ToggleRetiredAsync()
+    {
+        includeRetired = !includeRetired;
+        await LoadAsync();
+    }
+
+    private void Rate(CapabilityFeature f, MatrixApp a) => rating = (f, a);
+
+    private async Task OnRated(bool saved)
+    {
+        rating = null;
+        if (saved) await LoadAsync();
+    }
+
+    private static string CellTip(MatrixApp a, CapabilityFeature f, FeatureAssessment? c)
+    {
+        if (c is null) return $"{a.Name} – {f.Name}: not rated. Click to rate.";
+        var parts = new List<string>();
+        if (c.Availability is { } av) parts.Add($"Has it: {av}");
+        if (c.Strength is { } st) parts.Add($"Strength: {st}");
+        if (c.Note is { } n) parts.Add(n);
+        return $"{a.Name} – {f.Name}: {string.Join(". ", parts)}";
+    }
+}

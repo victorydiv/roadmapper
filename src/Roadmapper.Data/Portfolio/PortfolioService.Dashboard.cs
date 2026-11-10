@@ -45,7 +45,7 @@ public partial class PortfolioService
     {
         var today = Today;
         var settings = await GetSettingsAsync();
-        var apps = (await GetApplicationsAsync()).Where(a => a.Status != LifecycleStatus.Retired).ToList();
+        var apps = (await GetApplicationsAsync()).Where(PortfolioRules.CountsInPortfolio).ToList();
         var integrations = await GetIntegrationsAsync();
         var live = integrations.Where(i => i.Status != LifecycleStatus.Retired).ToList();
 

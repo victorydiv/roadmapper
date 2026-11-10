@@ -454,6 +454,60 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("BusinessProcesses", (string)null);
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.CapabilityFeature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category", "Name")
+                        .IsUnique();
+
+                    b.ToTable("CapabilityFeatures", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ComparisonMember", b =>
+                {
+                    b.Property<string>("Category")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Category", "ApplicationId");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.ToTable("ComparisonMembers", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
                 {
                     b.Property<int>("Id")
@@ -743,6 +797,36 @@ namespace Roadmapper.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("DocumentFolders", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.FeatureAssessment", b =>
+                {
+                    b.Property<int>("FeatureId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Availability")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Strength")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("FeatureId", "ApplicationId");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.ToTable("FeatureAssessments", (string)null);
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
@@ -1901,6 +1985,17 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("ProcessOwner");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.ComparisonMember", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Contact", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TradingPartner")
@@ -2014,6 +2109,25 @@ namespace Roadmapper.Data.Migrations
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.FeatureAssessment", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.CapabilityFeature", "Feature")
+                        .WithMany("Assessments")
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Feature");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
@@ -2361,6 +2475,11 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Kpis");
 
                     b.Navigation("PainPoints");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.CapabilityFeature", b =>
+                {
+                    b.Navigation("Assessments");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Decision", b =>

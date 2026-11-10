@@ -92,7 +92,7 @@
                             </label>
                             <label class="field">Status
                                 <InputSelect @bind-Value="draft.Status">
-                                    @foreach (var s in Enum.GetValues<LifecycleStatus>())
+                                    @foreach (var s in Enum.GetValues<LifecycleStatus>().Where(s => s != LifecycleStatus.Evaluating))
                                     {
                                         <option value="@s">@PortfolioText.Label(s)</option>
                                     }

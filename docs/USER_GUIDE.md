@@ -6,7 +6,7 @@ Above the roadmaps, the **application portfolio** records the systems you run, t
 
 This guide is for two audiences:
 
-- **People using the app.** Sections 1–9 explain the roadmap screens and how to get common jobs done. Section 10 covers the application portfolio. Section 13 introduces the three scoring models for anyone who hasn't used them before.
+- **People using the app.** Sections 1–9 explain the roadmap screens and how to get common jobs done. Section 10 covers the application portfolio, including **Capabilities** (comparing applications feature by feature). Section 13 introduces the three scoring models for anyone who hasn't used them before.
 - **AI assistants and developers.** Section 11 gives exact rules, the data model, and where each behavior lives in the code. The rules there are written so they can be relied on when answering questions or changing the app.
 
 ---
@@ -503,7 +503,7 @@ Import is a three-step wizard:
 
 The portfolio sits above your roadmaps. It records the systems you own and run (applications), the companies behind them (vendors and contracts), the customers and carriers you exchange data with (trading partners), how data moves between all of them (integrations), the business processes that depend on them, what roadmap work is expected to deliver (benefits), why things were decided (the decision log), and where the paperwork is (documents kept in SharePoint). It links back into your roadmaps instead of copying them, so status, dates and progress always come from the roadmap.
 
-Open it with **Portfolio** at the top of any page. Its tabs are **Dashboard · Applications · Trading partners · Integrations · Map · Processes · Impact analysis · Benefits · Decisions · Documents · Vendors & contracts · Contacts · Settings**.
+Open it with **Portfolio** at the top of any page; **Capabilities**, next to it, compares applications feature by feature (see [Capabilities](#capabilities-comparing-applications)). Its tabs are **Dashboard · Applications · Trading partners · Integrations · Map · Processes · Impact analysis · Benefits · Decisions · Documents · Vendors & contracts · Contacts · Settings**.
 
 On a brand-new database, Roadmapper adds a made-up 3PL sample portfolio (a WMS, TMS, ERP, EDI provider, customer portal and more) linked to the sample roadmap. In an existing portfolio, the Integrations, Processes, Benefits and Decisions pages offer **Add sample …** buttons while they're empty and the sample applications are present.
 
@@ -542,7 +542,7 @@ The first page of the portfolio, for a one-page status update.
 | Name | Required and unique. |
 | Category | WMS, TMS, YMS (yard management), ERP, EDI, Customer portal, Reporting, Integration platform, Finance, Other. Customers and carriers are [trading partners](#trading-partners), not applications. |
 | Tier | How critical the system is to operations. **Tier 1:** operations stop without it (you can't receive, ship or bill). **Tier 2:** important, but there's a workaround for a while. **Tier 3:** inconvenient if it's down. Tier raises the weight of problems in [health](#application-health) and the severity of [impact analysis](#impact-analysis). |
-| Status | Planned, Active, Retiring, Retired. Retiring means you're moving off it; Retired applications aren't health-rated. |
+| Status | Planned, Active, Retiring, Retired, Evaluating. Retiring means you're moving off it; Retired applications aren't health-rated. **Evaluating** is for candidates you're comparing but don't run (e.g. a YMS you're considering): they can have vendors, contacts, documents, decisions and feature ratings, but are left out of run cost, health and the dashboard. |
 | Hosting | SaaS, Hosted, On-premises. |
 | Vendor and contract | The contract must be one of the vendor's. The application's renewal and notice dates come from the contract. |
 | Own roadmap | The product whose roadmap is this application's. One application per roadmap. |
@@ -600,7 +600,7 @@ One integration is one flow of data, from a **source** to a **target**, optional
 | Message format | E.g. `X12 940`, `JSON`, `CSV`. |
 | Business purpose | Required: what the flow is for. |
 | Tier | Business criticality of the flow, same scale as applications. |
-| Owner, status | Status: Planned, Active, Retiring, Retired. Retired flows are ignored by the map, dependencies, health and impact analysis. |
+| Owner, status | Status: Planned, Active, Retiring, Retired (Evaluating is for applications only). Retired flows are ignored by the map, dependencies, health and impact analysis. |
 | Last review, review interval | When it was last reviewed and how often it should be (months). **Mark reviewed** on the integration's page sets today. A live integration that was never reviewed, or whose interval has passed, is **review overdue**. |
 
 **Risks:** each integration has a risk register. A risk has a description, **likelihood** and **impact** (1–5 each), a **score** (likelihood × impact, 1–25), mitigation, owner and status (Open, Mitigated, Accepted, Closed). Open and Accepted risks count; Mitigated and Closed don't.
@@ -729,6 +729,34 @@ The dialog shows exactly which folder the file will be saved to, and says when t
 
 Uploads appear in SharePoint once OneDrive has synced them (usually seconds). If OneDrive is paused or signed out, files wait in the folder and upload later.
 
+### Capabilities: comparing applications
+
+**Capabilities** (at the top of every page) compares applications feature by feature, one **application category** at a time: for example every YMS you run or are considering, rated on dock scheduling, yard visibility, gate security and so on. The first page shows each category with how many features and applications it has and how much is rated; open a category to work on it. It has three tabs.
+
+**Features & applications** (set up first):
+
+- **Features:** the capabilities this category is compared on, in the order they're shown. Add one by typing its name; **Edit** renames it or adds a description (what counts as having it); **↑ ↓** reorder; **Delete** removes it and its ratings.
+- **Compared applications:** every application of the category is included automatically. **Add** brings in applications from other categories that cover some of the same ground (a WMS with yard features, a telematics tool); **Remove** takes an added one out again (its ratings are kept for if it comes back). Candidates you're only considering: add them as applications with status **Evaluating** first.
+- **Show retired applications** includes retired ones, which are otherwise hidden.
+
+Each cell has **two ratings**, set together by clicking it on the comparison matrix (or a feature row in an application's **Features** section):
+
+| Rating | Values | Used by |
+|---|---|---|
+| Has it? | ✓ Yes, ◐ Partial, ✗ No (or not rated) | The comparison matrix |
+| Strength | None, Low, Medium, High (or not rated) | The heat map |
+| Note | Free text, e.g. "through an add-on module" | Hover text, Excel comments |
+
+**No** means no strength: choosing it sets strength to None, and a higher strength can't be saved with it.
+
+**Comparison matrix:** features down the side, applications across (the category's own first, then added ones, each alphabetically; Evaluating and added ones are labeled). Each cell shows ✓ / ◐ / ✗ shaded by strength, with a dot when there's a note. **Have it** counts the applications with a Yes (+ partials). **Gap**: no application has the feature fully. **Overlap**: two or more do. The **Coverage** row shows each application's Yes count out of all features and how much of it is rated. **Only gaps** filters to the gaps.
+
+**Heat map:** applications down the side and features along the bottom, colored by strength (None grey, Low yellow, Medium orange, High red; not rated is white and hatched), with a legend. **Features down the side** swaps them. Hover a cell for its rating and note. **Download SVG** saves a picture you can insert straight into PowerPoint; **Print** prints the page.
+
+**Export to Excel** writes a workbook with a **Comparison** sheet (Yes/Partial/No, coverage, gaps and overlaps) and a **Heat map** sheet (colored strengths), with notes as cell comments.
+
+Each application's page has a **Features** section listing its ratings in every comparison it's part of, with links to the matrix and heat map.
+
 ### Portfolio settings, backup and export
 
 **Settings:**
@@ -739,17 +767,17 @@ Uploads appear in SharePoint once OneDrive has synced them (usually seconds). If
 - **Jira site:** e.g. `https://yourcompany.atlassian.net`. Roadmap items with a [Jira key](#linking-roadmap-items-to-jira) link to `{site}/browse/{key}`.
 - **Document folders:** the shared folders, used for documents without a product and by products with no folder of their own for that type. Each product's folders are on its Settings tab. See [Documents](#documents-sharepoint).
 
-**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, the document list (not the files, which stay in SharePoint), the settings including every product's and the shared document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
+**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, capability feature and rating, the document list (not the files, which stay in SharePoint), the settings including every product's and the shared document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
 
 **Import a portfolio file:**
 
 - **Restore** (only into an empty portfolio): brings everything back, including settings and history. Use it to move to a new computer: open your .rmp files first, then restore the .rpf.
 - **Merge:** adds to what's here. A record that already exists is skipped and listed, and what belongs to it (a vendor's contracts, an integration's risks, a process's pain points) comes with it only when the record is new. References point at the existing record, so integrations in the file connect to applications you already have. Settings and history aren't changed.
-- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path.
+- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path; capability features by category and name (ratings by feature and application).
 - Roadmap links with no matching roadmap or item are listed after the import instead of failing it. Import the missing roadmaps' .rmp files, then merge again, or link them by hand.
 - The import runs in one transaction: if anything fails, nothing is added.
 
-**Export to Excel** (Dashboard) writes one sheet each for Applications (with health), Vendors, Contracts, Trading partners, Integrations, Risks, Processes, Pain points, KPIs, Benefits, Decisions, Documents and Contacts.
+**Export to Excel** (Dashboard) writes one sheet each for Applications (with health), Vendors, Contracts, Trading partners, Integrations, Risks, Processes, Pain points, KPIs, Benefits, Decisions, Documents, Features (every rating in every category) and Contacts.
 
 **Read-only API:** everything is also available as JSON under `/api/portfolio/` (for Power BI or Excel's **Get Data › From Web**). See [Portfolio API](#portfolio-api).
 
@@ -772,10 +800,10 @@ Roadmapper isn't a replacement for Jira; Jira stays the system of record for sto
 | `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `ScoringRubric` (`RubricCalculator`, `RubricScale`, `RubricRules`, `StarterRubric`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
 | `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations and `RoadmapService.Rubric.cs` the scoring rubric. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
 | `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. `Launcher.cs` handles start-up for the packaged exe (port choice, opening the browser). `UserGuide.cs` renders this guide (embedded from `docs/USER_GUIDE.md`) for `/guide`. The assembly, and so the packaged exe, is named `Roadmapper`. |
-| `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
-| `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook. |
+| `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, `Capabilities.cs` (`CapabilityMatrix`, `CapabilityRules`), and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
+| `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Capabilities, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook and `CapabilityExport` a category's comparison workbook. |
 | `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
-| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`). |
+| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`). |
 
 ### Data model
 
@@ -801,13 +829,14 @@ All portfolio tables live in the same database; enums are stored as text; names 
 
 - `Contact`: `Name, Title, Email, Phone, Department, Notes, IsActive`; `VendorId` or `TradingPartnerId` (cascade with the company), or neither for internal staff.
 - `Vendor` (unique name): `Website, AccountManagerId, TechnicalContactId, SupportPortalUrl, SupportPhone, Notes`. `Contract` (cascade): `Name, ContractNumber, StartDate, EndDate, RenewalDate, NoticePeriodDays, AutoRenews, AnnualValue (decimal), Notes`; *NoticeDeadline = RenewalDate − NoticePeriodDays*. `VendorEscalationContact` (key `VendorId, ContactId`): `Level, Note`.
-- `Application` (unique name): `Category, Criticality (Tier1–3), Status (Planned, Active, Retiring, Retired), Hosting, VendorId, ContractId (must be the vendor's), ProductId (unique when set: its own roadmap), BusinessOwnerId, TechnicalOwnerId, AnnualCost, BusinessFit, TechnicalFit (1–5), GoLiveDate, RetireDate, Description, Notes`. `ApplicationSupportContact` (key `ApplicationId, ContactId, Role`). `ApplicationInitiative` (key `ApplicationId, RoadmapItemId`, cascade both ways): `ImpactType`.
+- `Application` (unique name): `Category, Criticality (Tier1–3), Status (Planned, Active, Retiring, Retired, Evaluating), Hosting, VendorId, ContractId (must be the vendor's), ProductId (unique when set: its own roadmap), BusinessOwnerId, TechnicalOwnerId, AnnualCost, BusinessFit, TechnicalFit (1–5), GoLiveDate, RetireDate, Description, Notes`. `ApplicationSupportContact` (key `ApplicationId, ContactId, Role`). `ApplicationInitiative` (key `ApplicationId, RoadmapItemId`, cascade both ways): `ImpactType`.
 - `TradingPartner` (unique name): `Type, Status (Onboarding, Active, Inactive), Importance (Key, Standard), AccountCode, EdiQualifier (2), EdiId (35), GsId (35), RelationshipOwnerId, Notes`.
 - `Integration`: `Name`; `SourceApplicationId` xor `SourcePartnerId`; `TargetApplicationId` xor `TargetPartnerId` (CHECK constraints); `ViaApplicationId`; all endpoint FKs are Restrict. `Type, Direction, Frequency, MessageFormat, BusinessPurpose (required), Criticality, OwnerId, Status, LastReviewDate, ReviewIntervalMonths, Notes`. `IntegrationRisk` (cascade): `Description, Likelihood, Impact (1–5, CHECK), Mitigation, Status, OwnerId, RaisedOn`.
 - `BusinessProcess` (unique name): `Description, Domain, ProcessOwnerId, ParentProcessId (Restrict), SortOrder`. `ProcessApplication` (key `ProcessId, ApplicationId`): `Usage, IsPrimary`. `ProcessIntegration` (key `ProcessId, IntegrationId`). `ProcessPainPoint`: `Description, Severity, ApplicationId (SetNull), AddressedByItemId (SetNull), Status`. `ProcessKpi`: `Name, Unit, Direction, Baseline, Target, Current, MeasuredOn`.
 - `Benefit`: `RoadmapItemId (cascade), ApplicationId (SetNull), KpiId (SetNull), Category, Description, Unit, ExpectedValue, ExpectedBy, Baseline, Notes`. `BenefitMeasurement` (unique `BenefitId, MeasuredOn`): `Value, Source, Note`.
 - `Decision`: `Title, DecidedOn, Status, Context, DecisionText (column "Decision"), Outcome, DecidedBy, SupersededById (SetNull)`. `DecisionAlternative`: `Option, Pros, Cons, WhyRejected, SortOrder`. `DecisionLink`: exactly one of `ApplicationId, IntegrationId, VendorId, ContractId, ProcessId, RoadmapItemId, TradingPartnerId` (CHECK `CK_DecisionLinks_OneTarget`); each cascades with its target.
 - `PortfolioDocument` (table `Documents`): `Title, Category (Roadmap, Contract, Invoice, Sow, Brd, Other), FileName, LocalPath, Url, SizeBytes, DocumentDate, Notes`; `ProductId` (the product it belongs to, null = shared, SetNull); at most one of `ApplicationId, VendorId, ContractId, RoadmapItemId` (CHECK `CK_Documents_OneTarget`), each SetNull. An uploaded file has `LocalPath` (and `Url` when its folder's address is set); a link has only `Url`.
+- `CapabilityFeature` (table `CapabilityFeatures`, unique `Category, Name`): `Category, Name, Description, SortOrder`. `ComparisonMember` (key `Category, ApplicationId`; cascade with the application): an application added to another category's comparison. `FeatureAssessment` (key `FeatureId, ApplicationId`; cascade both ways): `Availability (Yes, Partial, No)?, Strength (None, Low, Medium, High)?, Note, UpdatedAt`.
 - `DocumentFolder`: `Id, ProductId (null = shared; cascade), Category, LocalPath, SharePointUrl`; unique `(ProductId, Category)` and unique `Category` where `ProductId` is null.
 - `PortfolioSettings` (one row, Id 1): `LaborRate, RenewalWarningDays (120), DefaultReviewIntervalMonths (12), JiraBaseUrl`.
 - `PortfolioAuditEntry`: `EntityType, EntityId, EntityName (snapshot), Action, Field, OldValue, NewValue, ChangedAt`; no foreign keys. Contracts and escalation are filed under the vendor; support contacts and initiative links under the application; risks under the integration; process links, pain points and KPIs under the process; measurements under the benefit; links under the decision.
@@ -842,6 +871,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 23. **Processes:** no parent loops (`PortfolioRules.ParentError`); a process with sub-processes can't be deleted. KPI drafts reject a target on the wrong side of the baseline.
 24. **Decisions:** `SupersededById` only with status Superseded; no loops; deleting a decision clears "superseded by" on those it replaced.
 25. **Documents** (`DocumentLibrary`, `PortfolioService.Documents.cs`): the upload folder is `DocumentLibrary.Resolve`: the product's folder of that type with a local path, else the shared one. A document attached to a roadmap item always gets the item's `ProductId`. A folder's local path must be fully qualified and exist (never created). SharePoint addresses: https only; `/:x:/r/` sharing links lose the prefix and query; `.aspx` views use the `id` (or `RootFolder`) parameter; other `/:x:/?/` sharing links are refused; segments are unescaped and re-escaped. File URL = folder URL + `/` + escaped name, plus `?web=1` for Office files. File names: folder part dropped, `"*:<>?|#%` and control characters → `_`, trimmed, leading `~$` removed, ≤ 200 characters keeping the extension. Upload writes `~$roadmapper-{guid}.tmp` in the folder (OneDrive ignores `~$` files) and then renames it; an existing name is refused unless replacing, and replacing a listed file updates that row. Removing a document never deletes the file.
+26. **Capabilities** (`CapabilityMatrix.Build`, `CapabilityRules`, `PortfolioService.Capabilities.cs`): columns = applications of the category plus `ComparisonMember`s (Retired left out unless asked), the category's own first, then by name; rows = the category's features by `SortOrder`. Feature coverage counts Yes/Partial/No/not rated; gap = no Yes; overlap = 2+ Yes; strongest = applications at the highest strength above None. A rating needs the application in the comparison; No forces strength None (higher is refused); an empty rating (no values, blank note) is deleted. Feature names are unique per category (case-insensitive); deleting a feature deletes its ratings; removing a member keeps its ratings. `PortfolioRules.CountsInPortfolio` (not Retired or Evaluating) decides which applications count in the dashboard, run cost and health; integrations can't be Evaluating.
 
 ### HTTP endpoints (file downloads)
 
@@ -853,7 +883,9 @@ All portfolio tables live in the same database; enums are stored as text; names 
 | `GET /export/{productId}/roadmap.xlsx` | Excel export (Roadmap, Dependencies, Templates) |
 | `GET /export/{productId}/roadmap.pdf?depth={Goal\|Initiative\|Feature\|Task}&baseline={snapshotId}` | PDF report, shown in the browser (`inline`) |
 | `GET /export/{productId}/timeline.svg?scale=quarter&depth=…&baseline=…&download=true` | Timeline SVG |
-| `GET /export/portfolio.xlsx` | Portfolio workbook (13 sheets) |
+| `GET /export/portfolio.xlsx` | Portfolio workbook (14 sheets) |
+| `GET /export/capabilities/{category}.xlsx?retired=true` | A category's comparison workbook (Comparison and Heat map sheets) |
+| `GET /export/capabilities/{category}/heatmap.svg?transpose=true&retired=true&download=true` | A category's heat map as SVG |
 | `GET /documents/{id}/file` | A document's saved copy on this PC (PDFs, images and text inline; other types download); 404 when it isn't there |
 | `GET /export/portfolio.rpf` | Portfolio file (whole portfolio as JSON) |
 
@@ -873,6 +905,7 @@ Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing cha
 | `/processes?domain=&applicationId=` · `/processes/{id}` | Processes in tree order; detail adds pain points, KPIs, integrations |
 | `/benefits?productId=&itemId=&applicationId=&status=` | Labor rate, totals and benefits with actual, realization, status and dollars |
 | `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
+| `/capabilities` · `/capabilities/{category}?retired=true` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, and its applications with coverage |
 | `/documents?productId=&entityType=&entityId=&category=` | Documents with their SharePoint address, file, date, product and what they're attached to (`entityType`: Application, Vendor (includes its contracts'), Contract, RoadmapItem) |
 | `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
 
@@ -898,12 +931,14 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and import are in `Data/Portfolio/PortfolioService.Files.cs` (`ExportPortfolioAsync` / `ImportPortfolioAsync`). Same JSON conventions as `.rmp`.
 
-- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
+- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `features` (with `ratings` by application id), `comparisonMembers`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
 - **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`. A document has `product` (a product name; absent = shared) and `attachedTo` with `targetId` (application, vendor, contract) or `item`. Folders and documents whose product doesn't match are listed as unmatched; the document is kept as shared.
 - **Validation** (before anything is written): format and version, unique ids per kind, names present, every id reference present in the file, exactly one source and target per integration. A `.rmp` is recognized and refused with a pointer to the Products page.
 - **Import:** one transaction, staged saves with old→new id maps. Restore requires `IsEmptyAsync()`, imports settings and history (history re-pointed to new ids; unmapped ids become 0) with audit capture off. Merge keeps audit on, keeps settings, skips existing records by the matching rule in [Portfolio settings, backup and export](#portfolio-settings-backup-and-export) and maps references to them; children of skipped records are skipped, except that contracts and KPIs of existing parents are matched by name for references. Unmatched roadmap references are dropped and listed (`PortfolioImportResult.Unmatched`); a benefit whose item doesn't match is skipped.
 
 ### Page routes
+
+Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|features` (category as its enum name, e.g. `YMS`).
 
 Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?product={id}&attach={key}&add=upload|link` (key: `a`/`v`/`c`/`r` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
 
@@ -1022,6 +1057,12 @@ Set the Jira site in Portfolio › Settings.
 
 **A product's upload went to the shared folder.**
 That product has no folder of its own for that type. Set one on the product's Settings › Document folders; documents already uploaded stay where they are.
+
+**A solution I'm evaluating shows in the YMS comparison but not on the portfolio dashboard.**
+That's intended: applications with status Evaluating are left out of run cost, health and the dashboard. Set it to Planned or Active once you've chosen it.
+
+**An application I rated has disappeared from a comparison.**
+It was added from another category and then removed, or it was retired. Add it again (its ratings come back), or tick **Show retired applications**.
 
 **I uploaded a document but it isn't in SharePoint yet.**
 OneDrive uploads it. Check the OneDrive icon in the taskbar: it may be paused, signed out, or still syncing. The file is safe in the folder meanwhile, and **local copy** opens it.

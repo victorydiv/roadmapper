@@ -84,4 +84,16 @@ public static class PortfolioUi
         DocumentTargetKind.Contract => d.Contract is { } c ? $"/portfolio/vendors/{c.VendorId}" : null,
         _ => d.RoadmapItem is { } i ? $"/products/{i.ProductId}" : null,
     };
+
+    /// <summary>✓ Yes, ◐ Partial, ✗ No; empty when not rated.</summary>
+    public static string Symbol(FeatureAvailability? a) => a switch
+    {
+        FeatureAvailability.Yes => "✓",
+        FeatureAvailability.Partial => "◐",
+        FeatureAvailability.No => "✗",
+        _ => "",
+    };
+
+    /// <summary>A category's page, e.g. "/capabilities/YMS".</summary>
+    public static string CapabilitiesHref(AppCategory c, string? view = null) => $"/capabilities/{c}" + (view is null ? "" : $"?view={view}");
 }
