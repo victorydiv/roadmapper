@@ -30,7 +30,7 @@ public static class MapLayout
     {
         AppCategory.EDI or AppCategory.IntegrationPlatform => 1,
         AppCategory.CustomerPortal => 2,
-        AppCategory.WMS or AppCategory.TMS => 3,
+        AppCategory.WMS or AppCategory.TMS or AppCategory.YMS => 3,
         AppCategory.ERP or AppCategory.Finance => 4,
         _ => 5,
     };

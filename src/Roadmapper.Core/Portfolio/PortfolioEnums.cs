@@ -1,7 +1,7 @@
 namespace Roadmapper.Core.Portfolio;
 
-/// <summary>What kind of system an application is. Customers, carriers and other outside companies are <see cref="TradingPartner"/>s, not applications.</summary>
-public enum AppCategory { WMS, TMS, ERP, EDI, CustomerPortal, Reporting, IntegrationPlatform, Finance, Other }
+/// <summary>What kind of system an application is. Customers, carriers and other outside companies are <see cref="TradingPartner"/>s, not applications. YMS: yard management (dock doors, trailers, yard moves).</summary>
+public enum AppCategory { WMS, TMS, YMS, ERP, EDI, CustomerPortal, Reporting, IntegrationPlatform, Finance, Other }
 
 /// <summary>Business criticality. Tier 1 = operations stop without it.</summary>
 public enum Criticality { Tier1 = 1, Tier2 = 2, Tier3 = 3 }

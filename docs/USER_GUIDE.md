@@ -540,7 +540,7 @@ The first page of the portfolio, for a one-page status update.
 | Field | Notes |
 |---|---|
 | Name | Required and unique. |
-| Category | WMS, TMS, ERP, EDI, Customer portal, Reporting, Integration platform, Finance, Other. Customers and carriers are [trading partners](#trading-partners), not applications. |
+| Category | WMS, TMS, YMS (yard management), ERP, EDI, Customer portal, Reporting, Integration platform, Finance, Other. Customers and carriers are [trading partners](#trading-partners), not applications. |
 | Tier | How critical the system is to operations. **Tier 1:** operations stop without it (you can't receive, ship or bill). **Tier 2:** important, but there's a workaround for a while. **Tier 3:** inconvenient if it's down. Tier raises the weight of problems in [health](#application-health) and the severity of [impact analysis](#impact-analysis). |
 | Status | Planned, Active, Retiring, Retired. Retiring means you're moving off it; Retired applications aren't health-rated. |
 | Hosting | SaaS, Hosted, On-premises. |

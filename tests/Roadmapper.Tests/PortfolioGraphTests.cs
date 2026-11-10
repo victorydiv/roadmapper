@@ -151,6 +151,13 @@ public class PortfolioGraphTests
 
 public class MapLayoutTests
 {
+    [Fact]
+    public void Yard_management_sits_with_warehouse_and_transport()
+    {
+        Assert.Equal(MapLayout.CategoryColumn(AppCategory.WMS), MapLayout.CategoryColumn(AppCategory.YMS));
+        Assert.Equal("YMS", PortfolioText.Label(AppCategory.YMS));
+    }
+
     private static NodeRef A(int id) => NodeRef.App(id);
     private static NodeRef P(int id) => NodeRef.Partner(id);
 
