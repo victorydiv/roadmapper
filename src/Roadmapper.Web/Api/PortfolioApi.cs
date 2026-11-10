@@ -139,8 +139,11 @@ public static class PortfolioApi
 
         // Feature comparisons: every category's summary, and one category's matrix (features × applications with ratings).
         api.MapGet("/capabilities", async (PortfolioService svc) => await svc.GetCapabilityOverviewAsync());
-        api.MapGet("/capabilities/{category}", async (string category, PortfolioService svc, bool? retired) =>
-            Parse<AppCategory>(category) is { } c ? Results.Ok(CapabilityDto.From(await svc.GetCapabilityMatrixAsync(c, retired == true))) : Results.NotFound());
+        // ?profile={siteProfileId} costs it for that site profile (default: the category's default profile).
+        api.MapGet("/capabilities/{category}", async (string category, PortfolioService svc, bool? retired, int? profile) =>
+            Parse<AppCategory>(category) is { } c ? Results.Ok(CapabilityDto.From(await svc.GetCapabilityMatrixAsync(c, retired == true, profile))) : Results.NotFound());
+        api.MapGet("/capabilities/{category}/profiles", async (string category, PortfolioService svc) =>
+            Parse<AppCategory>(category) is { } c ? Results.Ok(await svc.GetSiteProfilesAsync(c)) : Results.NotFound());
 
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
@@ -430,9 +433,14 @@ public record DocumentDto(int Id, string Title, DocumentCategory Category, strin
         d.DocumentDate, d.Notes, Ref.Of(d.Product), d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
 }
 
-public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.FeatureRow> Features, IReadOnlyList<CapabilityDto.AppColumn> Applications)
+public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.FeatureRow> Features, IReadOnlyList<CapabilityDto.AppColumn> Applications,
+    CapabilityDto.SiteRow Site)
 {
-    public record AppColumn(int Id, string Name, AppCategory Category, LifecycleStatus Status, bool Added, int Yes, int Partial, int No, int NotRated);
+    public record SiteRow(int Id, string Name, int? Users, int? Licenses, int? DockDoors, int? Assets, int? TransactionsPerMonth);
+    public record PriceRow(int Id, string Label, PricingBasis Basis, string? Unit, decimal? Quantity, decimal UnitPrice, PriceFrequency Frequency,
+        decimal? Minimum, PriceSource Source, DateOnly? AsOf, string? Note, decimal? CostedQuantity, decimal? Charge);
+    public record CostRow(bool Priced, bool Complete, decimal Monthly, decimal OneTime, decimal FirstYear, IReadOnlyList<string> Missing, IReadOnlyList<PriceRow> Lines);
+    public record AppColumn(int Id, string Name, AppCategory Category, LifecycleStatus Status, bool Added, int Yes, int Partial, int No, int NotRated, CostRow Cost);
     public record Rating(int ApplicationId, FeatureAvailability? Availability, FeatureStrength? Strength, string? Note);
     public record FeatureRow(int Id, string Name, string? Description, int Yes, int Partial, bool Gap, bool Overlap, IReadOnlyList<Rating> Ratings);
 
@@ -447,6 +455,11 @@ public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.Fe
         m.Apps.Select(a =>
         {
             var c = m.ByApp[a.Id];
-            return new AppColumn(a.Id, a.Name, a.Application.Category, a.Application.Status, a.Added, c.Yes, c.Partial, c.No, c.Unassessed);
-        }).ToList());
+            var k = m.Cost(a.Id);
+            return new AppColumn(a.Id, a.Name, a.Application.Category, a.Application.Status, a.Added, c.Yes, c.Partial, c.No, c.Unassessed,
+                new CostRow(k.IsPriced, k.IsComplete, k.Monthly, k.OneTime, k.FirstYear, k.Missing,
+                    k.Lines.Select(l => new PriceRow(l.Line.Id, l.Line.Label, l.Line.Basis, l.Line.Unit, l.Line.Quantity, l.Line.UnitPrice, l.Line.Frequency,
+                        l.Line.Minimum, l.Line.Source, l.Line.AsOf, l.Line.Note, l.Quantity, l.Charge)).ToList()));
+        }).ToList(),
+        new SiteRow(m.Site.Id, m.Site.Name, m.Site.Users, m.Site.Licenses, m.Site.DockDoors, m.Site.Assets, m.Site.TransactionsPerMonth));
 }

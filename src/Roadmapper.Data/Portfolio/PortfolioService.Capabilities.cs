@@ -7,7 +7,8 @@ namespace Roadmapper.Data.Portfolio;
 public record CapabilityOverview(AppCategory Category, int Features, int Applications, int AssessedPct, int Gaps);
 
 /// <summary>An application's ratings in one category's comparison, feature by feature (null: not rated).</summary>
-public record AppFeatureGroup(AppCategory Category, bool Added, IReadOnlyList<(CapabilityFeature Feature, FeatureAssessment? Rating)> Features);
+public record AppFeatureGroup(AppCategory Category, bool Added, IReadOnlyList<(CapabilityFeature Feature, FeatureAssessment? Rating)> Features,
+    IReadOnlyList<PricingLine> Pricing, CostEstimate Cost, SiteProfile Site);
 
 public partial class PortfolioService
 {
@@ -36,12 +37,129 @@ public partial class PortfolioService
         }).ToList();
     }
 
-    /// <summary>A category's comparison: its features × its applications and those added to it. Retired applications only when asked.</summary>
-    public async Task<CapabilityMatrix> GetCapabilityMatrixAsync(AppCategory category, bool includeRetired = false)
+    /// <summary>
+    /// A category's comparison: its features × its applications and those added to it, with each application's cost
+    /// for a site. Retired applications only when asked. The site is <paramref name="site"/> when given (unsaved, "try
+    /// your site"), else profile <paramref name="profileId"/>, else the category's default profile, else one site with
+    /// unknown sizes.
+    /// </summary>
+    public async Task<CapabilityMatrix> GetCapabilityMatrixAsync(AppCategory category, bool includeRetired = false, int? profileId = null, SiteProfile? site = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var (features, apps, members, ratings) = await LoadCapabilitiesAsync(db, category);
-        return CapabilityMatrix.Build(category, features, apps, members.Select(m => m.ApplicationId), ratings, includeRetired);
+        var pricing = await db.PricingLines.AsNoTracking().Where(l => l.Category == category).ToListAsync();
+        site ??= await ResolveSiteProfileAsync(db, category, profileId);
+        return CapabilityMatrix.Build(category, features, apps, members.Select(m => m.ApplicationId), ratings, includeRetired, pricing, site);
+    }
+
+    private static async Task<SiteProfile> ResolveSiteProfileAsync(RoadmapDbContext db, AppCategory category, int? profileId)
+    {
+        var profiles = await db.SiteProfiles.AsNoTracking().Where(p => p.Category == category).ToListAsync();
+        return profiles.FirstOrDefault(p => p.Id == profileId) ?? profiles.FirstOrDefault(p => p.IsDefault)
+            ?? profiles.OrderBy(p => p.Name).FirstOrDefault() ?? SiteProfile.OneSite(category);
+    }
+
+    // ---- Cost of adoption ----
+
+    /// <summary>A category's site profiles, the default first, then by name.</summary>
+    public async Task<List<SiteProfile>> GetSiteProfilesAsync(AppCategory category)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return (await db.SiteProfiles.AsNoTracking().Where(p => p.Category == category).ToListAsync())
+            .OrderByDescending(p => p.IsDefault).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Creates or updates a site profile. Names are unique within a category (ignoring case). The first profile of a
+    /// category, or one saved as default, becomes the default.
+    /// </summary>
+    public async Task<int> SaveSiteProfileAsync(SiteProfileDraft draft)
+    {
+        if (draft.Validate() is { } error) throw new InvalidOperationException(error);
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var name = draft.Name.Trim();
+        var siblings = await db.SiteProfiles.Where(p => p.Category == draft.Category).ToListAsync();
+        if (siblings.Any(p => p.Id != draft.Id && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"{PortfolioText.Label(draft.Category)} already has a site profile named “{name}”.");
+        SiteProfile profile;
+        if (draft.IsNew)
+        {
+            profile = db.SiteProfiles.Add(new SiteProfile()).Entity;
+        }
+        else
+        {
+            profile = siblings.FirstOrDefault(p => p.Id == draft.Id) ?? throw NotFound("Site profile");
+        }
+        draft.ApplyTo(profile);
+        profile.UpdatedAt = DateTime.UtcNow;
+        if (draft.IsDefault || !siblings.Any(p => p.Id != profile.Id && p.IsDefault))
+        {
+            foreach (var other in siblings.Where(p => p != profile && p.IsDefault)) other.IsDefault = false;
+            profile.IsDefault = true;
+        }
+        await db.SaveChangesAsync();
+        return profile.Id;
+    }
+
+    /// <summary>Makes a site profile its category's default.</summary>
+    public async Task SetDefaultSiteProfileAsync(int id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.SiteProfiles.FindAsync(id) is not { } profile) throw NotFound("Site profile");
+        foreach (var p in await db.SiteProfiles.Where(p => p.Category == profile.Category).ToListAsync()) p.IsDefault = p.Id == id;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Deletes a site profile. If it was the default, the next by name becomes the default.</summary>
+    public async Task DeleteSiteProfileAsync(int id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.SiteProfiles.FindAsync(id) is not { } profile) return;
+        db.SiteProfiles.Remove(profile);
+        if (profile.IsDefault
+            && (await db.SiteProfiles.Where(p => p.Category == profile.Category && p.Id != id).ToListAsync()).OrderBy(p => p.Name).FirstOrDefault() is { } next)
+            next.IsDefault = true;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>An application's pricing in a category's comparison, in order.</summary>
+    public async Task<List<PricingLine>> GetPricingAsync(AppCategory category, int applicationId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return (await db.PricingLines.AsNoTracking().Where(l => l.Category == category && l.ApplicationId == applicationId).ToListAsync())
+            .OrderBy(l => l.SortOrder).ThenBy(l => l.Id).ToList();
+    }
+
+    /// <summary>Adds or changes a line of an application's pricing. The application must be in the category's comparison.</summary>
+    public async Task<int> SavePricingLineAsync(PricingLineDraft draft)
+    {
+        if (draft.Validate() is { } error) throw new InvalidOperationException(error);
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var app = await db.Applications.AsNoTracking().FirstOrDefaultAsync(a => a.Id == draft.ApplicationId) ?? throw NotFound("Application");
+        if (app.Category != draft.Category && !await db.ComparisonMembers.AnyAsync(m => m.Category == draft.Category && m.ApplicationId == app.Id))
+            throw new InvalidOperationException($"{app.Name} isn't in the {PortfolioText.Label(draft.Category)} comparison. Add it there first.");
+        PricingLine line;
+        if (draft.IsNew)
+        {
+            var last = await db.PricingLines.Where(l => l.Category == draft.Category && l.ApplicationId == app.Id).Select(l => (int?)l.SortOrder).MaxAsync();
+            line = db.PricingLines.Add(new PricingLine { SortOrder = (last ?? -1) + 1 }).Entity;
+        }
+        else
+        {
+            line = await db.PricingLines.FirstOrDefaultAsync(l => l.Id == draft.Id) ?? throw NotFound("Price");
+        }
+        draft.ApplyTo(line);
+        line.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return line.Id;
+    }
+
+    public async Task DeletePricingLineAsync(int id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        if (await db.PricingLines.FindAsync(id) is not { } line) return;
+        db.PricingLines.Remove(line);
+        await db.SaveChangesAsync();
     }
 
     /// <summary>Creates or renames a feature. Names are unique within a category (ignoring case). New features go last.</summary>
@@ -154,9 +272,16 @@ public partial class PortfolioService
         var categories = new[] { app.Category }.Concat(added.OrderBy(c => c)).Distinct().ToList();
         var features = await db.CapabilityFeatures.AsNoTracking().Where(f => categories.Contains(f.Category)).ToListAsync();
         var ratings = await db.FeatureAssessments.AsNoTracking().Where(a => a.ApplicationId == applicationId).ToDictionaryAsync(a => a.FeatureId);
+        var pricing = await db.PricingLines.AsNoTracking().Where(l => l.ApplicationId == applicationId).ToListAsync();
+        var sites = new Dictionary<AppCategory, SiteProfile>();
+        foreach (var c in categories) sites[c] = await ResolveSiteProfileAsync(db, c, null);
         return categories
-            .Select(c => new AppFeatureGroup(c, c != app.Category, features.Where(f => f.Category == c).OrderBy(f => f.SortOrder).ThenBy(f => f.Id)
-                .Select(f => (f, ratings.GetValueOrDefault(f.Id))).ToList()))
-            .Where(g => g.Features.Count > 0).ToList();
+            .Select(c =>
+            {
+                var lines = pricing.Where(l => l.Category == c).OrderBy(l => l.SortOrder).ThenBy(l => l.Id).ToList();
+                return new AppFeatureGroup(c, c != app.Category, features.Where(f => f.Category == c).OrderBy(f => f.SortOrder).ThenBy(f => f.Id)
+                    .Select(f => (f, ratings.GetValueOrDefault(f.Id))).ToList(), lines, lines.Count > 0 ? CostEstimate.For(lines, sites[c]) : CostEstimate.NotPriced, sites[c]);
+            })
+            .Where(g => g.Features.Count > 0 || g.Pricing.Count > 0).ToList();
     }
 }

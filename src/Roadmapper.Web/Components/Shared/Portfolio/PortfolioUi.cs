@@ -96,4 +96,43 @@ public static class PortfolioUi
 
     /// <summary>A category's page, e.g. "/capabilities/YMS".</summary>
     public static string CapabilitiesHref(AppCategory c, string? view = null) => $"/capabilities/{c}" + (view is null ? "" : $"?view={view}");
+
+    /// <summary>A price as quoted: "$1,200 per site / month", "$90,000 one-time", "$0.15 per transaction / month (min $500)".</summary>
+    public static string Price(PricingLine l)
+    {
+        var per = l.Basis switch
+        {
+            PricingBasis.Flat => "",
+            PricingBasis.Other => $" per {l.Unit}",
+            _ => $" per {CostRules.UnitName(l.Basis)}",
+        };
+        var when = l.Frequency switch { PriceFrequency.Monthly => " / month", PriceFrequency.Annual => " / year", _ => " one-time" };
+        var qty = l.Quantity is { } q ? $" × {q.ToString("0.##", Us)}" : "";
+        var min = l.Minimum is { } m ? $" (min {Money(m)})" : "";
+        return $"{Money(l.UnitPrice)}{per}{when}{qty}{min}";
+    }
+
+    /// <summary>A site profile's sizes: "15 users · 10 dock doors"; "sizes not set" when none is.</summary>
+    public static string Sizes(SiteProfile s)
+    {
+        var parts = new[]
+        {
+            s.Users is { } u ? $"{u:N0} users" : null,
+            s.Licenses is { } l ? $"{l:N0} licenses" : null,
+            s.DockDoors is { } d ? $"{d:N0} dock doors" : null,
+            s.Assets is { } a ? $"{a:N0} trailers / assets" : null,
+            s.TransactionsPerMonth is { } t ? $"{t:N0} transactions / month" : null,
+        }.Where(p => p is not null).ToList();
+        return parts.Count == 0 ? "sizes not set" : string.Join(" · ", parts);
+    }
+
+    /// <summary>A cost's monthly figure for a cell: "$1,200", "≥ $1,200" when incomplete, "–" when not priced.</summary>
+    public static string MonthlyText(CostEstimate c) => !c.IsPriced ? "–" : (c.IsComplete ? "" : "≥ ") + Money(Math.Round(c.Monthly));
+
+    /// <summary>Hover text explaining a cost.</summary>
+    public static string CostTip(string app, CostEstimate c, SiteProfile site) => !c.IsPriced
+        ? $"{app}: not priced yet. Add its pricing on the Cost tab."
+        : c.IsComplete
+            ? $"{app} for {site.Name}: {Money(c.Monthly)} a month, {Money(c.OneTime)} one-time, {Money(c.FirstYear)} in the first year."
+            : $"{app} for {site.Name}: at least {Money(c.Monthly)} a month. Incomplete: the site profile doesn't say how many {string.Join(", ", c.Missing)}.";
 }

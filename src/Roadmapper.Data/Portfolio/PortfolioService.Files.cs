@@ -178,6 +178,12 @@ public partial class PortfolioService
                 }).ToList(),
             ComparisonMembers = (await db.ComparisonMembers.AsNoTracking().ToListAsync()).OrderBy(m => m.Category).ThenBy(m => m.ApplicationId)
                 .Select(m => new PfComparisonMember(m.Category, m.ApplicationId)).ToList(),
+            PricingLines = (await db.PricingLines.AsNoTracking().ToListAsync())
+                .OrderBy(l => l.Category).ThenBy(l => l.ApplicationId).ThenBy(l => l.SortOrder).ThenBy(l => l.Id)
+                .Select(l => new PfPricingLine(l.Category, l.ApplicationId, l.Label, l.Basis, l.Unit, l.Quantity, l.UnitPrice, l.Frequency, l.Minimum,
+                    l.Source, l.AsOf, l.Note, l.SortOrder)).ToList(),
+            SiteProfiles = (await db.SiteProfiles.AsNoTracking().ToListAsync()).OrderBy(p => p.Category).ThenBy(p => p.Name)
+                .Select(p => new PfSiteProfile(p.Id, p.Category, p.Name, p.IsDefault, p.Users, p.Licenses, p.DockDoors, p.Assets, p.TransactionsPerMonth, p.Notes)).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -657,6 +663,53 @@ public partial class PortfolioService
         await db.SaveChangesAsync();
         result.Count("feature ratings", ratingCount);
 
+        // Cost of adoption: site profiles (matched by category and name on a merge) and pricing (added unless the
+        // application already has pricing in that comparison, so merging twice doesn't double it).
+        var profileMap = new Dictionary<int, int>();
+        var existingProfiles = await db.SiteProfiles.AsNoTracking().ToListAsync();
+        var newProfiles = new List<(PfSiteProfile File, SiteProfile Row)>();
+        foreach (var sp in file.SiteProfiles)
+        {
+            var found = existingProfiles.FirstOrDefault(x => x.Category == sp.Category && string.Equals(x.Name, sp.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (found is not null || newProfiles.Any(n => n.Row.Category == sp.Category && string.Equals(n.Row.Name, sp.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                if (found is not null) profileMap[sp.Id] = found.Id;
+                result.Skipped.Add($"{PortfolioText.Label(sp.Category)} site profile {sp.Name} (already here)");
+                continue;
+            }
+            var row = new SiteProfile
+            {
+                Category = sp.Category, Name = sp.Name.Trim(), Users = sp.Users, Licenses = sp.Licenses, DockDoors = sp.DockDoors, Assets = sp.Assets,
+                TransactionsPerMonth = sp.TransactionsPerMonth, Notes = sp.Notes, UpdatedAt = now,
+                IsDefault = sp.IsDefault && !existingProfiles.Any(x => x.Category == sp.Category && x.IsDefault),
+            };
+            db.SiteProfiles.Add(row);
+            newProfiles.Add((sp, row));
+        }
+        await db.SaveChangesAsync();
+        foreach (var (sp, row) in newProfiles) profileMap[sp.Id] = row.Id;
+        result.Count("site profiles", newProfiles.Count);
+
+        var priced = (await db.PricingLines.AsNoTracking().Select(l => new { l.Category, l.ApplicationId }).ToListAsync())
+            .Select(l => (l.Category, l.ApplicationId)).ToHashSet();
+        var priceCount = 0;
+        foreach (var l in file.PricingLines)
+        {
+            if (Map(appMap, l.ApplicationId) is not { } aid || priced.Contains((l.Category, aid))) continue;
+            var draft = new PricingLineDraft
+            {
+                Category = l.Category, ApplicationId = aid, Label = l.Label, Basis = l.Basis, Unit = l.Unit, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
+                Frequency = l.Frequency, Minimum = l.Minimum, Source = l.Source, AsOf = l.AsOf, Note = l.Note,
+            };
+            if (draft.Validate() is not null) { result.Skipped.Add($"Price {l.Label} (not valid)"); continue; }
+            var line = new PricingLine { SortOrder = l.SortOrder, UpdatedAt = now };
+            draft.ApplyTo(line);
+            db.PricingLines.Add(line);
+            priceCount++;
+        }
+        await db.SaveChangesAsync();
+        result.Count("prices", priceCount);
+
         // History, on a restore: re-pointed at the new ids. Entries for records that no longer exist keep id 0.
         if (!merge)
         {
@@ -665,7 +718,7 @@ public partial class PortfolioService
                 [PortfolioEntityType.Application] = appMap, [PortfolioEntityType.Vendor] = vendorMap, [PortfolioEntityType.Contact] = contactMap,
                 [PortfolioEntityType.Integration] = flowMap, [PortfolioEntityType.TradingPartner] = partnerMap, [PortfolioEntityType.Process] = processMap,
                 [PortfolioEntityType.Benefit] = benefitMap, [PortfolioEntityType.Decision] = decisionMap,
-                [PortfolioEntityType.Document] = documentMap, [PortfolioEntityType.Feature] = featureMap,
+                [PortfolioEntityType.Document] = documentMap, [PortfolioEntityType.Feature] = featureMap, [PortfolioEntityType.SiteProfile] = profileMap,
             };
             foreach (var h in file.History)
                 db.PortfolioAuditEntries.Add(new PortfolioAuditEntry

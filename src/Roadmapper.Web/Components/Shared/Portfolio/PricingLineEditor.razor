@@ -1,0 +1,131 @@
+@* Add or change one line of an application's pricing in a category's comparison. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal" style="max-width:560px">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">@(draft.IsNew ? "Add price" : "Edit price")</h2>
+                <div class="muted small">@AppName · @PortfolioText.Label(draft.Category) comparison</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            <label class="field">Name
+                <input @bind="draft.Label" placeholder="e.g. Subscription, Implementation, Hardware, Training" />
+            </label>
+            <div class="row" style="align-items:flex-end">
+                <label class="field" style="flex:1">Priced
+                    <select @bind="draft.Basis">
+                        @foreach (var b in Enum.GetValues<PricingBasis>())
+                        {
+                            <option value="@b">@PortfolioText.Label(b)</option>
+                        }
+                    </select>
+                </label>
+                @if (draft.Basis == PricingBasis.Other)
+                {
+                    <label class="field" style="flex:1">Per what
+                        <input @bind="draft.Unit" placeholder="e.g. kiosk" />
+                    </label>
+                }
+            </div>
+            <div class="row" style="align-items:flex-end">
+                <label class="field" style="flex:1">Price ($)
+                    <input type="number" min="0" step="0.01" @bind="draft.UnitPrice" />
+                </label>
+                <label class="field" style="flex:1">How often
+                    <select @bind="draft.Frequency" disabled="@(draft.Basis == PricingBasis.Transaction)">
+                        @foreach (var f in Enum.GetValues<PriceFrequency>())
+                        {
+                            <option value="@f">@PortfolioText.Label(f)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1">Minimum ($) <span class="muted small">optional</span>
+                    <input type="number" min="0" step="0.01" @bind="draft.Minimum" />
+                </label>
+            </div>
+            @if (draft.Basis != PricingBasis.Flat)
+            {
+                <label class="field">How many <span class="muted small">@QuantityHint</span>
+                    <input type="number" min="0" step="1" @bind="draft.Quantity" />
+                </label>
+            }
+            <div class="row" style="align-items:flex-end">
+                <label class="field" style="flex:1">Source
+                    <select @bind="draft.Source">
+                        @foreach (var s in Enum.GetValues<PriceSource>())
+                        {
+                            <option value="@s">@PortfolioText.Label(s)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1">As of
+                    <input type="date" @bind="draft.AsOf" />
+                </label>
+            </div>
+            <label class="field">Note
+                <textarea rows="2" @bind="draft.Note" placeholder="e.g. 3-year term; volume discount above 10 sites"></textarea>
+            </label>
+        </div>
+        <div class="modal-foot">
+            @if (!draft.IsNew)
+            {
+                @if (confirmDelete)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Delete this price</button>
+                }
+                else
+                {
+                    <button type="button" class="btn danger" @onclick="() => confirmDelete = true">Delete</button>
+                }
+            }
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PricingLineDraft Draft { get; set; } = new();
+    [Parameter] public string AppName { get; set; } = "";
+    /// <summary>Called with true when the price was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private PricingLineDraft draft = new();
+    private string? error;
+    private bool saving, confirmDelete;
+
+    protected override void OnInitialized() => draft = Draft;
+
+    private string QuantityHint => draft.Basis == PricingBasis.Other
+        ? "(required: site profiles don't size this)"
+        : $"(leave blank to use the site profile's {CostRules.UnitName(draft.Basis, plural: true)}; set it when the quote fixes the number)";
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        if (draft.Basis == PricingBasis.Transaction) draft.Frequency = PriceFrequency.Monthly;
+        try
+        {
+            await Svc.SavePricingLineAsync(draft);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeletePricingLineAsync(draft.Id);
+        await OnClose.InvokeAsync(true);
+    }
+}

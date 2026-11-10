@@ -190,6 +190,30 @@ internal static class PortfolioAuditTrail
             [nameof(FeatureAssessment.Strength)] = "Strength",
             [nameof(FeatureAssessment.Note)] = "Note",
         },
+        [typeof(PricingLine)] = new()
+        {
+            [nameof(PricingLine.Label)] = "Name",
+            [nameof(PricingLine.Basis)] = "Basis",
+            [nameof(PricingLine.Unit)] = "Unit",
+            [nameof(PricingLine.Quantity)] = "Quantity",
+            [nameof(PricingLine.UnitPrice)] = "Price",
+            [nameof(PricingLine.Frequency)] = "Frequency",
+            [nameof(PricingLine.Minimum)] = "Minimum",
+            [nameof(PricingLine.Source)] = "Source",
+            [nameof(PricingLine.AsOf)] = "As of",
+            [nameof(PricingLine.Note)] = "Note",
+        },
+        [typeof(SiteProfile)] = new()
+        {
+            [nameof(SiteProfile.Name)] = "Name",
+            [nameof(SiteProfile.IsDefault)] = "Default",
+            [nameof(SiteProfile.Users)] = "Users",
+            [nameof(SiteProfile.Licenses)] = "Licenses",
+            [nameof(SiteProfile.DockDoors)] = "Dock doors",
+            [nameof(SiteProfile.Assets)] = "Trailers / assets",
+            [nameof(SiteProfile.TransactionsPerMonth)] = "Transactions per month",
+            [nameof(SiteProfile.Notes)] = "Notes",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -211,7 +235,7 @@ internal static class PortfolioAuditTrail
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
                 or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument
-                or CapabilityFeature or FeatureAssessment or ComparisonMember)) continue;
+                or CapabilityFeature or FeatureAssessment or ComparisonMember or PricingLine or SiteProfile)) continue;
 
             switch (entry.State)
             {
@@ -384,6 +408,20 @@ internal static class PortfolioAuditTrail
                     if (p.Action == AuditAction.Created) entry.NewValue = what; else entry.OldValue = what;
                     break;
                 }
+                case PricingLine pl:
+                {
+                    // Prices are filed under the application.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.Application, pl.ApplicationId, await AppNameAsync(db, pl.ApplicationId, ct));
+                    var name = $"{PortfolioText.Label(pl.Category)} price “{pl.Label}”";
+                    entry.Field = field is null ? name : $"{name} · {field}";
+                    var price = $"{pl.UnitPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {PortfolioText.Label(pl.Basis).ToLowerInvariant()}, {PortfolioText.Label(pl.Frequency).ToLowerInvariant()}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = price;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = price;
+                    break;
+                }
+                case SiteProfile sp:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.SiteProfile, sp.Id, $"{PortfolioText.Label(sp.Category)}: {sp.Name}", field);
+                    break;
                 case PortfolioDocument doc:
                     (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Document, doc.Id, doc.Title, field);
                     break;

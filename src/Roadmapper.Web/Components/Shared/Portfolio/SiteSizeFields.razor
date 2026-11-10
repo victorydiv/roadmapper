@@ -1,0 +1,22 @@
+@* The size inputs of a site profile. Blank: unknown (lines priced by it can't be costed). *@
+
+<div class="site-sizes">
+    <label class="field">Users <input type="number" min="0" step="1" value="@Draft.Users" @onchange="e => Set(v => Draft.Users = v, e)" /></label>
+    <label class="field">Licenses <input type="number" min="0" step="1" value="@Draft.Licenses" @onchange="e => Set(v => Draft.Licenses = v, e)" /></label>
+    <label class="field">Dock doors <input type="number" min="0" step="1" value="@Draft.DockDoors" @onchange="e => Set(v => Draft.DockDoors = v, e)" /></label>
+    <label class="field">Trailers / assets <input type="number" min="0" step="1" value="@Draft.Assets" @onchange="e => Set(v => Draft.Assets = v, e)" /></label>
+    <label class="field">Transactions / month <input type="number" min="0" step="1" value="@Draft.TransactionsPerMonth" @onchange="e => Set(v => Draft.TransactionsPerMonth = v, e)" /></label>
+</div>
+<div class="muted small">Per-site and flat prices count once. Leave a size blank if you don't know it; prices by it show as incomplete.</div>
+
+@code {
+    [Parameter, EditorRequired] public SiteProfileDraft Draft { get; set; } = new();
+    /// <summary>Called after a size changes (for live "try your site" numbers).</summary>
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private async Task Set(Action<int?> assign, ChangeEventArgs e)
+    {
+        assign(int.TryParse(e.Value?.ToString(), out var n) ? n : null);
+        await OnChange.InvokeAsync();
+    }
+}

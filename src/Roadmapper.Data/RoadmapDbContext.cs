@@ -48,6 +48,8 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<CapabilityFeature> CapabilityFeatures => Set<CapabilityFeature>();
     public DbSet<ComparisonMember> ComparisonMembers => Set<ComparisonMember>();
     public DbSet<FeatureAssessment> FeatureAssessments => Set<FeatureAssessment>();
+    public DbSet<PricingLine> PricingLines => Set<PricingLine>();
+    public DbSet<SiteProfile> SiteProfiles => Set<SiteProfile>();
     public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
 
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>

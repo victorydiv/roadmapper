@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document, Feature }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document, Feature, SiteProfile }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -92,3 +92,12 @@ public enum FeatureAvailability { Yes, Partial, No }
 
 /// <summary>How strong an application is at a feature, for the heat map. No ⇒ None.</summary>
 public enum FeatureStrength { None, Low, Medium, High }
+
+/// <summary>What a price is charged per. Flat and Site cost once per site; the others take the site profile's size.</summary>
+public enum PricingBasis { Flat, Site, User, License, DockDoor, Asset, Transaction, Other }
+
+/// <summary>How often a price is charged. Annual prices count as a twelfth each month.</summary>
+public enum PriceFrequency { Monthly, Annual, OneTime }
+
+/// <summary>Where a price came from.</summary>
+public enum PriceSource { Quote, ListPrice, Estimate }

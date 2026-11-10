@@ -35,6 +35,8 @@ public sealed class PortfolioFile
     public List<PfDocument> Documents { get; set; } = [];
     public List<PfFeature> Features { get; set; } = [];
     public List<PfComparisonMember> ComparisonMembers { get; set; } = [];
+    public List<PfPricingLine> PricingLines { get; set; } = [];
+    public List<PfSiteProfile> SiteProfiles { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -76,7 +78,7 @@ public sealed class PortfolioFile
 
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
-        Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; History ??= [];
+        Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; PricingLines ??= []; SiteProfiles ??= []; History ??= [];
         foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
         foreach (var v in Vendors) { v.Contracts ??= []; v.Escalation ??= []; }
@@ -180,6 +182,9 @@ public sealed class PortfolioFile
         foreach (var f in Features)
             foreach (var r in f.Ratings) Ref(r.ApplicationId, apps, "application", $"Feature “{f.Name}”");
         foreach (var m in ComparisonMembers) Ref(m.ApplicationId, apps, "application", $"The {m.Category} comparison");
+        foreach (var l in PricingLines) Ref(l.ApplicationId, apps, "application", $"Price “{l.Label}”");
+        Named(PricingLines.Select(l => l.Label), "price");
+        Named(SiteProfiles.Select(p => p.Name), "site profile");
         foreach (var d in Documents)
         {
             var where = $"Document “{d.Title}”";
@@ -472,3 +477,11 @@ public sealed record PfRating(int ApplicationId, FeatureAvailability? Availabili
 
 /// <summary>An application from another category added to a category's comparison.</summary>
 public sealed record PfComparisonMember(AppCategory Category, int ApplicationId);
+
+/// <summary>A line of an application's pricing in a category's comparison.</summary>
+public sealed record PfPricingLine(AppCategory Category, int ApplicationId, string Label, PricingBasis Basis, string? Unit, decimal? Quantity,
+    decimal UnitPrice, PriceFrequency Frequency, decimal? Minimum, PriceSource Source, DateOnly? AsOf, string? Note, int SortOrder);
+
+/// <summary>A typical site a category's solutions are costed for.</summary>
+public sealed record PfSiteProfile(int Id, AppCategory Category, string Name, bool IsDefault, int? Users, int? Licenses, int? DockDoors,
+    int? Assets, int? TransactionsPerMonth, string? Notes);

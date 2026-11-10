@@ -5,8 +5,8 @@
 {
     <div class="card stack" style="margin-top:1rem">
         <div class="row">
-            <h2 style="margin:0">Features</h2>
-            <span class="muted small">How @Name compares. Click a row to rate it.</span>
+            <h2 style="margin:0">Features &amp; cost</h2>
+            <span class="muted small">How @Name compares. Click a row to rate it or change a price.</span>
         </div>
         @foreach (var g in groups)
         {
@@ -14,11 +14,18 @@
             <div class="row">
                 <b>@PortfolioText.Label(g.Category) comparison</b>
                 @if (g.Added) { <span class="badge added">added</span> }
-                <span class="muted small">@yes of @g.Features.Count features</span>
+                @if (g.Features.Count > 0) { <span class="muted small">@yes of @g.Features.Count features</span> }
+                @if (g.Cost.IsPriced)
+                {
+                    <span class="small" title="@PortfolioUi.CostTip(Name, g.Cost, g.Site)">· <b>@PortfolioUi.MonthlyText(g.Cost)</b> a month for @g.Site.Name, @PortfolioUi.Money(g.Cost.OneTime) one-time</span>
+                }
                 <span class="spacer"></span>
+                <a class="small" href="@PortfolioUi.CapabilitiesHref(g.Category, "cost")">Cost →</a>
                 <a class="small" href="@PortfolioUi.CapabilitiesHref(g.Category)">Matrix →</a>
                 <a class="small" href="@PortfolioUi.CapabilitiesHref(g.Category, "heatmap")">Heat map →</a>
             </div>
+            @if (g.Features.Count > 0)
+            {
             <table class="tree">
                 <thead><tr><th>Feature</th><th>Has it</th><th>Strength</th><th>Note</th></tr></thead>
                 <tbody>
@@ -42,6 +49,15 @@
                     }
                 </tbody>
             </table>
+            }
+            <div class="row" style="flex-wrap:wrap;gap:.4rem">
+                <span class="muted small">Pricing:</span>
+                @foreach (var l in g.Pricing)
+                {
+                    <button class="btn sm" title="@(l.Note ?? "Edit this price")" @onclick="() => pricing = PricingLineDraft.From(l)">@l.Label: @PortfolioUi.Price(l)</button>
+                }
+                <button class="btn sm" @onclick="() => pricing = PricingLineDraft.New(g.Category, ApplicationId)">+ Add price</button>
+            </div>
         }
     </div>
 }
@@ -52,18 +68,25 @@
                       FeatureDescription="@e.Feature.Description" Current="e.Rating" OnClose="OnClosed" />
 }
 
+@if (pricing is { } pr)
+{
+    <PricingLineEditor Draft="pr" AppName="@Name" OnClose="OnClosed" />
+}
+
 @code {
     [Parameter, EditorRequired] public int ApplicationId { get; set; }
     [Parameter, EditorRequired] public string Name { get; set; } = "";
 
     private List<AppFeatureGroup>? groups;
     private (CapabilityFeature Feature, FeatureAssessment? Rating)? editing;
+    private PricingLineDraft? pricing;
 
     protected override async Task OnParametersSetAsync() => groups = await Svc.GetFeaturesForApplicationAsync(ApplicationId);
 
     private async Task OnClosed(bool saved)
     {
         editing = null;
+        pricing = null;
         if (saved) groups = await Svc.GetFeaturesForApplicationAsync(ApplicationId);
     }
 }

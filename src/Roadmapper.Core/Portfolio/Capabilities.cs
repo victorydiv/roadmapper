@@ -138,17 +138,41 @@ public sealed class CapabilityMatrix
 
     public FeatureAssessment? Cell(int featureId, int appId) => Cells.GetValueOrDefault((featureId, appId));
 
+    /// <summary>The site profile the comparison is costed for.</summary>
+    public SiteProfile Site { get; init; } = new();
+    /// <summary>What each application would cost <see cref="Site"/> (<see cref="CostEstimate.NotPriced"/> when it has no pricing).</summary>
+    public IReadOnlyDictionary<int, CostEstimate> Costs { get; init; } = new Dictionary<int, CostEstimate>();
+
+    public CostEstimate Cost(int appId) => Costs.GetValueOrDefault(appId) ?? CostEstimate.NotPriced;
+    public bool AnyPriced => Costs.Values.Any(c => c.IsPriced);
+
+    /// <summary>The applications with the lowest monthly cost, among those fully costed (empty when none is).</summary>
+    public IReadOnlyList<int> Cheapest
+    {
+        get
+        {
+            var complete = Apps.Where(a => Cost(a.Id).IsComplete).ToList();
+            if (complete.Count == 0) return [];
+            var min = complete.Min(a => Cost(a.Id).Monthly);
+            return complete.Where(a => Cost(a.Id).Monthly == min).Select(a => a.Id).ToList();
+        }
+    }
+
     public int Gaps => Features.Count(f => ByFeature[f.Id].IsGap);
     public int Overlaps => Features.Count(f => ByFeature[f.Id].IsOverlap);
 
     /// <summary>
     /// Builds the comparison. <paramref name="apps"/> may be every application: those of <paramref name="category"/>
     /// and those in <paramref name="addedIds"/> are kept. Retired applications are left out unless
-    /// <paramref name="includeRetired"/>.
+    /// <paramref name="includeRetired"/>. <paramref name="pricing"/> is costed for <paramref name="site"/> (one site
+    /// with unknown sizes when not given).
     /// </summary>
     public static CapabilityMatrix Build(AppCategory category, IEnumerable<CapabilityFeature> features, IEnumerable<Application> apps,
-        IEnumerable<int> addedIds, IEnumerable<FeatureAssessment> assessments, bool includeRetired = false)
+        IEnumerable<int> addedIds, IEnumerable<FeatureAssessment> assessments, bool includeRetired = false,
+        IEnumerable<PricingLine>? pricing = null, SiteProfile? site = null)
     {
+        site ??= SiteProfile.OneSite(category);
+        var lines = (pricing ?? []).Where(l => l.Category == category).ToLookup(l => l.ApplicationId);
         var added = addedIds.ToHashSet();
         var columns = apps
             .Where(a => a.Category == category || added.Contains(a.Id))
@@ -186,6 +210,8 @@ public sealed class CapabilityMatrix
             Cells = cells,
             ByApp = columns.ToDictionary(c => c.Id, c => CoverApp(c.Id)),
             ByFeature = rows.ToDictionary(f => f.Id, f => CoverFeature(f.Id)),
+            Site = site,
+            Costs = columns.ToDictionary(c => c.Id, c => lines[c.Id].Any() ? CostEstimate.For(lines[c.Id], site) : CostEstimate.NotPriced),
         };
     }
 }

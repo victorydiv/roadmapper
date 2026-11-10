@@ -35,9 +35,9 @@ public static class ExportEndpoints
         });
 
         // A category's feature comparison: workbook (comparison + heat map sheets), and the heat map as SVG.
-        app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired) =>
+        app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired, int? profile) =>
             Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) && Enum.IsDefined(c)
-                ? Results.File(Roadmapper.Data.Portfolio.CapabilityExport.ToXlsx(await svc.GetCapabilityMatrixAsync(c, retired == true)),
+                ? Results.File(Roadmapper.Data.Portfolio.CapabilityExport.ToXlsx(await svc.GetCapabilityMatrixAsync(c, retired == true, profile)),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{c}-features-{svc.Today:yyyy-MM-dd}.xlsx")
                 : Results.NotFound());
         app.MapGet("/export/capabilities/{category}/heatmap.svg", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? transpose, bool? retired, bool? download) =>

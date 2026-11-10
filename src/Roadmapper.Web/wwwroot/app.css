@@ -529,3 +529,11 @@ table.matrix tfoot td { background: var(--surface-2); font-size: .78rem; text-al
 .rating-choices label.on { border-color: var(--accent); background: var(--accent-soft); }
 .rating-choices input { display: none; }
 @media print { .matrix-wrap, .heatmap-wrap { overflow: visible; } }
+/* Cost of adoption */
+table.matrix tr.cost-row td { background: var(--surface); font-variant-numeric: tabular-nums; }
+table.matrix td.cheapest, table.cost-table tr.cheapest td { background: #e6f4ea; }
+table.cost-table td.num, table.cost-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.badge.cheapest { background: #e6f4ea; color: #1e6b3a; border-color: #b7dfc4; }
+.cost-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1rem; }
+.site-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; }
+@media (max-width: 640px) { .cost-cards { grid-template-columns: 1fr; } }

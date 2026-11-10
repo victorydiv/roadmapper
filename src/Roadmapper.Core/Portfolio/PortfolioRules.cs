@@ -140,6 +140,22 @@ public static class PortfolioText
 
     public static string Label(FeatureStrength s) => s.ToString();
 
+    public static string Label(PricingBasis b) => b switch
+    {
+        PricingBasis.Flat => "Flat",
+        PricingBasis.Site => "Per site",
+        PricingBasis.User => "Per user",
+        PricingBasis.License => "Per license",
+        PricingBasis.DockDoor => "Per dock door",
+        PricingBasis.Asset => "Per trailer / asset",
+        PricingBasis.Transaction => "Per transaction",
+        _ => "Per other unit",
+    };
+
+    public static string Label(PriceFrequency f) => f switch { PriceFrequency.OneTime => "One-time", _ => f.ToString() };
+
+    public static string Label(PriceSource s) => s switch { PriceSource.ListPrice => "List price", _ => s.ToString() };
+
     public static string Label(Hosting h) => h switch { Hosting.OnPrem => "On-premises", _ => h.ToString() };
 
     public static string Label(SupportRole r) => r switch
@@ -265,6 +281,9 @@ public static class PortfolioText
         DocumentCategory c => Label(c),
         FeatureAvailability a => Label(a),
         FeatureStrength f => Label(f),
+        PricingBasis pb => Label(pb),
+        PriceFrequency pf => Label(pf),
+        PriceSource ps => Label(ps),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

@@ -731,7 +731,7 @@ Uploads appear in SharePoint once OneDrive has synced them (usually seconds). If
 
 ### Capabilities: comparing applications
 
-**Capabilities** (at the top of every page) compares applications feature by feature, one **application category** at a time: for example every YMS you run or are considering, rated on dock scheduling, yard visibility, gate security and so on. The first page shows each category with how many features and applications it has and how much is rated; open a category to work on it. It has three tabs.
+**Capabilities** (at the top of every page) compares applications feature by feature, one **application category** at a time: for example every YMS you run or are considering, rated on dock scheduling, yard visibility, gate security and so on. The first page shows each category with how many features and applications it has and how much is rated; open a category to work on it. It has four tabs: Comparison matrix, Heat map, Cost and Features & applications.
 
 **Features & applications** (set up first):
 
@@ -753,9 +753,32 @@ Each cell has **two ratings**, set together by clicking it on the comparison mat
 
 **Heat map:** applications down the side and features along the bottom, colored by strength (None grey, Low yellow, Medium orange, High red; not rated is white and hatched), with a legend. **Features down the side** swaps them. Hover a cell for its rating and note. **Download SVG** saves a picture you can insert straight into PowerPoint; **Print** prints the page.
 
-**Export to Excel** writes a workbook with a **Comparison** sheet (Yes/Partial/No, coverage, gaps and overlaps) and a **Heat map** sheet (colored strengths), with notes as cell comments.
+**Export to Excel** writes a workbook with a **Comparison** sheet (Yes/Partial/No, coverage, gaps and overlaps) and a **Heat map** sheet (colored strengths), with notes as cell comments. Once anything is priced it adds a **Cost** sheet: every price costed for the selected site profile, and each application's monthly, one-time and first-year totals.
 
-Each application's page has a **Features** section listing its ratings in every comparison it's part of, with links to the matrix and heat map.
+Each application's page has a **Features & cost** section listing its ratings and its prices in every comparison it's part of, with links to the matrix, heat map and cost.
+
+#### Cost of adoption
+
+Solutions are adopted one site (or customer) at a time, so the **Cost** tab answers *"what would this cost a site like ours, per month?"*. Vendors price differently (per user, per dock door, per site, per transaction), so you enter each price **the way it's quoted**, and describe a typical site once; Roadmapper works out comparable figures.
+
+**Site profiles** describe a typical site: e.g. "Small DC: 15 users, 12 dock doors, 2,000 transactions a month". Sizes: users, licenses, dock doors, trailers / assets, transactions per month (leave one blank if you don't know it). **Add site profile** creates one; the first becomes the **default** (used when you open the comparison; change it in **Edit profile**). Pick a profile in **Costed for** to see every number for that size of site. **Try your own site…** lets a site type its own sizes and see the result without saving anything (**Save as a site profile** keeps it).
+
+**Prices**: each application has a card on the Cost tab; **Add price** adds one line of its quote, and clicking a line edits or deletes it:
+
+| Field | Meaning |
+|---|---|
+| Name | e.g. Subscription, Implementation, Hardware, Training |
+| Priced | Flat, Per site, Per user, Per license, Per dock door, Per trailer / asset, Per transaction, or per another unit you name (e.g. kiosk) |
+| Price, How often | The unit price; Monthly, Annual or One-time. Per-transaction prices are monthly (× transactions per month). |
+| Minimum | Optional: the least the line costs per period (e.g. $500 a month) |
+| How many | Optional: a fixed quantity from the quote, used instead of the site profile's (required for "another unit") |
+| Source, As of, Note | Quote, List price or Estimate; the date of the price; anything else (term, discounts) |
+
+**What's worked out**, for the selected site: **Monthly** (monthly prices plus annual ones ÷ 12), **One-time** and **First year** (12 months + one-time), plus monthly cost **per user** and **per dock door**. Flat and per-site prices count once. The table on the Cost tab ranks the applications cheapest first, with how many features each has; the cheapest fully costed one is marked **Lowest monthly**.
+
+If a price is per something the site profile doesn't size (e.g. per dock door, with no dock doors in the profile), it can't be costed: the application is marked **Incomplete**, its totals show "≥" (they leave that price out), and the hover text says which size is missing. An application with no prices shows **Not priced**; neither ever counts as $0.
+
+The **comparison matrix** shows **Monthly**, **One-time** and **First year** rows under Coverage once anything is priced, with the cheapest highlighted and a **Cost for** picker to switch site profile.
 
 ### Portfolio settings, backup and export
 
@@ -773,7 +796,7 @@ Each application's page has a **Features** section listing its ratings in every 
 
 - **Restore** (only into an empty portfolio): brings everything back, including settings and history. Use it to move to a new computer: open your .rmp files first, then restore the .rpf.
 - **Merge:** adds to what's here. A record that already exists is skipped and listed, and what belongs to it (a vendor's contracts, an integration's risks, a process's pain points) comes with it only when the record is new. References point at the existing record, so integrations in the file connect to applications you already have. Settings and history aren't changed.
-- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path; capability features by category and name (ratings by feature and application).
+- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path; capability features by category and name (ratings by feature and application); site profiles by category and name; prices are added only for an application with no prices yet in that comparison.
 - Roadmap links with no matching roadmap or item are listed after the import instead of failing it. Import the missing roadmaps' .rmp files, then merge again, or link them by hand.
 - The import runs in one transaction: if anything fails, nothing is added.
 
@@ -803,7 +826,7 @@ Roadmapper isn't a replacement for Jira; Jira stays the system of record for sto
 | `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, `Capabilities.cs` (`CapabilityMatrix`, `CapabilityRules`), and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
 | `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Capabilities, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook and `CapabilityExport` a category's comparison workbook. |
 | `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
-| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`). |
+| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`, `CapabilityCostTests`). |
 
 ### Data model
 
@@ -836,7 +859,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 - `Benefit`: `RoadmapItemId (cascade), ApplicationId (SetNull), KpiId (SetNull), Category, Description, Unit, ExpectedValue, ExpectedBy, Baseline, Notes`. `BenefitMeasurement` (unique `BenefitId, MeasuredOn`): `Value, Source, Note`.
 - `Decision`: `Title, DecidedOn, Status, Context, DecisionText (column "Decision"), Outcome, DecidedBy, SupersededById (SetNull)`. `DecisionAlternative`: `Option, Pros, Cons, WhyRejected, SortOrder`. `DecisionLink`: exactly one of `ApplicationId, IntegrationId, VendorId, ContractId, ProcessId, RoadmapItemId, TradingPartnerId` (CHECK `CK_DecisionLinks_OneTarget`); each cascades with its target.
 - `PortfolioDocument` (table `Documents`): `Title, Category (Roadmap, Contract, Invoice, Sow, Brd, Other), FileName, LocalPath, Url, SizeBytes, DocumentDate, Notes`; `ProductId` (the product it belongs to, null = shared, SetNull); at most one of `ApplicationId, VendorId, ContractId, RoadmapItemId` (CHECK `CK_Documents_OneTarget`), each SetNull. An uploaded file has `LocalPath` (and `Url` when its folder's address is set); a link has only `Url`.
-- `CapabilityFeature` (table `CapabilityFeatures`, unique `Category, Name`): `Category, Name, Description, SortOrder`. `ComparisonMember` (key `Category, ApplicationId`; cascade with the application): an application added to another category's comparison. `FeatureAssessment` (key `FeatureId, ApplicationId`; cascade both ways): `Availability (Yes, Partial, No)?, Strength (None, Low, Medium, High)?, Note, UpdatedAt`.
+- `CapabilityFeature` (table `CapabilityFeatures`, unique `Category, Name`): `Category, Name, Description, SortOrder`. `ComparisonMember` (key `Category, ApplicationId`; cascade with the application): an application added to another category's comparison. `FeatureAssessment` (key `FeatureId, ApplicationId`; cascade both ways): `Availability (Yes, Partial, No)?, Strength (None, Low, Medium, High)?, Note, UpdatedAt`. `PricingLine` (table `PricingLines`; cascade with the application): `Category, ApplicationId, Label, Basis (Flat, Site, User, License, DockDoor, Asset, Transaction, Other), Unit, Quantity?, UnitPrice, Frequency (Monthly, Annual, OneTime), Minimum?, Source (Quote, ListPrice, Estimate), AsOf?, Note, SortOrder`. `SiteProfile` (table `SiteProfiles`, unique `Category, Name`): `Category, Name, IsDefault, Users?, Licenses?, DockDoors?, Assets?, TransactionsPerMonth?, Notes`.
 - `DocumentFolder`: `Id, ProductId (null = shared; cascade), Category, LocalPath, SharePointUrl`; unique `(ProductId, Category)` and unique `Category` where `ProductId` is null.
 - `PortfolioSettings` (one row, Id 1): `LaborRate, RenewalWarningDays (120), DefaultReviewIntervalMonths (12), JiraBaseUrl`.
 - `PortfolioAuditEntry`: `EntityType, EntityId, EntityName (snapshot), Action, Field, OldValue, NewValue, ChangedAt`; no foreign keys. Contracts and escalation are filed under the vendor; support contacts and initiative links under the application; risks under the integration; process links, pain points and KPIs under the process; measurements under the benefit; links under the decision.
@@ -872,6 +895,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 24. **Decisions:** `SupersededById` only with status Superseded; no loops; deleting a decision clears "superseded by" on those it replaced.
 25. **Documents** (`DocumentLibrary`, `PortfolioService.Documents.cs`): the upload folder is `DocumentLibrary.Resolve`: the product's folder of that type with a local path, else the shared one. A document attached to a roadmap item always gets the item's `ProductId`. A folder's local path must be fully qualified and exist (never created). SharePoint addresses: https only; `/:x:/r/` sharing links lose the prefix and query; `.aspx` views use the `id` (or `RootFolder`) parameter; other `/:x:/?/` sharing links are refused; segments are unescaped and re-escaped. File URL = folder URL + `/` + escaped name, plus `?web=1` for Office files. File names: folder part dropped, `"*:<>?|#%` and control characters → `_`, trimmed, leading `~$` removed, ≤ 200 characters keeping the extension. Upload writes `~$roadmapper-{guid}.tmp` in the folder (OneDrive ignores `~$` files) and then renames it; an existing name is refused unless replacing, and replacing a listed file updates that row. Removing a document never deletes the file.
 26. **Capabilities** (`CapabilityMatrix.Build`, `CapabilityRules`, `PortfolioService.Capabilities.cs`): columns = applications of the category plus `ComparisonMember`s (Retired left out unless asked), the category's own first, then by name; rows = the category's features by `SortOrder`. Feature coverage counts Yes/Partial/No/not rated; gap = no Yes; overlap = 2+ Yes; strongest = applications at the highest strength above None. A rating needs the application in the comparison; No forces strength None (higher is refused); an empty rating (no values, blank note) is deleted. Feature names are unique per category (case-insensitive); deleting a feature deletes its ratings; removing a member keeps its ratings. `PortfolioRules.CountsInPortfolio` (not Retired or Evaluating) decides which applications count in the dashboard, run cost and health; integrations can't be Evaluating.
+27. **Cost of adoption** (`CostEstimate.For`, `CapabilityCost.cs`): each `PricingLine` of an application in the comparison is costed for one site: quantity = the line's own `Quantity`, else the site profile's size for its basis (Flat and Site = 1; Other has none, so needs its own); charge = max(quantity × unit price, minimum). Monthly = Σ monthly charges + Σ annual ÷ 12; one-time = Σ one-time; first year = 12 × monthly + one-time. A line whose quantity is unknown is left out and makes the estimate incomplete (its size is listed in `Missing`); an application with no lines is not priced. `Cheapest` = the fully costed applications with the lowest monthly cost. The site is the chosen profile, else the category's default (the first profile saved, or one marked default; deleting the default promotes the next by name), else "One site" with every size unknown. A price needs the application in the comparison; per-transaction prices must be monthly. Profile names are unique per category (case-insensitive).
 
 ### HTTP endpoints (file downloads)
 
@@ -884,7 +908,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 | `GET /export/{productId}/roadmap.pdf?depth={Goal\|Initiative\|Feature\|Task}&baseline={snapshotId}` | PDF report, shown in the browser (`inline`) |
 | `GET /export/{productId}/timeline.svg?scale=quarter&depth=…&baseline=…&download=true` | Timeline SVG |
 | `GET /export/portfolio.xlsx` | Portfolio workbook (14 sheets) |
-| `GET /export/capabilities/{category}.xlsx?retired=true` | A category's comparison workbook (Comparison and Heat map sheets) |
+| `GET /export/capabilities/{category}.xlsx?retired=true&profile={id}` | A category's comparison workbook (Comparison and Heat map sheets, plus Cost once anything is priced, costed for the site profile or the default) |
 | `GET /export/capabilities/{category}/heatmap.svg?transpose=true&retired=true&download=true` | A category's heat map as SVG |
 | `GET /documents/{id}/file` | A document's saved copy on this PC (PDFs, images and text inline; other types download); 404 when it isn't there |
 | `GET /export/portfolio.rpf` | Portfolio file (whole portfolio as JSON) |
@@ -905,7 +929,8 @@ Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing cha
 | `/processes?domain=&applicationId=` · `/processes/{id}` | Processes in tree order; detail adds pain points, KPIs, integrations |
 | `/benefits?productId=&itemId=&applicationId=&status=` | Labor rate, totals and benefits with actual, realization, status and dollars |
 | `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
-| `/capabilities` · `/capabilities/{category}?retired=true` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, and its applications with coverage |
+| `/capabilities` · `/capabilities/{category}?retired=true&profile={id}` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, its applications with coverage and `cost` (priced, complete, monthly, oneTime, firstYear, missing, lines), and the `site` it's costed for |
+| `/capabilities/{category}/profiles` | A category's site profiles |
 | `/documents?productId=&entityType=&entityId=&category=` | Documents with their SharePoint address, file, date, product and what they're attached to (`entityType`: Application, Vendor (includes its contracts'), Contract, RoadmapItem) |
 | `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
 
@@ -931,14 +956,14 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and import are in `Data/Portfolio/PortfolioService.Files.cs` (`ExportPortfolioAsync` / `ImportPortfolioAsync`). Same JSON conventions as `.rmp`.
 
-- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `features` (with `ratings` by application id), `comparisonMembers`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
+- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `features` (with `ratings` by application id), `comparisonMembers`, `pricingLines`, `siteProfiles`, `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
 - **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`. A document has `product` (a product name; absent = shared) and `attachedTo` with `targetId` (application, vendor, contract) or `item`. Folders and documents whose product doesn't match are listed as unmatched; the document is kept as shared.
 - **Validation** (before anything is written): format and version, unique ids per kind, names present, every id reference present in the file, exactly one source and target per integration. A `.rmp` is recognized and refused with a pointer to the Products page.
 - **Import:** one transaction, staged saves with old→new id maps. Restore requires `IsEmptyAsync()`, imports settings and history (history re-pointed to new ids; unmapped ids become 0) with audit capture off. Merge keeps audit on, keeps settings, skips existing records by the matching rule in [Portfolio settings, backup and export](#portfolio-settings-backup-and-export) and maps references to them; children of skipped records are skipped, except that contracts and KPIs of existing parents are matched by name for references. Unmatched roadmap references are dropped and listed (`PortfolioImportResult.Unmatched`); a benefit whose item doesn't match is skipped.
 
 ### Page routes
 
-Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|features` (category as its enum name, e.g. `YMS`).
+Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|cost|features` (category as its enum name, e.g. `YMS`).
 
 Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?product={id}&attach={key}&add=upload|link` (key: `a`/`v`/`c`/`r` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
 
@@ -1063,6 +1088,9 @@ That's intended: applications with status Evaluating are left out of run cost, h
 
 **An application I rated has disappeared from a comparison.**
 It was added from another category and then removed, or it was retired. Add it again (its ratings come back), or tick **Show retired applications**.
+
+**A solution's cost says "Incomplete" or shows "≥".**
+One of its prices is per something the selected site profile doesn't size, e.g. per dock door when the profile has no dock doors. Hover it to see which; fill that size in with **Edit profile** (or **Try your own site…**), or give the price its own **How many**.
 
 **I uploaded a document but it isn't in SharePoint yet.**
 OneDrive uploads it. Check the OneDrive icon in the taskbar: it may be paused, signed out, or still syncing. The file is safe in the folder meanwhile, and **local copy** opens it.

@@ -23,12 +23,13 @@ else
             </div>
         </div>
         <span class="spacer"></span>
-        <a class="btn" href="/export/capabilities/@(cat).xlsx" download>Export to Excel</a>
+        <a class="btn" href="@ExportHref" download>Export to Excel</a>
     </div>
 
     <nav class="tabs">
         <a class="@(View == "matrix" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat)">Comparison matrix</a>
         <a class="@(View == "heatmap" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "heatmap")">Heat map</a>
+        <a class="@(View == "cost" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "cost")">Cost</a>
         <a class="@(View == "features" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "features")">Features &amp; applications</a>
     </nav>
 
@@ -135,6 +136,143 @@ else
             </div>
         </div>
     }
+    else if (View == "cost")
+    {
+        <div class="card stack" style="margin-bottom:1rem">
+            <div class="row" style="flex-wrap:wrap">
+                <b>Costed for</b>
+                <select value="@profileId" @onchange="OnProfileChanged">
+                    @if (profiles.Count == 0)
+                    {
+                        <option value="-1">One site (no profiles yet)</option>
+                    }
+                    @foreach (var p in profiles)
+                    {
+                        <option value="@p.Id">@p.Name@(p.IsDefault ? " (default)" : "")</option>
+                    }
+                    <option value="0">Try your own site…</option>
+                </select>
+                <span class="muted small">@PortfolioUi.Sizes(matrix.Site)</span>
+                <span class="spacer"></span>
+                @if (profiles.FirstOrDefault(p => p.Id == matrix.Site.Id && matrix.Site.Id > 0) is { } current)
+                {
+                    <button class="btn sm" @onclick="() => editingProfile = SiteProfileDraft.From(current)">Edit profile</button>
+                }
+                <button class="btn sm" @onclick="NewProfile">Add site profile</button>
+            </div>
+            @if (profileId == 0)
+            {
+                <div class="muted small">Type your site's sizes to see what each solution would cost it. Nothing is saved unless you save it as a profile.</div>
+                <SiteSizeFields Draft="trial" OnChange="LoadAsync" />
+                <div><button class="btn sm" @onclick="SaveTrialAsProfile">Save as a site profile</button></div>
+            }
+            else if (profiles.Count == 0)
+            {
+                <div class="muted small">
+                    Solutions are adopted one site at a time, so costs are worked out for a typical site. Add a site profile (e.g. “Small DC: 15 users, 10 dock doors”)
+                    so per-user, per-door and per-transaction prices can be costed; until then only flat and per-site prices are.
+                </div>
+            }
+        </div>
+
+        @if (matrix.Apps.Count == 0)
+        {
+            <div class="card empty">No applications to compare yet. <a href="@PortfolioUi.CapabilitiesHref(cat, "features")">Set up applications →</a></div>
+        }
+        else
+        {
+            <div class="card" style="padding:0;margin-bottom:1rem">
+                <table class="tree cost-table">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th class="num">Monthly</th>
+                            <th class="num">One-time</th>
+                            <th class="num">First year</th>
+                            <th class="num" title="Monthly cost per user">Per user / mo</th>
+                            <th class="num" title="Monthly cost per dock door">Per door / mo</th>
+                            <th class="num" title="Features it has (Yes) of all features">Features</th>
+                            <th>Prices from</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in CostOrder())
+                        {
+                            var k = matrix.Cost(a.Id);
+                            var cv = matrix.ByApp[a.Id];
+                            <tr class="@(matrix.Cheapest.Contains(a.Id) ? "cheapest" : "")" title="@PortfolioUi.CostTip(a.Name, k, matrix.Site)">
+                                <td>
+                                    <a href="/portfolio/applications/@a.Id">@a.Name</a>
+                                    @if (a.Application.Status != LifecycleStatus.Active) { <LifecycleBadge Status="a.Application.Status" /> }
+                                    @if (matrix.Cheapest.Contains(a.Id)) { <span class="badge cheapest">Lowest monthly</span> }
+                                </td>
+                                @if (!k.IsPriced)
+                                {
+                                    <td colspan="5" class="muted small">Not priced</td>
+                                }
+                                else
+                                {
+                                    <td class="num"><b>@PortfolioUi.MonthlyText(k)</b></td>
+                                    <td class="num">@PortfolioUi.Money(k.OneTime)</td>
+                                    <td class="num">@((k.IsComplete ? "" : "≥ ") + PortfolioUi.Money(Math.Round(k.FirstYear)))</td>
+                                    <td class="num">@PortfolioUi.Money(k.MonthlyPer(matrix.Site.Users))</td>
+                                    <td class="num">@PortfolioUi.Money(k.MonthlyPer(matrix.Site.DockDoors))</td>
+                                }
+                                <td class="num">@(matrix.Features.Count == 0 ? "–" : $"{cv.Yes}/{cv.Total}")</td>
+                                <td class="small">
+                                    @string.Join(", ", k.Sources.Select(PortfolioText.Label))
+                                    @if (k.IsPriced && !k.IsComplete) { <span class="badge gap" title="The site profile doesn't size: @string.Join(", ", k.Missing)">Incomplete</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="muted small" style="margin-bottom:1rem">
+                Monthly = monthly prices plus annual ones ÷ 12; first year = 12 months plus one-time costs. “≥” and Incomplete: some prices are per something the
+                site profile doesn't size, so they're left out. Hover a row for details.
+            </div>
+
+            <div class="cost-cards">
+                @foreach (var a in matrix.Apps)
+                {
+                    var k = matrix.Cost(a.Id);
+                    <div class="card stack">
+                        <div class="row">
+                            <h3 style="margin:0"><a href="/portfolio/applications/@a.Id">@a.Name</a></h3>
+                            @if (a.Added) { <span class="badge added">@PortfolioText.Label(a.Application.Category)</span> }
+                            <span class="spacer"></span>
+                            <button class="btn sm" @onclick="() => pricing = (PricingLineDraft.New(cat, a.Id), a.Name)">Add price</button>
+                        </div>
+                        @if (!k.IsPriced)
+                        {
+                            <div class="muted small">No pricing yet. Add each part of the quote: subscription, implementation, hardware, support.</div>
+                        }
+                        else
+                        {
+                            <table class="tree">
+                                <thead><tr><th>Price</th><th>As quoted</th><th class="num">Qty</th><th class="num">Charge</th><th>Source</th></tr></thead>
+                                <tbody>
+                                    @foreach (var line in k.Lines)
+                                    {
+                                        var l = line.Line;
+                                        <tr style="cursor:pointer" title="@(l.Note ?? "Click to edit")" @onclick="() => pricing = (PricingLineDraft.From(l), a.Name)">
+                                            <td>@l.Label@if (l.Note is not null) { <span class="note-dot muted"> ●</span> }</td>
+                                            <td class="small">@PortfolioUi.Price(l)</td>
+                                            <td class="num">@(line.Quantity is { } q ? q.ToString("0.##") : "?")</td>
+                                            <td class="num">@(line.Charge is { } ch ? PortfolioUi.Money(Math.Round(ch, 2)) : "–")@(l.Frequency == PriceFrequency.OneTime ? "" : l.Frequency == PriceFrequency.Annual ? " /yr" : " /mo")</td>
+                                            <td class="small">@PortfolioText.Label(l.Source)@(l.AsOf is { } d ? $", {PortfolioUi.Date(d)}" : "")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <div class="small"><b>@PortfolioUi.MonthlyText(k)</b> a month · @PortfolioUi.Money(k.OneTime) one-time@(k.IsComplete ? "" : $" · needs {string.Join(", ", k.Missing)}")</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
     else if (matrix.Features.Count == 0 || matrix.Apps.Count == 0)
     {
         <div class="card empty">
@@ -163,6 +301,18 @@ else
     {
         <div class="toolbar">
             <label class="check"><input type="checkbox" @bind="gapsOnly" /><span>Only gaps</span></label>
+            @if (matrix.AnyPriced && profiles.Count > 0)
+            {
+                <label class="check" title="The site the cost rows are worked out for">Cost for
+                    <select value="@profileId" @onchange="OnProfileChanged">
+                        @foreach (var p in profiles)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                        @if (profileId == 0) { <option value="0">Your site (trial)</option> }
+                    </select>
+                </label>
+            }
             <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Include retired</span></label>
             <span class="spacer"></span>
             <span class="small"><span class="av-Yes">✓</span> Yes · <span class="av-Partial">◐</span> Partial · <span class="av-No">✗</span> No · blank: not rated. Shading shows strength. Click a cell to rate it.</span>
@@ -219,9 +369,46 @@ else
                         <td></td>
                         <td></td>
                     </tr>
+                    @if (matrix.AnyPriced)
+                    {
+                        <tr class="cost-row">
+                            <td style="text-align:left" title="Costed for @matrix.Site.Name: @PortfolioUi.Sizes(matrix.Site)"><b>Monthly</b> <span class="muted">· @matrix.Site.Name</span></td>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                var k = matrix.Cost(a.Id);
+                                <td class="@(matrix.Cheapest.Contains(a.Id) ? "cheapest" : "")" title="@PortfolioUi.CostTip(a.Name, k, matrix.Site)"><b>@PortfolioUi.MonthlyText(k)</b></td>
+                            }
+                            <td colspan="2" rowspan="3" class="muted" style="text-align:left;vertical-align:top"><a href="@PortfolioUi.CapabilitiesHref(cat, "cost")">Cost details →</a></td>
+                        </tr>
+                        <tr class="cost-row">
+                            <td style="text-align:left"><b>One-time</b></td>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                var k = matrix.Cost(a.Id);
+                                <td>@(k.IsPriced ? PortfolioUi.Money(k.OneTime) : "–")</td>
+                            }
+                        </tr>
+                        <tr class="cost-row">
+                            <td style="text-align:left"><b>First year</b></td>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                var k = matrix.Cost(a.Id);
+                                <td>@(k.IsPriced ? (k.IsComplete ? "" : "≥ ") + PortfolioUi.Money(Math.Round(k.FirstYear)) : "–")</td>
+                            }
+                        </tr>
+                    }
                 </tfoot>
             </table>
         </div>
+    }
+
+    @if (pricing is { } pr)
+    {
+        <PricingLineEditor Draft="pr.Draft" AppName="@pr.App" OnClose="OnPriced" />
+    }
+    @if (editingProfile is { } ep)
+    {
+        <SiteProfileEditor Draft="ep" OnClose="OnProfileSaved" />
     }
 
     @if (rating is { } r)
@@ -233,7 +420,7 @@ else
 
 @code {
     [Parameter] public string CategoryName { get; set; } = "";
-    /// <summary>matrix (default), heatmap or features.</summary>
+    /// <summary>matrix (default), heatmap, cost or features.</summary>
     [SupplyParameterFromQuery(Name = "view")] public string? ViewParam { get; set; }
 
     private AppCategory? category;
@@ -245,8 +432,16 @@ else
     private int addAppId;
     private bool includeRetired, transpose, gapsOnly;
     private (CapabilityFeature Feature, MatrixApp App)? rating;
+    private List<SiteProfile> profiles = [];
+    /// <summary>The site profile costed for: a saved profile's id, 0 for "try your own site", -1 for the category default.</summary>
+    private int profileId = -1;
+    private SiteProfileDraft trial = new();
+    private SiteProfileDraft? editingProfile;
+    private (PricingLineDraft Draft, string App)? pricing;
+    private AppCategory? loadedCategory;
 
-    private string View => ViewParam is "heatmap" or "features" ? ViewParam : "matrix";
+    private string View => ViewParam is "heatmap" or "features" or "cost" ? ViewParam : "matrix";
+    private string ExportHref => $"/export/capabilities/{category}.xlsx?retired={includeRetired}" + (profileId > 0 ? $"&profile={profileId}" : "");
     private string Title => category is { } c ? PortfolioText.Label(c) : CategoryName;
 
     protected override async Task OnParametersSetAsync()
@@ -258,7 +453,15 @@ else
     private async Task LoadAsync()
     {
         if (category is not { } cat) return;
-        matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired);
+        if (loadedCategory != cat)
+        {
+            (loadedCategory, profileId, trial) = (cat, -1, new SiteProfileDraft { Category = cat, Name = "Your site" });
+        }
+        profiles = await Svc.GetSiteProfilesAsync(cat);
+        if (profileId > 0 && profiles.All(p => p.Id != profileId)) profileId = -1;
+        trial.Category = cat;
+        matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired, profileId > 0 ? profileId : null, profileId == 0 ? trial.ToProfile() : null);
+        if (profileId < 0 && matrix.Site.Id > 0) profileId = matrix.Site.Id;
         var inMatrix = matrix.Apps.Select(a => a.Id).ToHashSet();
         others = (await Svc.GetApplicationsAsync())
             .Where(a => a.Category != cat && !inMatrix.Contains(a.Id) && a.Status != LifecycleStatus.Retired)
@@ -307,6 +510,46 @@ else
     }
 
     private void Rate(CapabilityFeature f, MatrixApp a) => rating = (f, a);
+
+    private async Task OnProfileChanged(ChangeEventArgs e)
+    {
+        profileId = int.TryParse(e.Value?.ToString(), out var id) ? id : -1;
+        await LoadAsync();
+    }
+
+    private void NewProfile()
+    {
+        if (category is { } cat) editingProfile = new SiteProfileDraft { Category = cat, IsDefault = profiles.Count == 0 };
+    }
+
+    private void SaveTrialAsProfile()
+    {
+        if (category is not { } cat) return;
+        editingProfile = new SiteProfileDraft
+        {
+            Category = cat, Name = "", Users = trial.Users, Licenses = trial.Licenses, DockDoors = trial.DockDoors, Assets = trial.Assets,
+            TransactionsPerMonth = trial.TransactionsPerMonth, IsDefault = profiles.Count == 0,
+        };
+    }
+
+    private async Task OnProfileSaved(int? id)
+    {
+        editingProfile = null;
+        if (id is null) return;
+        profileId = id > 0 ? id.Value : -1;
+        await LoadAsync();
+    }
+
+    private async Task OnPriced(bool saved)
+    {
+        pricing = null;
+        if (saved) await LoadAsync();
+    }
+
+    /// <summary>Applications for the cost table: fully costed by monthly cost, then incomplete, then not priced.</summary>
+    private IEnumerable<MatrixApp> CostOrder() => matrix!.Apps
+        .OrderBy(a => matrix.Cost(a.Id) switch { { IsComplete: true } => 0, { IsPriced: true } => 1, _ => 2 })
+        .ThenBy(a => matrix.Cost(a.Id).Monthly).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase);
 
     private async Task OnRated(bool saved)
     {

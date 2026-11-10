@@ -365,6 +365,30 @@ internal static class PortfolioModel
             e.HasIndex(a => a.ApplicationId);
         });
 
+        b.Entity<PricingLine>(e =>
+        {
+            e.ToTable("PricingLines");
+            e.Property(l => l.Category).HasConversion<string>().HasMaxLength(30);
+            e.Property(l => l.Label).IsRequired().HasMaxLength(Name);
+            e.Property(l => l.Basis).HasConversion<string>().HasMaxLength(20);
+            e.Property(l => l.Unit).HasMaxLength(40);
+            e.Property(l => l.Frequency).HasConversion<string>().HasMaxLength(20);
+            e.Property(l => l.Source).HasConversion<string>().HasMaxLength(20);
+            e.Property(l => l.Note).HasMaxLength(CapabilityRules.MaxNoteLength);
+            e.HasOne(l => l.Application).WithMany().HasForeignKey(l => l.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(l => new { l.Category, l.ApplicationId });
+            e.HasIndex(l => l.ApplicationId);
+        });
+
+        b.Entity<SiteProfile>(e =>
+        {
+            e.ToTable("SiteProfiles");
+            e.Property(p => p.Category).HasConversion<string>().HasMaxLength(30);
+            e.Property(p => p.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
+            e.Property(p => p.Notes).HasMaxLength(1000);
+            e.HasIndex(p => new { p.Category, p.Name }).IsUnique();
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

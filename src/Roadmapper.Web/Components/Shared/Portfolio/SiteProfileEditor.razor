@@ -1,0 +1,72 @@
+@* Add or change a site profile: a typical site a category's solutions are costed for. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal" style="max-width:560px">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">@(draft.IsNew ? "Add site profile" : "Edit site profile")</h2>
+                <div class="muted small">@PortfolioText.Label(draft.Category) · one site's size in the units vendors price by</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(null)">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            <label class="field">Name
+                <input @bind="draft.Name" placeholder="e.g. Small DC, Large cross-dock" />
+            </label>
+            <SiteSizeFields Draft="draft" />
+            <label class="field">Notes
+                <textarea rows="2" @bind="draft.Notes" placeholder="e.g. based on the Memphis site"></textarea>
+            </label>
+            <label class="check"><input type="checkbox" @bind="draft.IsDefault" /><span>Default for @PortfolioText.Label(draft.Category) (used when you open the comparison)</span></label>
+        </div>
+        <div class="modal-foot">
+            @if (!draft.IsNew)
+            {
+                @if (confirmDelete)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Delete this profile</button>
+                }
+                else
+                {
+                    <button type="button" class="btn danger" @onclick="() => confirmDelete = true">Delete</button>
+                }
+            }
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(null)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SiteProfileDraft Draft { get; set; } = new();
+    /// <summary>Called with the saved profile's id, 0 when deleted, or null when cancelled.</summary>
+    [Parameter] public EventCallback<int?> OnClose { get; set; }
+
+    private SiteProfileDraft draft = new();
+    private string? error;
+    private bool saving, confirmDelete;
+
+    protected override void OnInitialized() => draft = Draft;
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try { await OnClose.InvokeAsync(await Svc.SaveSiteProfileAsync(draft)); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteSiteProfileAsync(draft.Id);
+        await OnClose.InvokeAsync(0);
+    }
+}
