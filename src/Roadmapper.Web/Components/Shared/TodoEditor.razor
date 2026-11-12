@@ -1,0 +1,189 @@
+@* Add or change a to-do: what, when it's due, when to start reminding, priority, and what it's about. *@
+@inject PortfolioService Svc
+@inject TodoEvents Events
+
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal-head">
+            <h2 style="margin:0">@(draft.IsNew ? "New to-do" : "Edit to-do")</h2>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => CloseAsync(false)">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            <label class="field">To do
+                <input @bind="draft.Title" placeholder="e.g. Send Kaleris the signed SOW, chase EDI test results" autofocus />
+            </label>
+            <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+                <label class="field" style="flex:1;min-width:150px">Due
+                    <InputDate @bind-Value="draft.DueDate" @bind-Value:after="OnDueChanged" />
+                </label>
+                <label class="field" style="flex:1;min-width:170px" title="When the reminder starts showing on the dashboards">Remind me
+                    <select @bind="remind" @bind:after="ApplyRemind">
+                        @if (draft.DueDate is not null)
+                        {
+                            <option value="due">On the due date</option>
+                            @foreach (var (days, label) in Leads)
+                            {
+                                <option value="@days">@label</option>
+                            }
+                        }
+                        else
+                        {
+                            <option value="due">No reminder</option>
+                        }
+                        <option value="date">On a date…</option>
+                    </select>
+                </label>
+                @if (remind == "date")
+                {
+                    <label class="field" style="flex:1;min-width:150px">Remind on
+                        <InputDate @bind-Value="draft.RemindOn" />
+                    </label>
+                }
+                <label class="field" style="flex:0 0 120px">Priority
+                    <select @bind="draft.Priority">
+                        @foreach (var p in Enum.GetValues<TodoPriority>().Reverse())
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+                <label class="field" style="flex:0 0 170px">About
+                    <select @bind="kind" @bind:after="OnKindChanged">
+                        <option value="">Nothing in particular</option>
+                        @foreach (var k in Enum.GetValues<TodoLinkKind>())
+                        {
+                            <option value="@k">@TodoRules.Label(k)</option>
+                        }
+                    </select>
+                </label>
+                @if (kind is { Length: > 0 })
+                {
+                    <label class="field" style="flex:1;min-width:220px">@TodoRules.Label(Enum.Parse<TodoLinkKind>(kind))
+                        @if (options is null)
+                        {
+                            <span class="muted small">Loading…</span>
+                        }
+                        else
+                        {
+                            <select @bind="linkKey">
+                                <option value="">— choose —</option>
+                                @foreach (var o in options.Where(o => o.Link.Kind.ToString() == kind))
+                                {
+                                    <option value="@o.Link.Key">@o.Name@(o.Detail is { } d ? $" ({d})" : "")</option>
+                                }
+                            </select>
+                        }
+                    </label>
+                }
+            </div>
+            <label class="field">Notes
+                <textarea rows="3" @bind="draft.Notes"></textarea>
+            </label>
+            @if (!draft.IsNew)
+            {
+                <label class="check">
+                    <input type="checkbox" @bind="draft.Done" /> Done@(Original?.CompletedOn is { } c ? $" ({PortfolioUi.Date(c)})" : "")
+                </label>
+            }
+        </div>
+        <div class="modal-foot">
+            @if (!draft.IsNew)
+            {
+                @if (confirmingDelete)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Confirm delete</button>
+                    <button type="button" class="btn" @onclick="() => confirmingDelete = false">Keep</button>
+                }
+                else
+                {
+                    <button type="button" class="btn danger" @onclick="() => confirmingDelete = true">Delete</button>
+                }
+            }
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => CloseAsync(false)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">@(draft.IsNew ? "Add" : "Save")</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TodoDraft Draft { get; set; } = new();
+    /// <summary>The saved to-do being edited, for its completion date.</summary>
+    [Parameter] public TodoItem? Original { get; set; }
+    /// <summary>True when something was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private static readonly (string Days, string Label)[] Leads =
+        [("1", "1 day before"), ("2", "2 days before"), ("3", "3 days before"), ("7", "1 week before"), ("14", "2 weeks before"), ("30", "1 month before")];
+
+    private TodoDraft draft = new();
+    private List<TodoLinkOption>? options;
+    private string kind = "", linkKey = "", remind = "due";
+    private string? error;
+    private bool saving, confirmingDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        kind = draft.Link?.Kind.ToString() ?? "";
+        linkKey = draft.Link?.Key ?? "";
+        remind = draft.RemindOn is not { } r ? "due"
+            : draft.DueDate is { } d && Leads.FirstOrDefault(l => l.Days == (d.DayNumber - r.DayNumber).ToString()) is { Days: not null } lead ? lead.Days
+            : "date";
+        options = await Svc.GetTodoLinkOptionsAsync();
+    }
+
+    private void OnKindChanged() => linkKey = "";
+
+    /// <summary>A reminder set as "n days before" follows the due date.</summary>
+    private void OnDueChanged()
+    {
+        if (draft.DueDate is null && remind != "date") remind = "due";
+        ApplyRemind();
+    }
+
+    private void ApplyRemind()
+    {
+        if (remind == "due") draft.RemindOn = null;
+        else if (int.TryParse(remind, out var days)) draft.RemindOn = draft.DueDate?.AddDays(-days);
+        else draft.RemindOn ??= draft.DueDate ?? DateOnly.FromDateTime(DateTime.Today);
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (kind is { Length: > 0 } && linkKey is not { Length: > 0 })
+        {
+            error = $"Choose the {TodoRules.Label(Enum.Parse<TodoLinkKind>(kind)).ToLowerInvariant()}, or set About to “Nothing in particular”.";
+            return;
+        }
+        draft.Link = TodoLink.Parse(linkKey);
+        saving = true;
+        try
+        {
+            await Svc.SaveTodoAsync(draft);
+            await CloseAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteTodoAsync(draft.Id);
+        await CloseAsync(true);
+    }
+
+    private async Task CloseAsync(bool changed)
+    {
+        if (changed) Events.Notify();
+        await OnClose.InvokeAsync(changed);
+    }
+}

@@ -86,6 +86,28 @@ public static class PortfolioUi
         _ => d.RoadmapItem is { } i ? $"/products/{i.ProductId}" : null,
     };
 
+    /// <summary>The page of what a to-do is about (a roadmap item opens in its product's tree).</summary>
+    public static string? TodoLinkHref(TodoItem t) => t.Link is not { } l ? null : l.Kind switch
+    {
+        TodoLinkKind.Product => $"/products/{l.Id}/dashboard",
+        TodoLinkKind.RoadmapItem => t.ProductId is { } pid ? $"/products/{pid}?item={l.Id}" : null,
+        TodoLinkKind.Application => $"/portfolio/applications/{l.Id}",
+        TodoLinkKind.Decision => $"/portfolio/decisions/{l.Id}",
+        TodoLinkKind.Vendor => $"/portfolio/vendors/{l.Id}",
+        _ => "/portfolio/contacts",
+    };
+
+    /// <summary>"Today", "Tomorrow", "3 days overdue", "Fri, Nov 20"…, for a to-do's due date.</summary>
+    public static string Due(DateOnly d, DateOnly today) => (d.DayNumber - today.DayNumber) switch
+    {
+        0 => "Today",
+        1 => "Tomorrow",
+        -1 => "Yesterday",
+        < -1 and var n => $"{-n} days overdue",
+        < 7 => d.ToString("ddd, MMM d", Us),
+        _ => d.ToString(d.Year == today.Year ? "MMM d" : "MMM d, yyyy", Us),
+    };
+
     /// <summary>A product's development pipeline, opened at one project when given.</summary>
     public static string DevProjectHref(int productId, int? projectId = null) =>
         $"/products/{productId}/development" + (projectId is { } id ? $"?project={id}" : "");

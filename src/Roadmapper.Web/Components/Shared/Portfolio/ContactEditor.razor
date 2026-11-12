@@ -63,6 +63,13 @@
                 <label class="field">Notes
                     <InputTextArea @bind-Value="draft.Notes" />
                 </label>
+                @if (!draft.IsNew)
+                {
+                    <fieldset>
+                        <legend>To-dos</legend>
+                        <TodoMini Link="new TodoLink(TodoLinkKind.Contact, draft.Id)" What="contact" />
+                    </fieldset>
+                }
             </div>
 
             <div class="modal-foot">

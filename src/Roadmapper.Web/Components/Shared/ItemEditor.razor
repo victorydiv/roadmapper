@@ -459,6 +459,11 @@
                     </fieldset>
 
                     <fieldset>
+                        <legend>To-dos</legend>
+                        <TodoMini Link="new TodoLink(TodoLinkKind.RoadmapItem, draft.Id)" What="@draft.ItemType.ToString().ToLowerInvariant()" />
+                    </fieldset>
+
+                    <fieldset>
                         <legend>Documents</legend>
                         @if (documents is { Count: > 0 })
                         {

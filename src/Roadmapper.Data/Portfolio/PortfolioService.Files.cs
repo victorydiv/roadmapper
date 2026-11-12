@@ -194,6 +194,13 @@ public partial class PortfolioService
                     Item = p.RoadmapItemId is { } ri ? index.RefOf(ri) : null, TargetDate = p.TargetDate, CompletedOn = p.CompletedOn, CreatedAt = p.CreatedAt,
                     Costs = p.CostLines.OrderBy(l => l.SortOrder).ThenBy(l => l.Id).Select(l => new PfDevCost(l.CategoryId, l.Hours, l.Rate, l.FixedAmount, l.Note)).ToList(),
                 }).ToList(),
+            Todos = (await db.Todos.AsNoTracking().OrderBy(t => t.Id).ToListAsync()).Select(t => new PfTodo
+            {
+                Title = t.Title, Notes = t.Notes, DueDate = t.DueDate, RemindOn = t.RemindOn, Priority = t.Priority, CompletedOn = t.CompletedOn,
+                Product = t.RoadmapItemId is null && t.ProductId is { } tp ? productNames.GetValueOrDefault(tp) : null,
+                Item = t.RoadmapItemId is { } ti ? index.RefOf(ti) : null,
+                ApplicationId = t.ApplicationId, DecisionId = t.DecisionId, VendorId = t.VendorId, ContactId = t.ContactId, CreatedAt = t.CreatedAt,
+            }).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -650,6 +657,41 @@ public partial class PortfolioService
         await db.SaveChangesAsync();
         foreach (var (p, row) in newDevProjects) devProjectMap[p.Id] = row.Id;
         result.Count("development projects", newDevProjects.Count);
+
+        // To-dos: on a merge, one with the same title, due date and link as one already here is skipped.
+        var existingTodos = await db.Todos.AsNoTracking().ToListAsync();
+        var newTodos = 0;
+        foreach (var t in file.Todos)
+        {
+            var row = new TodoItem
+            {
+                Title = t.Title.Trim(), Notes = t.Notes, DueDate = t.DueDate, RemindOn = t.RemindOn, Priority = t.Priority, CompletedOn = t.CompletedOn,
+                ApplicationId = Map(appMap, t.ApplicationId), DecisionId = Map(decisionMap, t.DecisionId),
+                VendorId = Map(vendorMap, t.VendorId), ContactId = Map(contactMap, t.ContactId),
+                CreatedAt = t.CreatedAt == default ? now : t.CreatedAt, UpdatedAt = now,
+            };
+            if (t.Item is not null && Item(t.Item, $"To-do “{t.Title}”") is { } tid) row.RoadmapItemId = tid;
+            else if (t.Product is not null)
+            {
+                if (index.ProductOf(t.Product) is { } tp) row.ProductId = tp;
+                else result.Unmatched.Add($"To-do “{t.Title}”: roadmap {t.Product}");
+            }
+            // Keep one link, the most specific; a roadmap item brings its product.
+            var link = TodoLink.Of(row);
+            TodoLink.Apply(link, row);
+            if (link is { Kind: TodoLinkKind.RoadmapItem } il)
+                row.ProductId = await db.Items.Where(i => i.Id == il.Id).Select(i => (int?)i.ProductId).FirstAsync();
+            if (merge && existingTodos.Any(x => string.Equals(x.Title, row.Title, StringComparison.OrdinalIgnoreCase) && x.DueDate == row.DueDate
+                    && TodoLink.Of(x) == TodoLink.Of(row)))
+            {
+                result.Skipped.Add($"To-do {row.Title} (already here)");
+                continue;
+            }
+            db.Todos.Add(row);
+            newTodos++;
+        }
+        await db.SaveChangesAsync();
+        result.Count("to-dos", newTodos);
 
         // Documents: the files themselves stay in SharePoint; this brings back the list and what each is attached to.
         var documentMap = new Dictionary<int, int>();

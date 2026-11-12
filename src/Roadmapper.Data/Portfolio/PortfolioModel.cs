@@ -434,6 +434,29 @@ internal static class PortfolioModel
             e.HasIndex(l => l.CategoryId);
         });
 
+        b.Entity<TodoItem>(e =>
+        {
+            e.ToTable("Todos", t => t.HasCheckConstraint("CK_Todos_OneLink",
+                "(\"RoadmapItemId\" IS NOT NULL) + (\"ApplicationId\" IS NOT NULL) + (\"DecisionId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContactId\" IS NOT NULL) <= 1"));
+            e.Property(t => t.Title).IsRequired().HasMaxLength(TodoRules.MaxTitleLength);
+            e.Property(t => t.Notes).HasMaxLength(PortfolioRules.MaxNotesLength);
+            e.Property(t => t.Priority).HasConversion<string>().HasMaxLength(10);
+            // Deleting what a to-do is about keeps the to-do, unlinked.
+            e.HasOne(t => t.Product).WithMany().HasForeignKey(t => t.ProductId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.RoadmapItem).WithMany().HasForeignKey(t => t.RoadmapItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Application).WithMany().HasForeignKey(t => t.ApplicationId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Decision).WithMany().HasForeignKey(t => t.DecisionId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Vendor).WithMany().HasForeignKey(t => t.VendorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Contact).WithMany().HasForeignKey(t => t.ContactId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(t => t.ProductId);
+            e.HasIndex(t => t.RoadmapItemId);
+            e.HasIndex(t => t.ApplicationId);
+            e.HasIndex(t => t.DecisionId);
+            e.HasIndex(t => t.VendorId);
+            e.HasIndex(t => t.ContactId);
+            e.HasIndex(t => new { t.CompletedOn, t.DueDate });
+        });
+
         b.Entity<PortfolioSettings>(e =>
         {
             e.Property(s => s.Id).ValueGeneratedNever();

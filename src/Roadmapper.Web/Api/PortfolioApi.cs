@@ -153,6 +153,17 @@ public static class PortfolioApi
             await svc.GetDevPipelineAsync(productId) is { } p ? Results.Ok(DevPipelineDto.From(p)) : Results.NotFound());
         api.MapGet("/development/categories", async (PortfolioService svc) => await svc.GetDevCostCategoriesAsync());
 
+        // To-dos: open ones by default; done=true adds finished ones, product={id} narrows to one product,
+        // reminders=true only those whose reminder day has come.
+        api.MapGet("/todos", async (PortfolioService svc, bool? done, int? product, bool? reminders) =>
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var todos = reminders == true ? await svc.GetRemindersAsync(product)
+                : await svc.GetTodosAsync(new TodoQuery { ProductId = product, IncludeDone = done == true });
+            return todos.Select(t => new TodoDto(t.Id, t.Title, t.Notes, t.DueDate, t.RemindOn, t.Priority.ToString(), t.CompletedOn,
+                t.Link?.Kind.ToString(), t.Link?.Id, t.LinkName, t.ProductId, TodoRules.Bucket(t, today).ToString(), TodoRules.NeedsReminder(t, today)));
+        });
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -440,6 +451,10 @@ public record DocumentDto(int Id, string Title, DocumentCategory Category, strin
     public static DocumentDto From(PortfolioDocument d) => new(d.Id, d.Title, d.Category, d.Url, d.FileName, d.LocalPath, d.SizeBytes,
         d.DocumentDate, d.Notes, Ref.Of(d.Product), d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
 }
+
+/// <summary>A to-do; <c>about</c> is the kind of record it's linked to (Product, RoadmapItem, Application, Decision, Vendor, Contact).</summary>
+public record TodoDto(int Id, string Title, string? Notes, DateOnly? DueDate, DateOnly? RemindOn, string Priority, DateOnly? CompletedOn,
+    string? About, int? AboutId, string? AboutName, int? ProductId, string Bucket, bool ReminderDue);
 
 public record DevPipelineDto(Ref Product, IReadOnlyList<DevPipelineDto.Project> Projects, IReadOnlyList<DevPipelineDto.StatusTotal> ByStatus,
     decimal Proposed, decimal Committed, decimal Completed)

@@ -1,0 +1,102 @@
+@* A card of to-dos: the reminders that are due (on the dashboards), or the to-dos about one record or product, with + Add. *@
+@implements IDisposable
+@inject PortfolioService Svc
+@inject TodoEvents Events
+
+<div class="card stack @CssClass" style="@(CssClass is null ? "margin-top:1rem" : null)">
+    <div class="row">
+        <h2 style="margin:0">@Title</h2>
+        @if (todos is { Count: > 0 } && RemindersOnly)
+        {
+            <span class="badge todo-count">@todos.Count</span>
+        }
+        <span class="spacer"></span>
+        @if (!RemindersOnly)
+        {
+            <label class="check small"><input type="checkbox" checked="@showDone" @onchange="ToggleDoneAsync" /> Show done</label>
+        }
+        <a class="small" href="/todo">All to-dos →</a>
+        <button type="button" class="btn" @onclick="New">+ Add</button>
+    </div>
+    @if (todos is null)
+    {
+        <div class="muted small">Loading…</div>
+    }
+    else if (todos.Count == 0)
+    {
+        <div class="muted small">@(RemindersOnly ? "No reminders due. You're all caught up." : $"No to-dos{(Name is null ? "" : $" for {Name}")} yet.")</div>
+    }
+    else
+    {
+        <TodoRows Todos="todos" Today="today" ShowLink="Link is null" OnEdit="Edit" OnChanged="ReloadAndNotifyAsync" />
+    }
+</div>
+
+@if (editing is not null)
+{
+    <TodoEditor Draft="editing" Original="editingTodo" OnClose="OnClosed" />
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "To-do";
+    /// <summary>Only to-dos about this record; new ones are linked to it.</summary>
+    [Parameter] public TodoLink? Link { get; set; }
+    /// <summary>Only to-dos about this product (or one of its roadmap items).</summary>
+    [Parameter] public int? ProductId { get; set; }
+    /// <summary>Only open to-dos whose reminder day has come (for the dashboards).</summary>
+    [Parameter] public bool RemindersOnly { get; set; }
+    /// <summary>The record's or product's name, for the empty message.</summary>
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? CssClass { get; set; }
+
+    private List<TodoItem>? todos;
+    private TodoDraft? editing;
+    private TodoItem? editingTodo;
+    private bool showDone;
+    private DateOnly today;
+
+    protected override void OnInitialized() => Events.Changed += OnEvent;
+    public void Dispose() => Events.Changed -= OnEvent;
+
+    private void OnEvent() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        today = DateOnly.FromDateTime(DateTime.Today);
+        todos = RemindersOnly
+            ? await Svc.GetRemindersAsync(ProductId)
+            : await Svc.GetTodosAsync(new TodoQuery { Link = Link, ProductId = Link is null ? ProductId : null, IncludeDone = showDone });
+    }
+
+    private async Task ToggleDoneAsync(ChangeEventArgs e)
+    {
+        showDone = e.Value is true;
+        await LoadAsync();
+    }
+
+    private void New()
+    {
+        editingTodo = null;
+        editing = TodoDraft.New(Link ?? (ProductId is { } pid ? new TodoLink(TodoLinkKind.Product, pid) : null));
+    }
+
+    private void Edit(TodoItem t)
+    {
+        editingTodo = t;
+        editing = TodoDraft.From(t);
+    }
+
+    private async Task OnClosed(bool changed)
+    {
+        editing = null;
+        if (changed) await LoadAsync(); // the editor also tells everyone else
+    }
+
+    private async Task ReloadAndNotifyAsync()
+    {
+        await LoadAsync();
+        Events.Notify();
+    }
+}

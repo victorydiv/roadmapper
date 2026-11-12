@@ -1,0 +1,81 @@
+@* To-do rows: tick to finish, click to edit, snooze a reminder that's showing. *@
+@inject PortfolioService Svc
+
+<ul class="todo-list">
+    @foreach (var t in Todos)
+    {
+        var overdue = TodoRules.IsOverdue(t, Today);
+        <li class="todo-row @(t.IsDone ? "done" : "") @(overdue ? "is-overdue" : "")">
+            <input type="checkbox" checked="@t.IsDone" title="@(t.IsDone ? "Reopen" : "Mark done")" @onchange="e => SetDoneAsync(t, e.Value is true)" />
+            <div class="todo-main">
+                <a href="javascript:void(0)" class="todo-title" @onclick="() => OnEdit.InvokeAsync(t)">@t.Title</a>
+                <div class="todo-meta small">
+                    @if (t.Priority == TodoPriority.High)
+                    {
+                        <span class="badge todo-high">High</span>
+                    }
+                    @if (t.IsDone)
+                    {
+                        <span class="muted">Done @PortfolioUi.Date(t.CompletedOn)</span>
+                    }
+                    else if (t.DueDate is { } due)
+                    {
+                        <span class="@(overdue ? "overdue" : due == Today ? "todo-today" : "muted")" title="Due @PortfolioUi.Date(due)">@PortfolioUi.Due(due, Today)</span>
+                    }
+                    @if (!t.IsDone && t.RemindOn is { } r && r > Today)
+                    {
+                        <span class="muted" title="The reminder shows from this day">⏰ @PortfolioUi.Date(r)</span>
+                    }
+                    @if (ShowLink && t.Link is { } l)
+                    {
+                        <span class="muted">@TodoRules.Label(l.Kind):</span>
+                        @if (PortfolioUi.TodoLinkHref(t) is { } href)
+                        {
+                            <a href="@href">@t.LinkName</a>
+                        }
+                        else
+                        {
+                            <span>@t.LinkName</span>
+                        }
+                    }
+                    @if (t.Notes is { Length: > 0 } notes)
+                    {
+                        <span class="muted todo-notes" title="@notes">📝</span>
+                    }
+                </div>
+            </div>
+            @if (TodoRules.NeedsReminder(t, Today))
+            {
+                <select class="todo-snooze small" title="Hide the reminder for a while" value="" @onchange="e => SnoozeAsync(t, e.Value as string)">
+                    <option value="">Snooze…</option>
+                    <option value="1">1 day</option>
+                    <option value="3">3 days</option>
+                    <option value="7">1 week</option>
+                </select>
+            }
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TodoItem> Todos { get; set; } = [];
+    [Parameter] public DateOnly Today { get; set; }
+    /// <summary>Show what each to-do is about (off on a record's own page).</summary>
+    [Parameter] public bool ShowLink { get; set; } = true;
+    [Parameter] public EventCallback<TodoItem> OnEdit { get; set; }
+    /// <summary>After a to-do is ticked off or snoozed here.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task SetDoneAsync(TodoItem t, bool done)
+    {
+        await Svc.SetTodoDoneAsync(t.Id, done);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task SnoozeAsync(TodoItem t, string? days)
+    {
+        if (!int.TryParse(days, out var n)) return;
+        await Svc.SnoozeTodoAsync(t.Id, n);
+        await OnChanged.InvokeAsync();
+    }
+}

@@ -53,6 +53,7 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<DevProject> DevProjects => Set<DevProject>();
     public DbSet<DevCostCategory> DevCostCategories => Set<DevCostCategory>();
     public DbSet<DevCostLine> DevCostLines => Set<DevCostLine>();
+    public DbSet<TodoItem> Todos => Set<TodoItem>();
     public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
 
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>

@@ -558,3 +558,21 @@ table.dev-table tfoot td, table.dev-cost tfoot td { border-top: 2px solid var(--
 table.dev-cost input, table.dev-cost select { width: 100%; min-width: 0; }
 table.dev-cost td.num input { max-width: 110px; text-align: right; }
 .dev-board .column-head .badge { font-size: .75rem; }
+
+/* To-do list */
+.todo-nav { display: inline-flex; align-items: center; gap: .35rem; }
+.badge.todo-count { background: var(--accent); color: #fff; }
+.badge.todo-count.late { background: var(--danger); }
+.badge.todo-high { background: var(--danger-soft); color: var(--danger); border-color: #f0c3bf; }
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo-row { display: flex; align-items: flex-start; gap: .6rem; padding: .45rem 0; border-top: 1px solid var(--border); }
+.todo-row:first-child { border-top: 0; }
+.todo-row input[type=checkbox] { margin-top: .2rem; width: 1rem; height: 1rem; cursor: pointer; }
+.todo-main { flex: 1; min-width: 0; }
+.todo-title { color: inherit; font-weight: 500; }
+.todo-row.done .todo-title { text-decoration: line-through; color: var(--muted); }
+.todo-row.is-overdue { box-shadow: inset 3px 0 0 var(--danger); padding-left: .5rem; }
+.todo-meta { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .1rem; }
+.todo-today { color: #b26a00; font-weight: 600; }
+.todo-snooze { width: auto; padding: .15rem .3rem; }
+.card.todo-dash { margin: 0 0 1rem; }

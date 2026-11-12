@@ -8,6 +8,8 @@
     <button class="btn" @onclick="PrintAsync">Print</button>
 </PortfolioHeader>
 
+<TodoPanel Title="Reminders" RemindersOnly="true" CssClass="todo-dash" />
+
 @if (d is null)
 {
     <p class="muted">Loading…</p>

@@ -30,6 +30,7 @@ builder.Services.AddDbContextFactory<RoadmapDbContext>(o => o.UseSqlite($"Data S
     .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning)));
 builder.Services.AddScoped<RoadmapService>();
 builder.Services.AddScoped<PortfolioService>();
+builder.Services.AddScoped<Roadmapper.Web.Components.Shared.TodoEvents>();
 // The JSON API writes enums by name ("Tier1", "Active"), matching the database and .rmp files.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 

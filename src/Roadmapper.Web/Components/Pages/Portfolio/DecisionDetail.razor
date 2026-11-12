@@ -125,6 +125,8 @@ else
         }
     </div>
 
+    <TodoPanel Link="new TodoLink(TodoLinkKind.Decision, decision.Id)" Name="@decision.Title" />
+
     <div class="card stack" style="margin-top:1rem">
         <h2>History</h2>
         <PortfolioActivityList Entries="history" />

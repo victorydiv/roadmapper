@@ -1,0 +1,44 @@
+@* The top bar's To-do link, with the number of reminders due (overdue included). Refreshes on every page change and whenever a to-do changes. *@
+@implements IDisposable
+@inject PortfolioService Svc
+@inject TodoEvents Events
+@inject NavigationManager Nav
+
+<a href="/todo" class="todo-nav" title="@Tip">
+    To-do
+    @if (summary is { Reminders: > 0 } s)
+    {
+        <span class="badge todo-count @(s.Overdue > 0 ? "late" : "")">@s.Reminders</span>
+    }
+</a>
+
+@code {
+    private TodoSummary? summary;
+
+    private string Tip => summary is not { } s ? "Your to-do list"
+        : s.Reminders == 0 ? $"{s.Open} open to-do{(s.Open == 1 ? "" : "s")}; no reminders due"
+        : $"{s.Reminders} reminder{(s.Reminders == 1 ? "" : "s")} due: {s.Overdue} overdue, {s.DueToday} due today";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Events.Changed += Refresh;
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        Events.Changed -= Refresh;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Refresh();
+
+    private void Refresh() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    private async Task LoadAsync()
+    {
+        try { summary = await Svc.GetTodoSummaryAsync(); }
+        catch (Exception) { summary = null; } // never break the top bar
+    }
+}

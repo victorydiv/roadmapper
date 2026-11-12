@@ -166,6 +166,7 @@ else
     </div>
 
     <DocumentList Target="new DocumentTarget(DocumentTargetKind.Vendor, vendor.Id)" Name="@vendor.Name" Targets="DocumentTargets" />
+    <TodoPanel Link="new TodoLink(TodoLinkKind.Vendor, vendor.Id)" Name="@vendor.Name" />
     <DecisionList Target="new DecisionTarget(DecisionTargetKind.Vendor, vendor.Id)" Name="@vendor.Name" />
 }
 

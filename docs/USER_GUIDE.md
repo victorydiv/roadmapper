@@ -17,7 +17,7 @@ This guide is for two audiences:
 2. [Core concepts](#2-core-concepts)
 3. [The Tree tab: building the roadmap](#3-the-tree-tab-building-the-roadmap)
 4. [Editing an item](#4-editing-an-item)
-5. [Views: Dashboard, Timeline, Now/Next/Later, Kanban, Priorities, Scoring, Development](#5-views)
+5. [Views: Dashboard, Timeline, Now/Next/Later, Kanban, Priorities, Scoring, Development, To-do](#5-views)
 6. [Task templates](#6-task-templates)
 7. [Snapshots and baselines](#7-snapshots-and-baselines)
 8. [Import and export](#8-import-and-export)
@@ -351,6 +351,39 @@ The **Development** tab tracks each piece of development work for the product, s
 - **Export to Excel:** a **Projects** sheet (one row per project, a column per cost category, totals) and a **Cost lines** sheet.
 
 Each project has its own change history (status, fields and cost lines) at the bottom of its editor.
+
+---
+
+### To-do list and reminders
+
+**To-do** in the top bar is your own list of things to do, across every product and the portfolio. The number next to it counts the reminders that are due; it turns red when something is overdue.
+
+**Adding one:**
+- **Quick add:** on the To-do page, type in the box at the top (and pick a due date if you like) and press Enter.
+- **+ New to-do** (or **+ Add** on any to-do card) opens the editor:
+
+| Field | Meaning |
+|---|---|
+| To do | What needs doing, e.g. "Send Kaleris the signed SOW" |
+| Due | The deadline (optional) |
+| Remind me | When the reminder starts showing: on the due date, 1, 2, 3 days, 1 week, 2 weeks or 1 month before, or on a date you choose. Without a due date, choose a date or no reminder. |
+| Priority | High, Normal or Low. High shows a red **High** badge and sorts first among to-dos due the same day. |
+| About | Nothing in particular, or one **product**, **roadmap item**, **application**, **decision**, **vendor** or **contact**. |
+| Notes | Anything else |
+
+**Where to-dos show up:**
+- **Reminders** cards on the **Products** page and the **Portfolio dashboard** list every open to-do whose reminder day has come, overdue ones first.
+- A **To-do** card on each **product's dashboard** lists the open to-dos about that product or any of its roadmap items.
+- A **To-do** card on each **application**, **vendor** and **decision** page lists the to-dos about it, and **+ Add** there links the new one to it.
+- The **item editor** (for an existing goal, initiative, feature or task) and the **contact editor** have a **To-dos** section. Its **+ Add to-do** opens the To-do page with the new to-do already linked to the item or contact; save the item first, since leaving the editor drops unsaved changes.
+
+**Working the list:**
+- Tick the box to mark a to-do done (it records today); untick it to reopen it.
+- **Snooze…** on a reminder that's showing hides it for 1 day, 3 days or 1 week. It comes back then, even if it's overdue.
+- The To-do page groups to-dos into **Overdue**, **Due today**, **Next 7 days**, **Later** and **No due date**. **Open / Done / All**, **About** and **Search** narrow it.
+- Click a to-do to edit or delete it. The link under it goes to what it's about; a roadmap item opens in its product's Tree.
+
+Reminders are shown in Roadmapper only: there are no emails or Windows notifications, so they're seen when the app is open. Deleting the record a to-do is about keeps the to-do, no longer linked.
 
 ---
 
@@ -834,13 +867,13 @@ The **comparison matrix** shows **Monthly**, **One-time** and **First year** row
 - **Jira site:** e.g. `https://yourcompany.atlassian.net`. Roadmap items with a [Jira key](#linking-roadmap-items-to-jira) link to `{site}/browse/{key}`.
 - **Document folders:** the shared folders, used for documents without a product and by products with no folder of their own for that type. Each product's folders are on its Settings tab. See [Documents](#documents-sharepoint).
 
-**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, capability feature and rating, every product's development projects and the cost categories, the document list (not the files, which stay in SharePoint), the settings including every product's and the shared document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
+**Back up the portfolio** downloads a **portfolio file (.rpf)**: every application, vendor, contract, contact, trading partner, integration, risk, process, pain point, KPI, benefit, measurement, decision, capability feature and rating, every product's development projects and the cost categories, every to-do, the document list (not the files, which stay in SharePoint), the settings including every product's and the shared document folders, and the change history. Roadmaps aren't in it; back those up as [.rmp files](#roadmapper-files-rmp). Links into roadmaps are saved by roadmap name and item path, and reconnect when a matching roadmap exists.
 
 **Import a portfolio file:**
 
 - **Restore** (only into an empty portfolio): brings everything back, including settings and history. Use it to move to a new computer: open your .rmp files first, then restore the .rpf.
 - **Merge:** adds to what's here. A record that already exists is skipped and listed, and what belongs to it (a vendor's contracts, an integration's risks, a process's pain points) comes with it only when the record is new. References point at the existing record, so integrations in the file connect to applications you already have. Settings and history aren't changed.
-- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path; capability features by category and name (ratings by feature and application); site profiles by category and name; prices are added only for an application with no prices yet in that comparison; development projects by product and name; cost categories by name. A development project whose product isn't here is listed as unmatched.
+- **Matching rule for Merge:** applications, vendors, trading partners and processes by name; contacts by name and company; integrations by source, target, type and name; benefits by roadmap item and description; decisions by title and date; documents by SharePoint address or saved file path; capability features by category and name (ratings by feature and application); site profiles by category and name; prices are added only for an application with no prices yet in that comparison; development projects by product and name; cost categories by name; to-dos by title, due date and what they're about. A development project whose product isn't here is listed as unmatched.
 - Roadmap links with no matching roadmap or item are listed after the import instead of failing it. Import the missing roadmaps' .rmp files, then merge again, or link them by hand.
 - The import runs in one transaction: if anything fails, nothing is added.
 
@@ -870,7 +903,7 @@ Roadmapper isn't a replacement for Jira; Jira stays the system of record for sto
 | `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, `Capabilities.cs` (`CapabilityMatrix`, `CapabilityRules`), and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
 | `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Capabilities, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook and `CapabilityExport` a category's comparison workbook. |
 | `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
-| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`, `CapabilityCostTests`, `DevelopmentTests`). |
+| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`, `CapabilityCostTests`, `DevelopmentTests`, `TodoTests`, `ScheduleShiftTests`). |
 
 ### Data model
 
@@ -904,6 +937,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 - `Decision`: `Title, DecidedOn, Status, Context, DecisionText (column "Decision"), Outcome, DecidedBy, SupersededById (SetNull)`. `DecisionAlternative`: `Option, Pros, Cons, WhyRejected, SortOrder`. `DecisionLink`: exactly one of `ApplicationId, IntegrationId, VendorId, ContractId, ProcessId, RoadmapItemId, TradingPartnerId` (CHECK `CK_DecisionLinks_OneTarget`); each cascades with its target.
 - `PortfolioDocument` (table `Documents`): `Title, Category (Roadmap, Contract, Invoice, Sow, Brd, Other), FileName, LocalPath, Url, SizeBytes, DocumentDate, Notes`; `ProductId` (the product it belongs to, null = shared, SetNull); at most one of `ApplicationId, VendorId, ContractId, RoadmapItemId, DevProjectId` (CHECK `CK_Documents_OneTarget`), each SetNull. An uploaded file has `LocalPath` (and `Url` when its folder's address is set); a link has only `Url`.
 - `CapabilityFeature` (table `CapabilityFeatures`, unique `Category, Name`): `Category, Name, Description, SortOrder`. `ComparisonMember` (key `Category, ApplicationId`; cascade with the application): an application added to another category's comparison. `FeatureAssessment` (key `FeatureId, ApplicationId`; cascade both ways): `Availability (Yes, Partial, No)?, Strength (None, Low, Medium, High)?, Note, UpdatedAt`. `PricingLine` (table `PricingLines`; cascade with the application): `Category, ApplicationId, Label, Basis (Flat, Site, User, License, DockDoor, Asset, Transaction, Other), Unit, Quantity?, UnitPrice, Frequency (Monthly, Annual, OneTime), Minimum?, Source (Quote, ListPrice, Estimate), AsOf?, Note, SortOrder`. `SiteProfile` (table `SiteProfiles`, unique `Category, Name`): `Category, Name, IsDefault, Users?, Licenses?, DockDoors?, Assets?, TransactionsPerMonth?, Notes`.
+- `TodoItem` (table `Todos`): `Title, Notes, DueDate?, RemindOn?, Priority (Low, Normal, High), CompletedOn?, ProductId, RoadmapItemId, ApplicationId, DecisionId, VendorId, ContactId` (each SetNull; at most one of the last five, CHECK `CK_Todos_OneLink`).
 - `DevProject` (table `DevProjects`; cascade with the product): `ProductId, Name, Status (Requested, Quoted, Approved, InDevelopment, Test, Complete, OnHold, Cancelled), Description, Reference, CustomerId (trading partner), ApplicationId, VendorId, RoadmapItemId (each SetNull), TargetDate, CompletedOn`. `DevCostLine` (table `DevCostLines`; cascade with the project): `CategoryId (Restrict), Hours?, Rate?, FixedAmount?, Note, SortOrder`; amount = round(hours × rate, 2) when there are hours, else the fixed amount. `DevCostCategory` (table `DevCostCategories`, unique name; seeded DEV, QA, EDI, PM): `Name, DefaultRate?, SortOrder`.
 - `DocumentFolder`: `Id, ProductId (null = shared; cascade), Category, LocalPath, SharePointUrl`; unique `(ProductId, Category)` and unique `Category` where `ProductId` is null.
 - `PortfolioSettings` (one row, Id 1): `LaborRate, RenewalWarningDays (120), DefaultReviewIntervalMonths (12), JiraBaseUrl`.
@@ -942,6 +976,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 26. **Capabilities** (`CapabilityMatrix.Build`, `CapabilityRules`, `PortfolioService.Capabilities.cs`): columns = applications of the category plus `ComparisonMember`s (Retired left out unless asked), the category's own first, then by name; rows = the category's features by `SortOrder`. Feature coverage counts Yes/Partial/No/not rated; gap = no Yes; overlap = 2+ Yes; strongest = applications at the highest strength above None. A rating needs the application in the comparison; No forces strength None (higher is refused); an empty rating (no values, blank note) is deleted. Feature names are unique per category (case-insensitive); deleting a feature deletes its ratings; removing a member keeps its ratings. `PortfolioRules.CountsInPortfolio` (not Retired or Evaluating) decides which applications count in the dashboard, run cost and health; integrations can't be Evaluating.
 27. **Cost of adoption** (`CostEstimate.For`, `CapabilityCost.cs`): each `PricingLine` of an application in the comparison is costed for one site: quantity = the line's own `Quantity`, else the site profile's size for its basis (Flat and Site = 1; Other has none, so needs its own); charge = max(quantity × unit price, minimum). Monthly = Σ monthly charges + Σ annual ÷ 12; one-time = Σ one-time; first year = 12 × monthly + one-time. A line whose quantity is unknown is left out and makes the estimate incomplete (its size is listed in `Missing`); an application with no lines is not priced. `Cheapest` = the fully costed applications with the lowest monthly cost. The site is the chosen profile, else the category's default (the first profile saved, or one marked default; deleting the default promotes the next by name), else "One site" with every size unknown. A price needs the application in the comparison; per-transaction prices must be monthly. Profile names are unique per category (case-insensitive).
 28. **Development pipeline** (`DevRules`, `Development.cs`, `PortfolioService.Development.cs`): a project needs a name and an existing product, and can't move to another product; its roadmap item must be in that product. Each non-blank cost line needs a category, and either hours with a rate or (hours blank) an amount; nothing negative. Saving matches lines by id (others are removed), so unchanged lines keep their history. Status Complete sets `CompletedOn` to today when blank; any other status clears it. Proposed = Requested + Quoted; Committed = Approved + InDevelopment + Test; open = not Complete, OnHold or Cancelled. A category used by a line can't be deleted; names are unique (case-insensitive). A project's documents always get its `ProductId`; deleting the project leaves them unattached.
+29. **To-dos** (`TodoRules`, `Todos.cs`, `PortfolioService.Todos.cs`): a title is required (at most 200 characters). A to-do is about at most one record (CHECK `CK_Todos_OneLink` over the roadmap item, application, decision, vendor and contact columns), or a product; one about a roadmap item also stores the item's `ProductId`, so product queries include it. Every link is SetNull, so deleting the record keeps the to-do. Reminder day = `RemindOn`, else `DueDate`; a reminder is due when the to-do is open and that day ≤ today. Snoozing sets `RemindOn` = today + n days. Overdue = open and due before today. Buckets: Overdue, Today, ThisWeek (due within 7 days), Later, NoDate, Done. Order: open first; then due date (none last), priority (High first), title; done ones most recently completed first. Marking done sets `CompletedOn` to today (kept if already done); reopening clears it. To-dos have no change history.
 
 ### HTTP endpoints (file downloads)
 
@@ -978,6 +1013,7 @@ Read-only JSON under `/api/portfolio` (camelCase, enums as strings); nothing cha
 | `/decisions?entityType=&entityId=&status=` · `/decisions/{id}` | Decisions with alternatives and links |
 | `/capabilities` · `/capabilities/{category}?retired=true&profile={id}&apps={ids}` | Every category's feature/application counts, % rated and gaps; one category's features with coverage and ratings, its applications with coverage and `cost` (priced, complete, monthly, oneTime, firstYear, missing, lines), and the `site` it's costed for; `apps` narrows it to those applications |
 | `/capabilities/{category}/profiles` | A category's site profiles |
+| `/todos` | To-dos (open; `done=true` adds finished ones, `product={id}` narrows to a product, `reminders=true` only reminders due), each with `about`, `aboutId`, `aboutName`, `bucket` and `reminderDue` |
 | `/products/{productId}/development` · `/development/categories` | A product's development projects (status, links, hours, total, cost lines, documents), totals by status and proposed / committed / completed; the cost categories |
 | `/documents?productId=&entityType=&entityId=&category=` | Documents with their SharePoint address, file, date, product and what they're attached to (`entityType`: Application, Vendor (includes its contracts'), Contract, RoadmapItem, DevProject) |
 | `/map.svg?focus=&partner=&depth=&type=&tier=&retired=&partners=false&download=true` | The integration map as SVG |
@@ -1004,7 +1040,7 @@ A `.rmp` is UTF-8 JSON defined by `Core/Exchange/RoadmapFile.cs`. Export and imp
 
 A `.rpf` is UTF-8 JSON defined by `Core/Exchange/PortfolioFile.cs`; export and import are in `Data/Portfolio/PortfolioService.Files.cs` (`ExportPortfolioAsync` / `ImportPortfolioAsync`). Same JSON conventions as `.rmp`.
 
-- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `features` (with `ratings` by application id), `comparisonMembers`, `pricingLines`, `siteProfiles`, `devCostCategories`, `devProjects` (with `product` name, `item` path and `costs`), `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
+- **Top level:** `format` (`"roadmapper-portfolio"`), `version` (`1`), `exportedAt`, `appVersion`, `settings`, `contacts`, `vendors` (with `contracts`, `escalation`), `partners`, `applications` (with `support`, `initiatives`), `integrations` (with `risks`), `processes` (with `applications`, `integrationIds`, `painPoints`, `kpis`), `benefits` (with `measurements`), `decisions` (with `alternatives`, `links`), `documents`, `features` (with `ratings` by application id), `comparisonMembers`, `pricingLines`, `siteProfiles`, `devCostCategories`, `devProjects` (with `product` name, `item` path and `costs`), `todos` (with `product` name or `item` path, or `applicationId`, `decisionId`, `vendorId`, `contactId`), `history`. `settings.documentFolders` lists `{ category, localPath, sharePointUrl, product }` (`product`: a product name, or absent for shared). Missing lists are treated as empty.
 - **References:** records have file-local `id`s; references use them (`vendorId`, `contractId`, `sourceApplicationId`, `kpiId`, …). Roadmap references are `{ "product": name, "path": "Goal › Initiative" }` (`application.roadmap` is just the product name); decision links are `{ kind, id }` or `{ kind: "RoadmapItem", item }`. A document has `product` (a product name; absent = shared) and `attachedTo` with `targetId` (application, vendor, contract, development project) or `item`. Folders and documents whose product doesn't match are listed as unmatched; the document is kept as shared.
 - **Validation** (before anything is written): format and version, unique ids per kind, names present, every id reference present in the file, exactly one source and target per integration. A `.rmp` is recognized and refused with a pointer to the Products page.
 - **Import:** one transaction, staged saves with old→new id maps. Restore requires `IsEmptyAsync()`, imports settings and history (history re-pointed to new ids; unmapped ids become 0) with audit capture off. Merge keeps audit on, keeps settings, skips existing records by the matching rule in [Portfolio settings, backup and export](#portfolio-settings-backup-and-export) and maps references to them; children of skipped records are skipped, except that contracts and KPIs of existing parents are matched by name for references. Unmatched roadmap references are dropped and listed (`PortfolioImportResult.Unmatched`); a benefit whose item doesn't match is skipped.
@@ -1015,7 +1051,7 @@ Capabilities: `/capabilities`, `/capabilities/{category}?view=matrix|heatmap|cos
 
 Portfolio: `/portfolio` (dashboard), `/portfolio/applications[/{id}]`, `/portfolio/partners[/{id}]`, `/portfolio/integrations[/{id}]`, `/portfolio/map?focus=&partner=&depth=`, `/portfolio/processes[/{id}]`, `/portfolio/impact?app=|partner=&depth=`, `/portfolio/benefits?item=&new=true&product=`, `/portfolio/decisions[/{id}]`, `/portfolio/documents?product={id}&attach={key}&add=upload|link` (key: `a`/`v`/`c`/`r`/`d` + id), `/portfolio/vendors[/{id}]`, `/portfolio/contacts`, `/portfolio/settings`.
 
-Roadmaps: `/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/development?project={id}`, `/snapshots`, `/exchange`, `/settings`.
+Roadmaps: `/` (products), `/guide` (this guide), `/products/{id}` (Tree), `/products/{id}/scoring` (WSJF rubric grid), `/products/{id}/dashboard`, `/timeline` (accepts `?baseline={snapshotId}`), `/board`, `/kanban`, `/priorities`, `/development?project={id}`, `/snapshots`, `/exchange`, `/settings`. `/products/{id}?item={itemId}` opens that item's editor. To-do: `/todo` (accepts `?add={key}` for a new to-do about a record, key `p`/`r`/`a`/`x`/`v`/`n` + id, and `?edit={todoId}`).
 
 ### Colors (shared by the UI and every export)
 
@@ -1070,6 +1106,9 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 ---
 
 ## 12. FAQ and troubleshooting
+
+**I don't see my reminder.**
+Its reminder day hasn't come yet (the to-do shows ⏰ and the date), it was snoozed, or it's done. Reminders show only in Roadmapper, on the Products page, the Portfolio dashboard and the product's dashboard, and as the number next to **To-do** in the top bar.
 
 **I can't delete a cost category.**
 A cost line uses it. **Cost categories** shows how many; change those lines to another category first, then delete it.

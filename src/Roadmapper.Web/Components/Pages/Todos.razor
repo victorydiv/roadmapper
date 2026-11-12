@@ -1,0 +1,165 @@
+@page "/todo"
+@implements IDisposable
+@inject PortfolioService Svc
+@inject TodoEvents Events
+
+<PageTitle>To-do · Roadmapper</PageTitle>
+
+<div class="product-header">
+    <div>
+        <h1>To-do</h1>
+        <div class="muted small">Things you need to do, with deadlines and reminders, about a product, roadmap item, application, decision, vendor or contact.</div>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn primary" @onclick="() => New()">+ New to-do</button>
+</div>
+
+<form class="card row todo-quick" style="margin-bottom:1rem;flex-wrap:wrap" @onsubmit="QuickAddAsync">
+    <input style="flex:1;min-width:260px" placeholder="Add a to-do and press Enter…" @bind="quickTitle" @bind:event="oninput" />
+    <InputDate @bind-Value="quickDue" title="Due date (optional)" />
+    <button type="submit" class="btn" disabled="@string.IsNullOrWhiteSpace(quickTitle)">Add</button>
+    <span class="muted small">Use <b>+ New to-do</b> to set a reminder, priority or what it's about.</span>
+</form>
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (summary is { } s)
+{
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile"><span class="tile-label">Open</span><span class="tile-value">@s.Open</span></div>
+        <div class="card tile"><span class="tile-label">Overdue</span><span class="tile-value @(s.Overdue > 0 ? "overdue" : "")">@s.Overdue</span></div>
+        <div class="card tile"><span class="tile-label">Due today</span><span class="tile-value">@s.DueToday</span></div>
+        <div class="card tile"><span class="tile-label">Reminders showing</span><span class="tile-value">@s.Reminders</span></div>
+    </div>
+}
+
+<div class="row" style="margin-bottom:.8rem;flex-wrap:wrap">
+    <div class="segmented">
+        <button class="@(show == "open" ? "on" : "")" @onclick='() => SetShowAsync("open")'>Open</button>
+        <button class="@(show == "done" ? "on" : "")" @onclick='() => SetShowAsync("done")'>Done</button>
+        <button class="@(show == "all" ? "on" : "")" @onclick='() => SetShowAsync("all")'>All</button>
+    </div>
+    <select @bind="aboutFilter" title="What the to-dos are about">
+        <option value="">About anything</option>
+        <option value="none">Nothing in particular</option>
+        @foreach (var k in Enum.GetValues<TodoLinkKind>())
+        {
+            <option value="@k">@TodoRules.Label(k)</option>
+        }
+    </select>
+    <input placeholder="Search…" @bind="search" @bind:event="oninput" style="min-width:200px" />
+</div>
+
+@if (todos is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (Visible.Count == 0)
+{
+    <div class="card empty">@(todos.Count == 0 && show == "open" ? "Nothing to do. Add a to-do above." : "No to-dos match.")</div>
+}
+else
+{
+    foreach (var group in Visible.GroupBy(t => TodoRules.Bucket(t, today)).OrderBy(g => g.Key))
+    {
+        <div class="card stack todo-group" style="margin-bottom:1rem">
+            <h2 class="@(group.Key == TodoBucket.Overdue ? "overdue" : "")" style="margin:0">@TodoRules.Label(group.Key) <span class="muted small">(@group.Count())</span></h2>
+            <TodoRows Todos="group.ToList()" Today="today" OnEdit="Edit" OnChanged="ChangedAsync" />
+        </div>
+    }
+}
+
+@if (editing is not null)
+{
+    <TodoEditor Draft="editing" Original="editingTodo" OnClose="OnClosed" />
+}
+
+@code {
+    private List<TodoItem>? todos;
+    private TodoSummary? summary;
+    private TodoDraft? editing;
+    private TodoItem? editingTodo;
+    private string show = "open", aboutFilter = "", search = "";
+    private string? quickTitle, error;
+    private DateOnly? quickDue;
+    private DateOnly today;
+
+    /// <summary>?add=r12 opens a new to-do about that record; ?edit=5 opens that to-do.</summary>
+    [SupplyParameterFromQuery(Name = "add")] public string? AddFor { get; set; }
+    [SupplyParameterFromQuery(Name = "edit")] public int? EditId { get; set; }
+
+    private List<TodoItem> Visible => (todos ?? [])
+        .Where(t => show == "all" || (show == "done") == t.IsDone)
+        .Where(t => aboutFilter switch
+        {
+            "" => true,
+            "none" => t.Link is null,
+            var k => t.Link?.Kind.ToString() == k,
+        })
+        .Where(t => search is not { Length: > 0 } q
+            || t.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || (t.Notes?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (t.LinkName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Events.Changed += OnEvent;
+        await LoadAsync();
+        if (EditId is { } id && await Svc.GetTodoAsync(id) is { } t) Edit(t);
+        else if (AddFor is not null) editing = TodoDraft.New(TodoLink.Parse(AddFor));
+    }
+
+    public void Dispose() => Events.Changed -= OnEvent;
+
+    private void OnEvent() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    private async Task LoadAsync()
+    {
+        today = DateOnly.FromDateTime(DateTime.Today);
+        todos = await Svc.GetTodosAsync(new TodoQuery { IncludeDone = show != "open" });
+        summary = await Svc.GetTodoSummaryAsync();
+    }
+
+    private async Task SetShowAsync(string value)
+    {
+        show = value;
+        await LoadAsync();
+    }
+
+    private async Task QuickAddAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(quickTitle)) return;
+        try
+        {
+            await Svc.SaveTodoAsync(new TodoDraft { Title = quickTitle, DueDate = quickDue });
+            quickTitle = null;
+            quickDue = null;
+            Events.Notify();
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+
+    private void New()
+    {
+        editingTodo = null;
+        editing = TodoDraft.New();
+    }
+
+    private void Edit(TodoItem t)
+    {
+        editingTodo = t;
+        editing = TodoDraft.From(t);
+    }
+
+    private void OnClosed(bool changed) => editing = null; // a change reloads through TodoEvents
+
+    private Task ChangedAsync()
+    {
+        Events.Notify();
+        return Task.CompletedTask;
+    }
+}

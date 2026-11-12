@@ -20,6 +20,8 @@ else
 
     <ProductHeader Roadmap="Roadmap" Section="Dashboard" />
 
+    <TodoPanel Title="To-do" ProductId="ProductId" Name="@Roadmap.Product.Name" CssClass="todo-dash" />
+
     @if (items.Count == 0)
     {
         <div class="card empty">Nothing to summarize yet. Add goals and items from the <a href="/products/@ProductId">Tree</a>.</div>

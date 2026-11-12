@@ -18,7 +18,19 @@ public abstract class ProductPageBase : ComponentBase
     protected ItemDraft? Editing { get; set; }
     protected string? Error { get; set; }
 
-    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+    /// <summary>An item to open in the editor when the page loads (?item=12), e.g. from a to-do's link.</summary>
+    [SupplyParameterFromQuery(Name = "item")] public int? FocusItem { get; set; }
+    private int? _openedFocus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ReloadAsync();
+        if (FocusItem is { } id && id != _openedFocus && Roadmap?.Find(id) is { } item)
+        {
+            _openedFocus = id;
+            OpenEdit(item);
+        }
+    }
 
     protected async Task ReloadAsync()
     {

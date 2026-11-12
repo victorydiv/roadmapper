@@ -1,0 +1,42 @@
+@* A record's open to-dos in an editor that's itself a form: each links to the To-do page, as does + Add to-do. *@
+@inject PortfolioService Svc
+
+@if (todos is { Count: > 0 })
+{
+    <ul class="todo-list">
+        @foreach (var t in todos)
+        {
+            <li class="todo-row @(TodoRules.IsOverdue(t, today) ? "is-overdue" : "")">
+                <div class="todo-main">
+                    <a class="todo-title" href="/todo?edit=@t.Id">@t.Title</a>
+                    @if (t.DueDate is { } due)
+                    {
+                        <span class="small @(TodoRules.IsOverdue(t, today) ? "overdue" : "muted")"> · @PortfolioUi.Due(due, today)</span>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+else if (todos is not null)
+{
+    <span class="muted small">No open to-dos for this @What.</span>
+}
+<div class="row" style="margin-top:.4rem">
+    <a class="btn sm" href="/todo?add=@Link.Key">+ Add to-do</a>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TodoLink Link { get; set; }
+    /// <summary>"feature", "contact"…, for the empty message.</summary>
+    [Parameter] public string What { get; set; } = "record";
+
+    private List<TodoItem>? todos;
+    private DateOnly today;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        today = DateOnly.FromDateTime(DateTime.Today);
+        todos = await Svc.GetTodosAsync(new TodoQuery { Link = Link });
+    }
+}

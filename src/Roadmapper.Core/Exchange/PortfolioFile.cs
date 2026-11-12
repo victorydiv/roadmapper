@@ -39,6 +39,7 @@ public sealed class PortfolioFile
     public List<PfSiteProfile> SiteProfiles { get; set; } = [];
     public List<PfDevCostCategory> DevCostCategories { get; set; } = [];
     public List<PfDevProject> DevProjects { get; set; } = [];
+    public List<PfTodo> Todos { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -81,7 +82,7 @@ public sealed class PortfolioFile
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
         Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; PricingLines ??= []; SiteProfiles ??= []; History ??= [];
-        DevCostCategories ??= []; DevProjects ??= [];
+        DevCostCategories ??= []; DevProjects ??= []; Todos ??= [];
         foreach (var p in DevProjects) p.Costs ??= [];
         foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
@@ -124,6 +125,7 @@ public sealed class PortfolioFile
         Named(DevCostCategories.Select(c => c.Name), "cost category");
         Named(DevProjects.Select(p => p.Name), "development project");
         if (DevProjects.Any(p => string.IsNullOrWhiteSpace(p.Product))) errors.Add("A development project has no product.");
+        if (Todos.Any(t => string.IsNullOrWhiteSpace(t.Title))) errors.Add("A to-do has no title.");
         if (errors.Count > 0) return errors;
 
         var contacts = Contacts.Select(c => c.Id).ToHashSet();
@@ -208,6 +210,14 @@ public sealed class PortfolioFile
                 case DocumentTargetKind.RoadmapItem when d.Item is null: errors.Add($"{where} is attached to a roadmap item with no path."); break;
                 case DocumentTargetKind.DevProject: Ref(d.TargetId ?? 0, devProjects, "development project", where); break;
             }
+        }
+        foreach (var t in Todos)
+        {
+            var where = $"To-do “{t.Title}”";
+            Ref(t.ApplicationId, apps, "application", where);
+            Ref(t.DecisionId, decisions, "decision", where);
+            Ref(t.VendorId, vendors, "vendor", where);
+            Ref(t.ContactId, contacts, "contact", where);
         }
         foreach (var p in DevProjects)
         {
@@ -501,6 +511,27 @@ public sealed record PfComparisonMember(AppCategory Category, int ApplicationId)
 /// <summary>A line of an application's pricing in a category's comparison.</summary>
 public sealed record PfPricingLine(AppCategory Category, int ApplicationId, string Label, PricingBasis Basis, string? Unit, decimal? Quantity,
     decimal UnitPrice, PriceFrequency Frequency, decimal? Minimum, PriceSource Source, DateOnly? AsOf, string? Note, int SortOrder);
+
+/// <summary>
+/// A to-do. It's about at most one record: a roadmap <see cref="Item"/> (by path), else an application, decision,
+/// vendor or contact (by id), else the <see cref="Product"/> named.
+/// </summary>
+public sealed class PfTodo
+{
+    public string Title { get; set; } = "";
+    public string? Notes { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public DateOnly? RemindOn { get; set; }
+    public TodoPriority Priority { get; set; } = TodoPriority.Normal;
+    public DateOnly? CompletedOn { get; set; }
+    public string? Product { get; set; }
+    public PfRoadmapRef? Item { get; set; }
+    public int? ApplicationId { get; set; }
+    public int? DecisionId { get; set; }
+    public int? VendorId { get; set; }
+    public int? ContactId { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
 
 /// <summary>A development cost category (DEV, QA, EDI, PM…).</summary>
 public sealed record PfDevCostCategory(int Id, string Name, decimal? DefaultRate, int SortOrder);
