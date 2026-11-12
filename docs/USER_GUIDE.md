@@ -128,7 +128,7 @@ To move a goal, initiative or feature's whole schedule, open it and tick **"Move
 - **Rolled-up parent:** the dates unlock while the box is ticked, and changing one date moves the other with it. After saving, the parent rolls up again from its moved sub-items, so it lands on the new dates.
 - **Manual parent:** the parent keeps the dates you type. Its sub-items move by however much its start moved, or by how much its end moved if the start didn't change.
 - **What moves:** sub-items without dates stay as they are, and done and cancelled items move too. Each moved item records the change in its own history.
-- **Unticked** (the default): only the item you're editing changes.
+- **Unticked** (the default): if you change a parent's dates and it has dated sub-items, **Save** asks first: *"You moved this feature +366 days. Move its 11 dated sub-items by the same amount?"* Choose **Move them too**, **Only this feature**, or **Back** to keep editing.
 
 ### Prioritization (scoring)
 

@@ -3,7 +3,7 @@
 
 <div class="modal-backdrop">
     <div class="modal">
-        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+        <EditForm Model="draft" OnValidSubmit="SubmitAsync">
             <div class="modal-head">
                 <TypeBadge Type="draft.ItemType" />
                 <h2>@(draft.IsNew ? $"New {draft.ItemType}" : "Edit item")</h2>
@@ -498,6 +498,16 @@
                 }
             </div>
 
+            @if (askingMove)
+            {
+                <div class="modal-foot move-ask">
+                    <span>You moved this @draft.ItemType.ToString().ToLowerInvariant() <b>@ScheduleShift.Describe(DaysMoved)</b>. Move its @DatedSubItems dated sub-item@(DatedSubItems == 1 ? "" : "s") by the same amount?</span>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn primary" disabled="@saving" @onclick="() => SaveAsync(true)">Move them too</button>
+                    <button type="button" class="btn" disabled="@saving" @onclick="() => SaveAsync(false)">Only this @draft.ItemType.ToString().ToLowerInvariant()</button>
+                    <button type="button" class="btn" @onclick="() => askingMove = false">Back</button>
+                </div>
+            }
             <div class="modal-foot">
                 @if (!draft.IsNew)
                 {
@@ -561,7 +571,9 @@
 
     // "Move its sub-items with it": the dates as saved, and how far the edited ones moved from them.
     private bool moveSubItems;
+    private bool askingMove;
     private RoadmapItem? Saved => draft.IsNew ? null : roadmap.Find(draft.Id);
+    private int DatedSubItems => draft.IsNew ? 0 : roadmap.Descendants(draft.Id).Count(i => i.StartDate is not null || i.EndDate is not null);
     private int DaysMoved => Saved is { } o ? ScheduleShift.DaysMoved(o.StartDate, o.EndDate, draft.StartDate, draft.EndDate) : 0;
 
     private string MovePreview
@@ -569,7 +581,7 @@
         get
         {
             var subs = roadmap.Descendants(draft.Id).ToList();
-            var dated = subs.Count(i => i.StartDate is not null || i.EndDate is not null);
+            var dated = DatedSubItems;
             if (dated == 0) return "None of its sub-items have dates yet, so there's nothing to move.";
             var undated = subs.Count - dated;
             var rest = undated > 0 ? $" ({undated} without dates stay as they are)" : "";
@@ -583,12 +595,14 @@
     // A rolled-up parent's dates come from its sub-items, so moving it moves both dates together.
     private void OnStartChanged()
     {
+        askingMove = false;
         if (moveSubItems && RolledUp && Saved is { StartDate: { } s, EndDate: { } e } && draft.StartDate is { } ns)
             draft.EndDate = e.AddDays(ns.DayNumber - s.DayNumber);
     }
 
     private void OnEndChanged()
     {
+        askingMove = false;
         if (moveSubItems && RolledUp && Saved is { StartDate: { } s, EndDate: { } e } && draft.EndDate is { } ne)
             draft.StartDate = s.AddDays(ne.DayNumber - e.DayNumber);
     }
@@ -687,7 +701,7 @@
     private void AddTask()
     {
         draft = ItemDraft.New(draft.ProductId, ItemType.Task, draft.Id);
-        moveSubItems = false;
+        moveSubItems = askingMove = false;
         history = null;
         appLinks = [];
         error = notice = null;
@@ -736,13 +750,25 @@
         if (on) draft.TagIds.Add(id); else draft.TagIds.Remove(id);
     }
 
-    private async Task SaveAsync()
+    /// <summary>
+    /// Saves. When a parent's dates moved and "Move its sub-items" isn't ticked, asks first whether its dated
+    /// sub-items should move too; <paramref name="move"/> is the answer.
+    /// </summary>
+    private Task SubmitAsync() => SaveAsync(null);
+
+    private async Task SaveAsync(bool? move)
     {
+        if (move is null && !moveSubItems && HasChildren && DaysMoved != 0 && DatedSubItems > 0 && draft.Validate() is null)
+        {
+            askingMove = true;
+            return;
+        }
+        askingMove = false;
         saving = true;
         error = null;
         try
         {
-            await Svc.SaveItemAsync(draft, moveSubItems && HasChildren);
+            await Svc.SaveItemAsync(draft, (move ?? moveSubItems) && HasChildren);
             changed = true;
             await CloseAsync();
         }
