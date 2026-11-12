@@ -38,6 +38,18 @@ public class TodoRulesTests
     }
 
     [Fact]
+    public void Dashboards_list_open_to_dos_with_due_reminders_first()
+    {
+        TodoItem T(string title, int? due, int? remind = null, bool done = false) => new()
+        {
+            Title = title, DueDate = due is { } d ? Today.AddDays(d) : null, RemindOn = remind is { } r ? Today.AddDays(r) : null,
+            CompletedOn = done ? Today : null,
+        };
+        var list = new[] { T("tomorrow", 1), T("next week, remind now", 7, -1), T("no date", null), T("done", 0, done: true), T("late", -2) };
+        Assert.Equal(["late", "next week, remind now", "tomorrow", "no date"], TodoRules.ForDashboard(list, Today).Select(t => t.Title));
+    }
+
+    [Fact]
     public void Links_round_trip_through_their_keys_and_a_draft_records_completion()
     {
         foreach (var kind in Enum.GetValues<TodoLinkKind>())

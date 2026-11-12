@@ -576,3 +576,5 @@ table.dev-cost td.num input { max-width: 110px; text-align: right; }
 .todo-today { color: #b26a00; font-weight: 600; }
 .todo-snooze { width: auto; padding: .15rem .3rem; }
 .card.todo-dash { margin: 0 0 1rem; }
+.todo-row.reminding { box-shadow: inset 3px 0 0 #e0a100; padding-left: .5rem; }
+.badge.todo-remind { background: #fff7e6; color: #8a5a00; border-color: #f2d9a0; }

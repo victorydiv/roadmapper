@@ -5,11 +5,16 @@
     @foreach (var t in Todos)
     {
         var overdue = TodoRules.IsOverdue(t, Today);
-        <li class="todo-row @(t.IsDone ? "done" : "") @(overdue ? "is-overdue" : "")">
+        var reminding = !overdue && TodoRules.NeedsReminder(t, Today);
+        <li class="todo-row @(t.IsDone ? "done" : "") @(overdue ? "is-overdue" : "") @(reminding ? "reminding" : "")">
             <input type="checkbox" checked="@t.IsDone" title="@(t.IsDone ? "Reopen" : "Mark done")" @onchange="e => SetDoneAsync(t, e.Value is true)" />
             <div class="todo-main">
                 <a href="javascript:void(0)" class="todo-title" @onclick="() => OnEdit.InvokeAsync(t)">@t.Title</a>
                 <div class="todo-meta small">
+                    @if (reminding)
+                    {
+                        <span class="badge todo-remind" title="Its reminder is due">🔔 Reminder</span>
+                    }
                     @if (t.Priority == TodoPriority.High)
                     {
                         <span class="badge todo-high">High</span>

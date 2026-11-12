@@ -1,4 +1,4 @@
-@* A card of to-dos: the reminders that are due (on the dashboards), or the to-dos about one record or product, with + Add. *@
+@* A card of to-dos with + Add. On a dashboard: the open ones, reminders that are due first, then the soonest due. On a record's page: the ones about it. *@
 @implements IDisposable
 @inject PortfolioService Svc
 @inject TodoEvents Events
@@ -6,12 +6,12 @@
 <div class="card stack @CssClass" style="@(CssClass is null ? "margin-top:1rem" : null)">
     <div class="row">
         <h2 style="margin:0">@Title</h2>
-        @if (todos is { Count: > 0 } && RemindersOnly)
+        @if (Dashboard && todos is not null && todos.Count(t => TodoRules.NeedsReminder(t, today)) is > 0 and var due)
         {
-            <span class="badge todo-count">@todos.Count</span>
+            <span class="badge todo-count @(todos.Any(t => TodoRules.IsOverdue(t, today)) ? "late" : "")" title="Reminders due, overdue included">@due reminder@(due == 1 ? "" : "s") due</span>
         }
         <span class="spacer"></span>
-        @if (!RemindersOnly)
+        @if (!Dashboard)
         {
             <label class="check small"><input type="checkbox" checked="@showDone" @onchange="ToggleDoneAsync" /> Show done</label>
         }
@@ -24,11 +24,15 @@
     }
     else if (todos.Count == 0)
     {
-        <div class="muted small">@(RemindersOnly ? "No reminders due. You're all caught up." : $"No to-dos{(Name is null ? "" : $" for {Name}")} yet.")</div>
+        <div class="muted small">@(Dashboard && Name is null ? "Nothing on your to-do list. You're all caught up." : $"No open to-dos{(Name is null ? "" : $" for {Name}")}.")</div>
     }
     else
     {
-        <TodoRows Todos="todos" Today="today" ShowLink="Link is null" OnEdit="Edit" OnChanged="ReloadAndNotifyAsync" />
+        <TodoRows Todos="Shown" Today="today" ShowLink="Link is null" OnEdit="Edit" OnChanged="ReloadAndNotifyAsync" />
+        @if (todos.Count > Shown.Count)
+        {
+            <a class="small" href="/todo">+ @(todos.Count - Shown.Count) more on the To-do page</a>
+        }
     }
 </div>
 
@@ -43,8 +47,12 @@
     [Parameter] public TodoLink? Link { get; set; }
     /// <summary>Only to-dos about this product (or one of its roadmap items).</summary>
     [Parameter] public int? ProductId { get; set; }
-    /// <summary>Only open to-dos whose reminder day has come (for the dashboards).</summary>
-    [Parameter] public bool RemindersOnly { get; set; }
+    /// <summary>
+    /// For a dashboard: open to-dos only, reminders that are due first (<see cref="TodoRules.ForDashboard"/>), at most
+    /// <see cref="Max"/>.
+    /// </summary>
+    [Parameter] public bool Dashboard { get; set; }
+    [Parameter] public int Max { get; set; } = 8;
     /// <summary>The record's or product's name, for the empty message.</summary>
     [Parameter] public string? Name { get; set; }
     [Parameter] public string? CssClass { get; set; }
@@ -54,6 +62,8 @@
     private TodoItem? editingTodo;
     private bool showDone;
     private DateOnly today;
+
+    private List<TodoItem> Shown => Dashboard ? (todos ?? []).Take(Max).ToList() : todos ?? [];
 
     protected override void OnInitialized() => Events.Changed += OnEvent;
     public void Dispose() => Events.Changed -= OnEvent;
@@ -65,8 +75,8 @@
     private async Task LoadAsync()
     {
         today = DateOnly.FromDateTime(DateTime.Today);
-        todos = RemindersOnly
-            ? await Svc.GetRemindersAsync(ProductId)
+        todos = Dashboard
+            ? TodoRules.ForDashboard(await Svc.GetTodosAsync(new TodoQuery { ProductId = ProductId }), today).ToList()
             : await Svc.GetTodosAsync(new TodoQuery { Link = Link, ProductId = Link is null ? ProductId : null, IncludeDone = showDone });
     }
 

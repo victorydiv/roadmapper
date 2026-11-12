@@ -20,7 +20,7 @@ else
 
     <ProductHeader Roadmap="Roadmap" Section="Dashboard" />
 
-    <TodoPanel Title="To-do" ProductId="ProductId" Name="@Roadmap.Product.Name" CssClass="todo-dash" />
+    <TodoPanel Title="To-do" Dashboard="true" ProductId="ProductId" Name="@Roadmap.Product.Name" CssClass="todo-dash" />
 
     @if (items.Count == 0)
     {

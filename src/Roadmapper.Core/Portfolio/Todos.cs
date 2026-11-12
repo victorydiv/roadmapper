@@ -132,6 +132,13 @@ public static class TodoRules
         .ThenByDescending(t => t.Priority)
         .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Open to-dos for a dashboard: those whose reminder is due first, then the rest; each part in list order.</summary>
+    public static IEnumerable<TodoItem> ForDashboard(IEnumerable<TodoItem> todos, DateOnly today)
+    {
+        var open = InOrder(todos.Where(t => !t.IsDone)).ToList();
+        return open.Where(t => NeedsReminder(t, today)).Concat(open.Where(t => !NeedsReminder(t, today)));
+    }
+
     public static TodoSummary Summarize(IEnumerable<TodoItem> todos, DateOnly today)
     {
         var open = todos.Where(t => !t.IsDone).ToList();
