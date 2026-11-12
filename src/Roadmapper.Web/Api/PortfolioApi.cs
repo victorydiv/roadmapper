@@ -148,6 +148,11 @@ public static class PortfolioApi
         api.MapGet("/capabilities/{category}/profiles", async (string category, PortfolioService svc) =>
             Parse<AppCategory>(category) is { } c ? Results.Ok(await svc.GetSiteProfilesAsync(c)) : Results.NotFound());
 
+        // A product's development pipeline: projects with status, cost lines and documents, and totals by status.
+        api.MapGet("/products/{productId:int}/development", async (int productId, PortfolioService svc) =>
+            await svc.GetDevPipelineAsync(productId) is { } p ? Results.Ok(DevPipelineDto.From(p)) : Results.NotFound());
+        api.MapGet("/development/categories", async (PortfolioService svc) => await svc.GetDevCostCategoriesAsync());
+
         // The integration map as SVG. ?focus={applicationId} or ?partner={partnerId} with depth=1–5 draws a dependency view;
         // type, tier (1–3: that tier and more critical), retired=true and partners=false (leave out trading partners)
         // filter; download=true saves it as a file.
@@ -434,6 +439,30 @@ public record DocumentDto(int Id, string Title, DocumentCategory Category, strin
 {
     public static DocumentDto From(PortfolioDocument d) => new(d.Id, d.Title, d.Category, d.Url, d.FileName, d.LocalPath, d.SizeBytes,
         d.DocumentDate, d.Notes, Ref.Of(d.Product), d.Target?.Kind, d.Target?.Id, d.TargetName, d.CreatedAt, d.UpdatedAt);
+}
+
+public record DevPipelineDto(Ref Product, IReadOnlyList<DevPipelineDto.Project> Projects, IReadOnlyList<DevPipelineDto.StatusTotal> ByStatus,
+    decimal Proposed, decimal Committed, decimal Completed)
+{
+    public record Project(int Id, string Name, DevStatus Status, string? Reference, string? Description, Ref? Customer, Ref? Application, Ref? Vendor,
+        Ref? RoadmapItem, DateOnly? TargetDate, DateOnly? CompletedOn, decimal Hours, decimal Total, IReadOnlyList<CostLine> Costs, IReadOnlyList<Doc> Documents);
+    public record CostLine(string Category, decimal? Hours, decimal? Rate, decimal Amount, string? Note);
+    public record Doc(int Id, string Title, DocumentCategory Category, string? Url, string? FileName);
+    public record StatusTotal(DevStatus Status, int Count, decimal Cost);
+
+    public static DevPipelineDto From(DevPipeline p)
+    {
+        var s = p.Summary;
+        static Ref? R(int? id, string? name) => id is { } i ? new Ref(i, name ?? "") : null;
+        return new(new Ref(p.ProductId, p.ProductName),
+            p.Projects.Select(x => new Project(x.Id, x.Name, x.Status, x.Reference, x.Description, R(x.CustomerId, x.Customer?.Name),
+                R(x.ApplicationId, x.Application?.Name), R(x.VendorId, x.Vendor?.Name), R(x.RoadmapItemId, x.RoadmapItem?.Title),
+                x.TargetDate, x.CompletedOn, x.TotalHours, x.TotalCost,
+                x.CostLines.OrderBy(l => l.SortOrder).Select(l => new CostLine(l.Category?.Name ?? "", l.Hours, l.Hours is null ? null : l.Rate, l.Amount, l.Note)).ToList(),
+                p.DocumentsOf(x.Id).Select(d => new Doc(d.Id, d.Title, d.Category, d.Url, d.FileName)).ToList())).ToList(),
+            DevRules.Pipeline.Select(st => new StatusTotal(st, s.ByStatus[st].Count, s.ByStatus[st].Cost)).ToList(),
+            s.Proposed, s.Committed, s.Completed);
+    }
 }
 
 public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.FeatureRow> Features, IReadOnlyList<CapabilityDto.AppColumn> Applications,

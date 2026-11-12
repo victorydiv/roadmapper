@@ -20,7 +20,7 @@ public enum SupportRole { L1Support, L2Support, VendorSupport, SME, KeyUser, Oth
 public enum InitiativeImpact { Enhances, Implements, Replaces, Retires, Integrates, Upgrades }
 
 /// <summary>Kinds of portfolio record that keep a change history.</summary>
-public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document, Feature, SiteProfile }
+public enum PortfolioEntityType { Application, Vendor, Contact, Integration, TradingPartner, Process, Benefit, Decision, Document, Feature, SiteProfile, DevProject }
 
 /// <summary>How data moves between two applications.</summary>
 public enum IntegrationType { API, SFTP, EDI, Manual, Batch }
@@ -85,7 +85,7 @@ public enum ImpactSeverity { Low, Medium, High }
 public enum DocumentCategory { Roadmap, Contract, Invoice, Sow, Brd, Other }
 
 /// <summary>What a document is attached to.</summary>
-public enum DocumentTargetKind { Application, Vendor, Contract, RoadmapItem }
+public enum DocumentTargetKind { Application, Vendor, Contract, RoadmapItem, DevProject }
 
 /// <summary>Whether an application has a feature, for the comparison matrix.</summary>
 public enum FeatureAvailability { Yes, Partial, No }

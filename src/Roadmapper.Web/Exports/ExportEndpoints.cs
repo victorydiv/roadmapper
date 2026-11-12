@@ -34,6 +34,13 @@ public static class ExportEndpoints
             return Results.File(path, type, inline ? null : Path.GetFileName(path), enableRangeProcessing: true);
         });
 
+        // A product's development pipeline: projects with cost by category, and every cost line.
+        app.MapGet("/export/products/{productId:int}/development.xlsx", async (int productId, Roadmapper.Data.Portfolio.PortfolioService svc) =>
+            await svc.GetDevPipelineAsync(productId) is { } p
+                ? Results.File(Roadmapper.Data.Portfolio.DevelopmentExport.ToXlsx(p.ProductName, p.Projects, p.Categories, p.Documents),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName(p.ProductName, "xlsx", "development"))
+                : Results.NotFound());
+
         // A category's feature comparison: workbook (comparison + heat map sheets), and the heat map as SVG.
         app.MapGet("/export/capabilities/{category}.xlsx", async (string category, Roadmapper.Data.Portfolio.PortfolioService svc, bool? retired, int? profile, string? apps) =>
             Enum.TryParse<Roadmapper.Core.Portfolio.AppCategory>(category, true, out var c) && Enum.IsDefined(c)

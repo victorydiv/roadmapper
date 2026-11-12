@@ -87,7 +87,7 @@ public partial class PortfolioService
 
     private static IQueryable<PortfolioDocument> WithTargets(IQueryable<PortfolioDocument> q) => q
         .Include(d => d.Product).Include(d => d.Application).Include(d => d.Vendor)
-        .Include(d => d.Contract).ThenInclude(c => c!.Vendor).Include(d => d.RoadmapItem).ThenInclude(i => i!.Product);
+        .Include(d => d.Contract).ThenInclude(c => c!.Vendor).Include(d => d.RoadmapItem).ThenInclude(i => i!.Product).Include(d => d.DevProject);
 
     /// <summary>
     /// Documents, newest first. With <paramref name="target"/>, only those attached to it (a vendor's list also has its
@@ -104,6 +104,7 @@ public partial class PortfolioService
                 DocumentTargetKind.Application => q.Where(d => d.ApplicationId == t.Id),
                 DocumentTargetKind.Vendor => q.Where(d => d.VendorId == t.Id || d.Contract!.VendorId == t.Id),
                 DocumentTargetKind.Contract => q.Where(d => d.ContractId == t.Id),
+                DocumentTargetKind.DevProject => q.Where(d => d.DevProjectId == t.Id),
                 _ => q.Where(d => d.RoadmapItemId == t.Id),
             };
         }
@@ -251,10 +252,13 @@ public partial class PortfolioService
                 .Select(i => new { i.Id, i.Title, Product = i.Product!.Name, i.ProductId, i.ItemType }).ToListAsync())
             .OrderBy(x => x.Product).ThenBy(x => x.ItemType).ThenBy(x => x.Title)
             .Select(x => new DocumentTargetOption(T(DocumentTargetKind.RoadmapItem, x.Id), x.Title, x.Product, x.ProductId)));
+        options.AddRange((await db.DevProjects.AsNoTracking().Select(p => new { p.Id, p.Name, Product = p.Product!.Name, p.ProductId }).ToListAsync())
+            .OrderBy(x => x.Product).ThenBy(x => x.Name)
+            .Select(x => new DocumentTargetOption(T(DocumentTargetKind.DevProject, x.Id), x.Name, $"{x.Product} · development", x.ProductId)));
         return options;
     }
 
-    /// <summary>Checks the product and target exist. A roadmap item's document always belongs to the item's product.</summary>
+    /// <summary>Checks the product and target exist. A roadmap item's or development project's document always belongs to its product.</summary>
     private static async Task PrepareDocumentAsync(RoadmapDbContext db, DocumentDraft draft)
     {
         if (draft.ProductId is { } pid && !await db.Products.AnyAsync(p => p.Id == pid)) throw NotFound("Product");
@@ -264,11 +268,14 @@ public partial class PortfolioService
             DocumentTargetKind.Application => await db.Applications.AnyAsync(x => x.Id == t.Id),
             DocumentTargetKind.Vendor => await db.Vendors.AnyAsync(x => x.Id == t.Id),
             DocumentTargetKind.Contract => await db.Contracts.AnyAsync(x => x.Id == t.Id),
+            DocumentTargetKind.DevProject => await db.DevProjects.AnyAsync(x => x.Id == t.Id),
             _ => await db.Items.AnyAsync(x => x.Id == t.Id),
         };
         if (!exists) throw NotFound(PortfolioText.Label(t.Kind));
         if (t.Kind == DocumentTargetKind.RoadmapItem)
             draft.ProductId = await db.Items.Where(i => i.Id == t.Id).Select(i => (int?)i.ProductId).FirstAsync();
+        if (t.Kind == DocumentTargetKind.DevProject)
+            draft.ProductId = await db.DevProjects.Where(p => p.Id == t.Id).Select(p => (int?)p.ProductId).FirstAsync();
     }
 
     private static void TryDelete(string path)

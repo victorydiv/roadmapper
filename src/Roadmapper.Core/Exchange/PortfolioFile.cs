@@ -37,6 +37,8 @@ public sealed class PortfolioFile
     public List<PfComparisonMember> ComparisonMembers { get; set; } = [];
     public List<PfPricingLine> PricingLines { get; set; } = [];
     public List<PfSiteProfile> SiteProfiles { get; set; } = [];
+    public List<PfDevCostCategory> DevCostCategories { get; set; } = [];
+    public List<PfDevProject> DevProjects { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -79,6 +81,8 @@ public sealed class PortfolioFile
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
         Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; PricingLines ??= []; SiteProfiles ??= []; History ??= [];
+        DevCostCategories ??= []; DevProjects ??= [];
+        foreach (var p in DevProjects) p.Costs ??= [];
         foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
         foreach (var v in Vendors) { v.Contracts ??= []; v.Escalation ??= []; }
@@ -115,6 +119,11 @@ public sealed class PortfolioFile
         Named(Documents.Select(d => d.Title), "document");
         Named(Features.Select(f => f.Name), "feature");
         Unique(Features.Select(f => f.Id), "feature");
+        Unique(DevCostCategories.Select(c => c.Id), "cost category");
+        Unique(DevProjects.Select(p => p.Id), "development project");
+        Named(DevCostCategories.Select(c => c.Name), "cost category");
+        Named(DevProjects.Select(p => p.Name), "development project");
+        if (DevProjects.Any(p => string.IsNullOrWhiteSpace(p.Product))) errors.Add("A development project has no product.");
         if (errors.Count > 0) return errors;
 
         var contacts = Contacts.Select(c => c.Id).ToHashSet();
@@ -126,6 +135,8 @@ public sealed class PortfolioFile
         var processes = Processes.Select(p => p.Id).ToHashSet();
         var kpis = Processes.SelectMany(p => p.Kpis).Select(k => k.Id).ToHashSet();
         var decisions = Decisions.Select(d => d.Id).ToHashSet();
+        var costCategories = DevCostCategories.Select(c => c.Id).ToHashSet();
+        var devProjects = DevProjects.Select(p => p.Id).ToHashSet();
         void Ref(int? id, HashSet<int> known, string what, string where)
         {
             if (id is { } x && !known.Contains(x)) errors.Add($"{where} refers to {what} {x}, which isn't in the file.");
@@ -195,7 +206,16 @@ public sealed class PortfolioFile
                 case DocumentTargetKind.Vendor: Ref(d.TargetId ?? 0, vendors, "vendor", where); break;
                 case DocumentTargetKind.Contract: Ref(d.TargetId ?? 0, contracts, "contract", where); break;
                 case DocumentTargetKind.RoadmapItem when d.Item is null: errors.Add($"{where} is attached to a roadmap item with no path."); break;
+                case DocumentTargetKind.DevProject: Ref(d.TargetId ?? 0, devProjects, "development project", where); break;
             }
+        }
+        foreach (var p in DevProjects)
+        {
+            var where = $"Development project “{p.Name}”";
+            Ref(p.CustomerId, partners, "trading partner", where);
+            Ref(p.ApplicationId, apps, "application", where);
+            Ref(p.VendorId, vendors, "vendor", where);
+            foreach (var c in p.Costs) Ref(c.CategoryId, costCategories, "cost category", where);
         }
         foreach (var d in Decisions)
         {
@@ -442,7 +462,7 @@ public sealed record PfHistory(PortfolioEntityType EntityType, int EntityId, str
 /// <summary>
 /// A document: a saved file (<see cref="FileName"/>, <see cref="LocalPath"/>) and/or its SharePoint <see cref="Url"/>.
 /// <see cref="Product"/> is the name of the product it belongs to (null: shared). Attached by <see cref="TargetId"/>
-/// (application, vendor, contract) or <see cref="Item"/> (roadmap item).
+/// (application, vendor, contract, development project) or <see cref="Item"/> (roadmap item).
 /// </summary>
 public sealed class PfDocument
 {
@@ -481,6 +501,34 @@ public sealed record PfComparisonMember(AppCategory Category, int ApplicationId)
 /// <summary>A line of an application's pricing in a category's comparison.</summary>
 public sealed record PfPricingLine(AppCategory Category, int ApplicationId, string Label, PricingBasis Basis, string? Unit, decimal? Quantity,
     decimal UnitPrice, PriceFrequency Frequency, decimal? Minimum, PriceSource Source, DateOnly? AsOf, string? Note, int SortOrder);
+
+/// <summary>A development cost category (DEV, QA, EDI, PM…).</summary>
+public sealed record PfDevCostCategory(int Id, string Name, decimal? DefaultRate, int SortOrder);
+
+/// <summary>
+/// A development project of the product named <see cref="Product"/>, with its cost lines. <see cref="Item"/> is the
+/// roadmap item it delivers, by path.
+/// </summary>
+public sealed class PfDevProject
+{
+    public int Id { get; set; }
+    public string Product { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DevStatus Status { get; set; }
+    public string? Description { get; set; }
+    public string? Reference { get; set; }
+    public int? CustomerId { get; set; }
+    public int? ApplicationId { get; set; }
+    public int? VendorId { get; set; }
+    public PfRoadmapRef? Item { get; set; }
+    public DateOnly? TargetDate { get; set; }
+    public DateOnly? CompletedOn { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<PfDevCost> Costs { get; set; } = [];
+}
+
+/// <summary>One line of a development project's cost: hours × rate, or a fixed amount.</summary>
+public sealed record PfDevCost(int CategoryId, decimal? Hours, decimal? Rate, decimal? Amount, string? Note);
 
 /// <summary>A typical site a category's solutions are costed for.</summary>
 public sealed record PfSiteProfile(int Id, AppCategory Category, string Name, bool IsDefault, int? Users, int? Licenses, int? DockDoors,

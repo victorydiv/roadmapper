@@ -156,6 +156,14 @@ public static class PortfolioText
 
     public static string Label(PriceSource s) => s switch { PriceSource.ListPrice => "List price", _ => s.ToString() };
 
+    public static string Label(DevStatus s) => s switch
+    {
+        DevStatus.InDevelopment => "In development",
+        DevStatus.Complete => "Deployed / Complete",
+        DevStatus.OnHold => "On hold",
+        _ => s.ToString(),
+    };
+
     public static string Label(Hosting h) => h switch { Hosting.OnPrem => "On-premises", _ => h.ToString() };
 
     public static string Label(SupportRole r) => r switch
@@ -233,6 +241,7 @@ public static class PortfolioText
     public static string Label(DocumentTargetKind k) => k switch
     {
         DocumentTargetKind.RoadmapItem => "Roadmap item",
+        DocumentTargetKind.DevProject => "Development project",
         _ => k.ToString(),
     };
 
@@ -284,6 +293,7 @@ public static class PortfolioText
         PricingBasis pb => Label(pb),
         PriceFrequency pf => Label(pf),
         PriceSource ps => Label(ps),
+        DevStatus ds => Label(ds),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

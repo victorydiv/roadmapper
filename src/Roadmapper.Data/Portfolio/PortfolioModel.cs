@@ -301,7 +301,7 @@ internal static class PortfolioModel
         {
             // Attached to at most one record. (The product it belongs to is separate.)
             e.ToTable("Documents", t => t.HasCheckConstraint("CK_Documents_OneTarget",
-                "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1"));
+                "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) + (\"DevProjectId\" IS NOT NULL) <= 1"));
             e.Property(d => d.Title).IsRequired().HasMaxLength(300);
             e.Property(d => d.Category).HasConversion<string>().HasMaxLength(20);
             e.Property(d => d.FileName).HasMaxLength(DocumentLibrary.MaxFileNameLength + 10);
@@ -314,6 +314,8 @@ internal static class PortfolioModel
             e.HasOne(d => d.Vendor).WithMany().HasForeignKey(d => d.VendorId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(d => d.Contract).WithMany().HasForeignKey(d => d.ContractId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(d => d.RoadmapItem).WithMany().HasForeignKey(d => d.RoadmapItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(d => d.DevProject).WithMany().HasForeignKey(d => d.DevProjectId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(d => d.DevProjectId);
             e.HasIndex(d => d.ProductId);
             e.HasIndex(d => d.ApplicationId);
             e.HasIndex(d => d.VendorId);
@@ -387,6 +389,49 @@ internal static class PortfolioModel
             e.Property(p => p.Name).IsRequired().HasMaxLength(Name).UseCollation("NOCASE");
             e.Property(p => p.Notes).HasMaxLength(1000);
             e.HasIndex(p => new { p.Category, p.Name }).IsUnique();
+        });
+
+        // Development pipeline: a product's development projects and their cost breakdown.
+        b.Entity<DevProject>(e =>
+        {
+            e.ToTable("DevProjects");
+            e.Property(p => p.Name).IsRequired().HasMaxLength(Name);
+            e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.Description).HasMaxLength(PortfolioRules.MaxNotesLength);
+            e.Property(p => p.Reference).HasMaxLength(DevRules.MaxReferenceLength);
+            e.HasOne(p => p.Product).WithMany().HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Customer).WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.Application).WithMany().HasForeignKey(p => p.ApplicationId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.Vendor).WithMany().HasForeignKey(p => p.VendorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.RoadmapItem).WithMany().HasForeignKey(p => p.RoadmapItemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(p => p.ProductId);
+            e.HasIndex(p => p.CustomerId);
+            e.HasIndex(p => p.ApplicationId);
+            e.HasIndex(p => p.VendorId);
+            e.HasIndex(p => p.RoadmapItemId);
+        });
+
+        b.Entity<DevCostCategory>(e =>
+        {
+            e.ToTable("DevCostCategories");
+            e.Property(c => c.Name).IsRequired().HasMaxLength(DevRules.MaxCategoryLength).UseCollation("NOCASE");
+            e.HasIndex(c => c.Name).IsUnique();
+            e.HasData(
+                new DevCostCategory { Id = 1, Name = "DEV", SortOrder = 0 },
+                new DevCostCategory { Id = 2, Name = "QA", SortOrder = 1 },
+                new DevCostCategory { Id = 3, Name = "EDI", SortOrder = 2 },
+                new DevCostCategory { Id = 4, Name = "PM", SortOrder = 3 });
+        });
+
+        b.Entity<DevCostLine>(e =>
+        {
+            e.ToTable("DevCostLines");
+            e.Property(l => l.Note).HasMaxLength(DevRules.MaxNoteLength);
+            e.HasOne(l => l.DevProject).WithMany(p => p.CostLines).HasForeignKey(l => l.DevProjectId).OnDelete(DeleteBehavior.Cascade);
+            // A category in use can't be deleted.
+            e.HasOne(l => l.Category).WithMany().HasForeignKey(l => l.CategoryId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(l => l.DevProjectId);
+            e.HasIndex(l => l.CategoryId);
         });
 
         b.Entity<PortfolioSettings>(e =>

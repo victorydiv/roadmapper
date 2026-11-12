@@ -1,0 +1,266 @@
+@page "/products/{ProductId:int}/development"
+@inherits ProductPageBase
+@inject NavigationManager Nav
+
+@if (Roadmap is null)
+{
+    if (Loaded) { <NotFoundCard /> }
+}
+else
+{
+    <ProductHeader Roadmap="Roadmap" Section="Development">
+        <a class="btn" href="/export/products/@ProductId/development.xlsx" download>Export to Excel</a>
+        <button class="btn primary" @onclick="() => OpenNew()">+ New project</button>
+    </ProductHeader>
+
+    @if (Error is not null)
+    {
+        <div class="alert" style="margin-bottom:.75rem">@Error</div>
+    }
+
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile">
+            <span class="tile-label">Open projects</span>
+            <span class="tile-value">@projects.Count(p => DevRules.IsOpen(p.Status))</span>
+            <span class="muted small">@Count(DevStatus.OnHold) on hold</span>
+        </div>
+        <div class="card tile" title="Requested and quoted: not approved yet">
+            <span class="tile-label">Proposed</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(summary.Proposed)</span>
+            <span class="muted small">@(Count(DevStatus.Requested) + Count(DevStatus.Quoted)) requested / quoted</span>
+        </div>
+        <div class="card tile" title="Approved, in development or in test">
+            <span class="tile-label">Committed</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(summary.Committed)</span>
+            <span class="muted small">@(Count(DevStatus.Approved) + Count(DevStatus.InDevelopment) + Count(DevStatus.Test)) approved to test</span>
+        </div>
+        <div class="card tile">
+            <span class="tile-label">Deployed / complete</span>
+            <span class="tile-value">@PortfolioUi.MoneyShort(summary.Completed)</span>
+            <span class="muted small">@Count(DevStatus.Complete) project@(Count(DevStatus.Complete) == 1 ? "" : "s")</span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="segmented">
+            <button class="@(board ? "" : "on")" @onclick="() => board = false">List</button>
+            <button class="@(board ? "on" : "")" @onclick="() => board = true">Board</button>
+        </div>
+        @if (!board)
+        {
+            <label class="check"><input type="checkbox" @bind="showClosed" /><span>Show completed, on hold &amp; cancelled</span></label>
+        }
+        <span class="spacer"></span>
+        <button class="btn sm" @onclick="() => managingCategories = true" title="DEV, QA, EDI, PM…: the cost categories and their default rates, shared by all products">Cost categories</button>
+    </div>
+
+    @if (!loaded)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (projects.Count == 0)
+    {
+        <div class="card empty">
+            No development projects for @Roadmap.Product.Name yet. <button class="btn sm primary" @onclick="() => OpenNew()">+ New project</button>
+            <div class="muted small" style="margin-top:.5rem">
+                Track each piece of development from request to deployment: its status, its cost by category (DEV, QA, EDI, PM…)
+                and its SOW, which is uploaded to the product's SOW folder in SharePoint.
+            </div>
+        </div>
+    }
+    else if (board)
+    {
+        <div class="board dev-board" style="grid-template-columns:repeat(@DevRules.Pipeline.Count, minmax(200px, 1fr))">
+            @foreach (var status in DevRules.Pipeline)
+            {
+                var cards = projects.Where(p => p.Status == status).ToList();
+                <div class="column @(over == status && dragging is not null ? "over" : "")"
+                     @ondragenter="() => over = status"
+                     @ondragover:preventDefault
+                     @ondrop="() => DropAsync(status)">
+                    <div class="column-head">
+                        <DevStatusBadge Status="status" />
+                        <span class="count">@cards.Count</span>
+                        <span class="spacer"></span>
+                        <span class="small muted">@(cards.Count == 0 ? "" : PortfolioUi.MoneyShort(cards.Sum(p => p.TotalCost)))</span>
+                    </div>
+                    @foreach (var p in cards)
+                    {
+                        <div class="board-card @(dragging?.Id == p.Id ? "dragging" : "")" @key="p.Id" draggable="true"
+                             @ondragstart="() => dragging = p" @ondragend="() => { dragging = null; over = null; }">
+                            @if (p.Customer is { } c) { <div class="path">@c.Name</div> }
+                            <div class="ttl" @onclick="() => OpenEdit(p)">@p.Name</div>
+                            <div class="row small" style="gap:.4rem">
+                                <b>@PortfolioUi.Money(p.TotalCost)</b>
+                                @if (p.TargetDate is { } t && DevRules.IsOpen(p.Status)) { <span class="muted @(t < PortfolioSvc.Today ? "overdue" : "")" title="Target date">· @PortfolioUi.Date(t)</span> }
+                                <span class="spacer"></span>
+                                @if (Sows(p) is { Count: > 0 } docs) { <a href="@PortfolioUi.DocumentHref(docs[0])" target="_blank" title="@docs[0].Title" class="small">SOW</a> }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="muted small" style="margin-top:.5rem">Drag a card to another column to change its status. Click a name to open it.</div>
+    }
+    else
+    {
+        var shown = projects.Where(p => showClosed || DevRules.IsOpen(p.Status)).ToList();
+        var used = categories.Where(c => shown.Any(p => p.CostLines.Any(l => l.CategoryId == c.Id))).ToList();
+        <div class="card" style="padding:0;overflow-x:auto">
+            <table class="tree dev-table">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Customer</th>
+                        <th>Application</th>
+                        <th>Target</th>
+                        @foreach (var c in used)
+                        {
+                            <th class="num">@c.Name</th>
+                        }
+                        <th class="num">Hours</th>
+                        <th class="num">Total</th>
+                        <th>SOW</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in shown)
+                    {
+                        <tr class="@(Focus == p.Id ? "hl" : "")" style="cursor:pointer" @onclick="() => OpenEdit(p)">
+                            <td>
+                                <b>@p.Name</b>
+                                @if (p.Reference is { } r) { <span class="muted small"> · @r</span> }
+                                @if (p.Vendor is { } v) { <div class="muted small">by @v.Name</div> }
+                            </td>
+                            <td><DevStatusBadge Status="p.Status" /></td>
+                            <td>@p.Customer?.Name</td>
+                            <td>@p.Application?.Name</td>
+                            <td class="nowrap">
+                                @if (p.Status == DevStatus.Complete && p.CompletedOn is { } done)
+                                {
+                                    <span class="muted" title="Deployed / completed">✓ @PortfolioUi.Date(done)</span>
+                                }
+                                else if (p.TargetDate is { } t)
+                                {
+                                    <span class="@(t < PortfolioSvc.Today && DevRules.IsOpen(p.Status) ? "overdue" : "")">@PortfolioUi.Date(t)</span>
+                                }
+                            </td>
+                            @foreach (var c in used)
+                            {
+                                var amount = p.CostOf(c.Id);
+                                <td class="num">@(amount == 0 && p.CostLines.All(l => l.CategoryId != c.Id) ? "" : PortfolioUi.Money(amount))</td>
+                            }
+                            <td class="num">@(p.TotalHours == 0 ? "" : p.TotalHours.ToString("0.##"))</td>
+                            <td class="num"><b>@(p.CostLines.Count == 0 ? "–" : PortfolioUi.Money(p.TotalCost))</b></td>
+                            <td @onclick:stopPropagation="true">
+                                @foreach (var d in Sows(p))
+                                {
+                                    <div><a href="@PortfolioUi.DocumentHref(d)" target="_blank" title="@d.Title">@(d.FileName ?? d.Title)</a></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                @if (shown.Count > 1)
+                {
+                    <tfoot>
+                        <tr>
+                            <td colspan="5"><b>Total</b> <span class="muted small">(@shown.Count projects)</span></td>
+                            @foreach (var c in used)
+                            {
+                                <td class="num">@PortfolioUi.Money(shown.Sum(p => p.CostOf(c.Id)))</td>
+                            }
+                            <td class="num">@shown.Sum(p => p.TotalHours).ToString("0.##")</td>
+                            <td class="num"><b>@PortfolioUi.Money(shown.Sum(p => p.TotalCost))</b></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+        @if (shown.Count < projects.Count)
+        {
+            <div class="muted small" style="margin-top:.5rem">@(projects.Count - shown.Count) completed, on hold or cancelled not shown.</div>
+        }
+    }
+
+    @if (editing is { } ed && options is not null)
+    {
+        <DevProjectEditor Draft="ed" ProductName="@Roadmap.Product.Name" Categories="categories" Options="options" OnClose="OnEditorClosedAsync" />
+    }
+
+    @if (managingCategories)
+    {
+        <DevCostCategoriesEditor OnClose="OnCategoriesClosedAsync" />
+    }
+}
+
+@code {
+    /// <summary>A project to open when the page loads (from a document's link).</summary>
+    [SupplyParameterFromQuery(Name = "project")] public int? Focus { get; set; }
+
+    private List<DevProject> projects = [];
+    private List<DevCostCategory> categories = [];
+    private Dictionary<int, List<PortfolioDocument>> documents = [];
+    private DevPipelineSummary summary = DevRules.Summarize([]);
+    private DevProjectOptions? options;
+    private DevProjectDraft? editing;
+    private DevProject? dragging;
+    private DevStatus? over;
+    private bool loaded, board, showClosed, managingCategories;
+    private int? opened;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        await LoadAsync();
+        if (Focus is { } id && opened != id && projects.FirstOrDefault(p => p.Id == id) is { } p)
+        {
+            opened = id;
+            showClosed |= !DevRules.IsOpen(p.Status);
+            OpenEdit(p);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (await PortfolioSvc.GetDevPipelineAsync(ProductId) is not { } pipeline) return;
+        (projects, categories, documents, summary) = (pipeline.Projects, pipeline.Categories, pipeline.Documents, pipeline.Summary);
+        options = await PortfolioSvc.GetDevProjectOptionsAsync(ProductId);
+        loaded = true;
+    }
+
+    private int Count(DevStatus s) => summary.ByStatus[s].Count;
+
+    /// <summary>A project's SOWs first, then its other documents.</summary>
+    private List<PortfolioDocument> Sows(DevProject p) => documents.GetValueOrDefault(p.Id) ?? [];
+
+    private void OpenNew() => editing = DevProjectDraft.New(ProductId);
+
+    private void OpenEdit(DevProject p) => editing = DevProjectDraft.From(p);
+
+    private async Task OnEditorClosedAsync(bool changed)
+    {
+        editing = null;
+        if (Focus is not null) Nav.NavigateTo(PortfolioUi.DevProjectHref(ProductId), replace: true);
+        // Reload either way: documents may have been added from the editor without saving the project.
+        await LoadAsync();
+    }
+
+    private async Task OnCategoriesClosedAsync()
+    {
+        managingCategories = false;
+        await LoadAsync();
+    }
+
+    private async Task DropAsync(DevStatus to)
+    {
+        var p = dragging;
+        (dragging, over) = (null, null);
+        if (p is null || p.Status == to) return;
+        await RunAsync(() => PortfolioSvc.SetDevProjectStatusAsync(p.Id, to));
+        await LoadAsync();
+    }
+}

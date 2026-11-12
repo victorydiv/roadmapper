@@ -1,0 +1,103 @@
+@* The development cost categories (DEV, QA, EDI, PM…), their order and default hourly rates. Shared by every product. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal narrow">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">Cost categories</h2>
+                <div class="muted small">Used in every product's development cost breakdowns, in this order.</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync()">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            <table class="tree">
+                <thead><tr><th>Name</th><th class="num" title="Filled in when a line of this category is added">Default rate ($/h)</th><th class="num">Used by</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var (c, n) in categories.Select((c, n) => (c, n)))
+                    {
+                        <tr>
+                            @if (editingId == c.Id)
+                            {
+                                <td><input @bind="name" /></td>
+                                <td class="num"><input type="number" min="0" step="0.01" @bind="rate" /></td>
+                                <td></td>
+                                <td class="nowrap">
+                                    <button class="btn sm primary" @onclick="SaveAsync">Save</button>
+                                    <button class="btn sm" @onclick="() => editingId = null">Cancel</button>
+                                </td>
+                            }
+                            else
+                            {
+                                <td><b>@c.Name</b></td>
+                                <td class="num">@PortfolioUi.Money(c.DefaultRate)</td>
+                                <td class="num muted">@(usage.GetValueOrDefault(c.Id) is var u && u > 0 ? $"{u} line{(u == 1 ? "" : "s")}" : "–")</td>
+                                <td class="nowrap">
+                                    <button class="btn icon sm" title="Move up" disabled="@(n == 0)" @onclick="() => RunAsync(() => Svc.MoveDevCostCategoryAsync(c.Id, -1))">↑</button>
+                                    <button class="btn icon sm" title="Move down" disabled="@(n == categories.Count - 1)" @onclick="() => RunAsync(() => Svc.MoveDevCostCategoryAsync(c.Id, 1))">↓</button>
+                                    <button class="btn sm" @onclick="() => Edit(c)">Edit</button>
+                                    <button class="btn sm danger" disabled="@(usage.GetValueOrDefault(c.Id) > 0)" title="@(usage.GetValueOrDefault(c.Id) > 0 ? "In use: change those lines to another category first" : "Delete this category")" @onclick="() => RunAsync(() => Svc.DeleteDevCostCategoryAsync(c.Id))">Delete</button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="row" style="align-items:flex-end">
+                <label class="field" style="flex:2">New category
+                    <input @bind="newName" placeholder="e.g. BA, Infrastructure, Training" />
+                </label>
+                <label class="field" style="flex:1">Default rate ($/h)
+                    <input type="number" min="0" step="0.01" @bind="newRate" />
+                </label>
+                <button class="btn primary" disabled="@string.IsNullOrWhiteSpace(newName)" @onclick="AddAsync">Add</button>
+            </div>
+        </div>
+        <div class="modal-foot">
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync()">Done</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private List<DevCostCategory> categories = [];
+    private Dictionary<int, int> usage = [];
+    private int? editingId;
+    private string? name, newName, error;
+    private decimal? rate, newRate;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        categories = await Svc.GetDevCostCategoriesAsync();
+        usage = await Svc.GetDevCostCategoryUsageAsync();
+    }
+
+    private void Edit(DevCostCategory c) => (editingId, name, rate) = (c.Id, c.Name, c.DefaultRate);
+
+    private async Task SaveAsync()
+    {
+        if (editingId is not { } id) return;
+        await RunAsync(async () => { await Svc.SaveDevCostCategoryAsync(id, name ?? "", rate); editingId = null; });
+    }
+
+    private async Task AddAsync() =>
+        await RunAsync(async () => { await Svc.SaveDevCostCategoryAsync(0, newName ?? "", newRate); (newName, newRate) = (null, null); });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        try { await action(); }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        await LoadAsync();
+    }
+}

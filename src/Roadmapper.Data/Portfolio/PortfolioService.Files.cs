@@ -166,7 +166,7 @@ public partial class PortfolioService
                 Id = d.Id, Title = d.Title, Category = d.Category, FileName = d.FileName, LocalPath = d.LocalPath, Url = d.Url,
                 SizeBytes = d.SizeBytes, DocumentDate = d.DocumentDate, Notes = d.Notes, CreatedAt = d.CreatedAt,
                 AttachedTo = d.Target?.Kind,
-                TargetId = d.ApplicationId ?? d.VendorId ?? d.ContractId,
+                TargetId = d.ApplicationId ?? d.VendorId ?? d.ContractId ?? d.DevProjectId,
                 Product = d.ProductId is { } dp ? productNames.GetValueOrDefault(dp) : null,
                 Item = d.RoadmapItemId is { } di ? index.RefOf(di) : null,
             }).ToList(),
@@ -184,6 +184,16 @@ public partial class PortfolioService
                     l.Source, l.AsOf, l.Note, l.SortOrder)).ToList(),
             SiteProfiles = (await db.SiteProfiles.AsNoTracking().ToListAsync()).OrderBy(p => p.Category).ThenBy(p => p.Name)
                 .Select(p => new PfSiteProfile(p.Id, p.Category, p.Name, p.IsDefault, p.Users, p.Licenses, p.DockDoors, p.Assets, p.TransactionsPerMonth, p.Notes)).ToList(),
+            DevCostCategories = (await db.DevCostCategories.AsNoTracking().ToListAsync()).OrderBy(c => c.SortOrder).ThenBy(c => c.Id)
+                .Select(c => new PfDevCostCategory(c.Id, c.Name, c.DefaultRate, c.SortOrder)).ToList(),
+            DevProjects = (await db.DevProjects.AsNoTracking().Include(p => p.CostLines).OrderBy(p => p.Id).ToListAsync())
+                .Where(p => productNames.ContainsKey(p.ProductId)).Select(p => new PfDevProject
+                {
+                    Id = p.Id, Product = productNames[p.ProductId], Name = p.Name, Status = p.Status, Description = p.Description, Reference = p.Reference,
+                    CustomerId = p.CustomerId, ApplicationId = p.ApplicationId, VendorId = p.VendorId,
+                    Item = p.RoadmapItemId is { } ri ? index.RefOf(ri) : null, TargetDate = p.TargetDate, CompletedOn = p.CompletedOn, CreatedAt = p.CreatedAt,
+                    Costs = p.CostLines.OrderBy(l => l.SortOrder).ThenBy(l => l.Id).Select(l => new PfDevCost(l.CategoryId, l.Hours, l.Rate, l.FixedAmount, l.Note)).ToList(),
+                }).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -571,6 +581,76 @@ public partial class PortfolioService
         await db.SaveChangesAsync();
         result.Count("decisions", newDecisions.Count);
 
+        // Development pipeline: cost categories (matched by name; a restore replaces the default ones) and projects
+        // (matched by product and name on a merge). Projects for a product that isn't here are skipped.
+        var categoryMap = new Dictionary<int, int>();
+        if (!merge && file.DevCostCategories.Count > 0 && !await db.DevCostLines.AnyAsync())
+        {
+            db.DevCostCategories.RemoveRange(await db.DevCostCategories.ToListAsync());
+            await db.SaveChangesAsync();
+        }
+        var existingCategories = await db.DevCostCategories.ToListAsync();
+        var newCategories = new List<(PfDevCostCategory File, DevCostCategory Row)>();
+        foreach (var c in file.DevCostCategories.OrderBy(c => c.SortOrder))
+        {
+            if (existingCategories.FirstOrDefault(x => string.Equals(x.Name, c.Name.Trim(), StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                categoryMap[c.Id] = found.Id;
+                continue;
+            }
+            var row = new DevCostCategory
+            {
+                Name = c.Name.Trim(), DefaultRate = c.DefaultRate is < 0 ? null : c.DefaultRate,
+                SortOrder = existingCategories.Select(x => x.SortOrder + 1).Concat(newCategories.Select(n => n.Row.SortOrder + 1)).DefaultIfEmpty(0).Max(),
+            };
+            db.DevCostCategories.Add(row);
+            newCategories.Add((c, row));
+        }
+        await db.SaveChangesAsync();
+        foreach (var (c, row) in newCategories) categoryMap[c.Id] = row.Id;
+        result.Count("cost categories", newCategories.Count);
+
+        var devProjectMap = new Dictionary<int, int>();
+        var newDevProjects = new List<(PfDevProject File, DevProject Row)>();
+        var existingDevProjects = await db.DevProjects.AsNoTracking().Select(p => new { p.Id, p.ProductId, p.Name }).ToListAsync();
+        foreach (var p in file.DevProjects)
+        {
+            if (index.ProductOf(p.Product) is not { } pid)
+            {
+                result.Unmatched.Add($"Development project “{p.Name}”: roadmap {p.Product}");
+                continue;
+            }
+            if (merge && existingDevProjects.FirstOrDefault(x => x.ProductId == pid && string.Equals(x.Name, p.Name.Trim(), StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                devProjectMap[p.Id] = found.Id;
+                result.Skipped.Add($"Development project {p.Name} (already here)");
+                continue;
+            }
+            var itemId = Item(p.Item, $"Development project “{p.Name}”");
+            var row = new DevProject
+            {
+                ProductId = pid, Name = p.Name.Trim(), Status = p.Status, Description = p.Description, Reference = p.Reference,
+                CustomerId = Map(partnerMap, p.CustomerId), ApplicationId = Map(appMap, p.ApplicationId), VendorId = Map(vendorMap, p.VendorId),
+                RoadmapItemId = itemId is { } ii && await db.Items.AnyAsync(i => i.Id == ii && i.ProductId == pid) ? itemId : null,
+                TargetDate = p.TargetDate, CompletedOn = p.CompletedOn, CreatedAt = p.CreatedAt == default ? now : p.CreatedAt, UpdatedAt = now,
+            };
+            var n = 0;
+            foreach (var c in p.Costs)
+            {
+                if (!categoryMap.TryGetValue(c.CategoryId, out var cid)) continue;
+                var line = new DevCostLineDraft { CategoryId = cid, Hours = c.Hours, Rate = c.Rate, Amount = c.Hours is null ? c.Amount : null, Note = c.Note };
+                if (line.Validate() is not null) { result.Skipped.Add($"A cost line of {p.Name} (not valid)"); continue; }
+                var l = new DevCostLine { SortOrder = n++ };
+                line.ApplyTo(l);
+                row.CostLines.Add(l);
+            }
+            db.DevProjects.Add(row);
+            newDevProjects.Add((p, row));
+        }
+        await db.SaveChangesAsync();
+        foreach (var (p, row) in newDevProjects) devProjectMap[p.Id] = row.Id;
+        result.Count("development projects", newDevProjects.Count);
+
         // Documents: the files themselves stay in SharePoint; this brings back the list and what each is attached to.
         var documentMap = new Dictionary<int, int>();
         var newDocuments = new List<(PfDocument File, PortfolioDocument Row)>();
@@ -601,6 +681,10 @@ public partial class PortfolioService
                 case DocumentTargetKind.Application: row.ApplicationId = Map(appMap, d.TargetId); break;
                 case DocumentTargetKind.Vendor: row.VendorId = Map(vendorMap, d.TargetId); break;
                 case DocumentTargetKind.Contract: row.ContractId = Map(contractMap, d.TargetId); break;
+                case DocumentTargetKind.DevProject:
+                    row.DevProjectId = Map(devProjectMap, d.TargetId);
+                    if (row.DevProjectId is { } dpid) row.ProductId = await db.DevProjects.Where(x => x.Id == dpid).Select(x => (int?)x.ProductId).FirstAsync();
+                    break;
                 case DocumentTargetKind.RoadmapItem:
                     row.RoadmapItemId = Item(d.Item, $"Document “{d.Title}”");
                     if (row.RoadmapItemId is { } ri) row.ProductId = await db.Items.Where(i => i.Id == ri).Select(i => (int?)i.ProductId).FirstAsync();
@@ -719,6 +803,7 @@ public partial class PortfolioService
                 [PortfolioEntityType.Integration] = flowMap, [PortfolioEntityType.TradingPartner] = partnerMap, [PortfolioEntityType.Process] = processMap,
                 [PortfolioEntityType.Benefit] = benefitMap, [PortfolioEntityType.Decision] = decisionMap,
                 [PortfolioEntityType.Document] = documentMap, [PortfolioEntityType.Feature] = featureMap, [PortfolioEntityType.SiteProfile] = profileMap,
+                [PortfolioEntityType.DevProject] = devProjectMap,
             };
             foreach (var h in file.History)
                 db.PortfolioAuditEntries.Add(new PortfolioAuditEntry

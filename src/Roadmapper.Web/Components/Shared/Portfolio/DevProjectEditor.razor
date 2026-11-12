@@ -1,0 +1,257 @@
+@* Add or change a development project: its details, cost breakdown (hours × rate or a fixed amount per category) and, once saved, its SOW and other documents. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal wide">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">@(draft.IsNew ? "New development project" : draft.Name)</h2>
+                <div class="muted small">@ProductName · development pipeline</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="CloseAsync">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            @if (justCreated)
+            {
+                <div class="card" style="background:var(--accent-soft)">Saved. Upload the SOW (or link it) under <b>SOW &amp; documents</b> below.</div>
+            }
+            <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+                <label class="field" style="flex:2;min-width:240px">Project name
+                    <input @bind="draft.Name" placeholder="e.g. Acme ASN enhancement, Wave release rework" />
+                </label>
+                <label class="field" style="flex:1;min-width:170px">Status
+                    <select @bind="draft.Status">
+                        @foreach (var s in DevRules.Pipeline)
+                        {
+                            <option value="@s">@PortfolioText.Label(s)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1;min-width:140px" title="A quote, ticket or PO number">Reference
+                    <input @bind="draft.Reference" placeholder="e.g. Q-1042" />
+                </label>
+            </div>
+            <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+                <label class="field" style="flex:1;min-width:180px">Customer
+                    <select @bind="draft.CustomerId">
+                        <option value="">— none —</option>
+                        @foreach (var o in Options.Customers)
+                        {
+                            <option value="@o.Id">@o.Name@(o.Detail is { } d ? $" ({d})" : "")</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1;min-width:180px" title="The system being changed">Application
+                    <select @bind="draft.ApplicationId">
+                        <option value="">— none —</option>
+                        @foreach (var o in Options.Applications)
+                        {
+                            <option value="@o.Id">@o.Name</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1;min-width:180px" title="Who's doing the work, when it's a vendor">Vendor
+                    <select @bind="draft.VendorId">
+                        <option value="">— internal / none —</option>
+                        @foreach (var o in Options.Vendors)
+                        {
+                            <option value="@o.Id">@o.Name</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+                <label class="field" style="flex:2;min-width:240px" title="The goal, initiative or feature on this product's roadmap that it delivers">Roadmap item
+                    <select @bind="draft.RoadmapItemId">
+                        <option value="">— none —</option>
+                        @foreach (var o in Options.Items)
+                        {
+                            <option value="@o.Id">@o.Detail: @o.Name</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1;min-width:150px">Target date
+                    <InputDate @bind-Value="draft.TargetDate" />
+                </label>
+                @if (draft.Status == DevStatus.Complete)
+                {
+                    <label class="field" style="flex:1;min-width:150px" title="Left blank, it's set to today when you save">Deployed / completed
+                        <InputDate @bind-Value="draft.CompletedOn" />
+                    </label>
+                }
+            </div>
+            <label class="field">Description
+                <textarea rows="2" @bind="draft.Description" placeholder="What's being built, for whom, and why"></textarea>
+            </label>
+
+            <div class="stack">
+                <div class="row" style="flex-wrap:wrap;gap:.4rem">
+                    <h3 style="margin:0">Cost breakdown</h3>
+                    <span class="muted small">Hours × rate, or an amount for a fixed fee.</span>
+                    <span class="spacer"></span>
+                    @foreach (var c in Categories)
+                    {
+                        <button type="button" class="btn sm" title="Add a @c.Name line@(c.DefaultRate is { } r ? $" at {PortfolioUi.Money(r)}/h" : "")" @onclick="() => AddLine(c)">+ @c.Name</button>
+                    }
+                </div>
+                @if (Categories.Count == 0)
+                {
+                    <div class="muted small">There are no cost categories. Add some with <b>Cost categories</b> on the Development tab.</div>
+                }
+                else if (draft.Lines.Count == 0)
+                {
+                    <div class="muted small">No costs yet. Add a line per category above, e.g. DEV 40 h × $150.</div>
+                }
+                else
+                {
+                    <table class="tree dev-cost">
+                        <thead>
+                            <tr><th>Category</th><th class="num">Hours</th><th class="num">Rate ($/h)</th><th class="num">Amount</th><th>Note</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in draft.Lines)
+                            {
+                                <tr>
+                                    <td>
+                                        <select @bind="line.CategoryId">
+                                            @if (line.CategoryId == 0) { <option value="0">— choose —</option> }
+                                            @foreach (var c in Categories)
+                                            {
+                                                <option value="@c.Id">@c.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="num"><input type="number" min="0" step="0.25" @bind="line.Hours" @bind:after="() => FillRate(line)" placeholder="—" /></td>
+                                    <td class="num"><input type="number" min="0" step="0.01" @bind="line.Rate" placeholder="—" /></td>
+                                    <td class="num">
+                                        @if (line.ByHours)
+                                        {
+                                            <span title="Hours × rate">@PortfolioUi.Money(line.Total)</span>
+                                        }
+                                        else
+                                        {
+                                            <input type="number" min="0" step="0.01" @bind="line.Amount" placeholder="fixed $" />
+                                        }
+                                    </td>
+                                    <td><input @bind="line.Note" placeholder="optional" /></td>
+                                    <td><button type="button" class="btn icon sm" title="Remove this line" @onclick="() => draft.Lines.Remove(line)">✕</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td><b>Total</b></td>
+                                <td class="num">@draft.Hours.ToString("0.##")</td>
+                                <td></td>
+                                <td class="num"><b>@PortfolioUi.Money(draft.Total)</b></td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                }
+            </div>
+
+            @if (draft.IsNew)
+            {
+                <div class="muted small">Save the project to upload or link its SOW.</div>
+            }
+            else
+            {
+                <DocumentList Target="new DocumentTarget(DocumentTargetKind.DevProject, draft.Id)" ProductId="draft.ProductId" Name="@draft.Name" Title="@("SOW & documents")" CssClass="flat" />
+                @if (history is { Count: > 0 })
+                {
+                    <details>
+                        <summary class="small">History (@history.Count)</summary>
+                        <PortfolioActivityList Entries="history" />
+                    </details>
+                }
+            }
+        </div>
+        <div class="modal-foot">
+            @if (!draft.IsNew)
+            {
+                @if (confirmDelete)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Delete this project</button>
+                }
+                else
+                {
+                    <button type="button" class="btn danger" @onclick="() => confirmDelete = true">Delete</button>
+                }
+            }
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="CloseAsync">@(changed ? "Close" : "Cancel")</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DevProjectDraft Draft { get; set; } = new();
+    [Parameter] public string ProductName { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<DevCostCategory> Categories { get; set; } = [];
+    [Parameter, EditorRequired] public DevProjectOptions Options { get; set; } = new([], [], [], []);
+    /// <summary>Called with true when anything was saved or deleted.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private DevProjectDraft draft = new();
+    private List<PortfolioAuditEntry>? history;
+    private string? error;
+    private bool saving, confirmDelete, changed, justCreated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        draft = Draft;
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync() =>
+        history = draft.IsNew ? null : await Svc.GetActivityAsync(PortfolioEntityType.DevProject, draft.Id);
+
+    private void AddLine(DevCostCategory c) => draft.Lines.Add(new DevCostLineDraft { CategoryId = c.Id, Rate = c.DefaultRate });
+
+    /// <summary>Hours entered on a line with no rate: use the category's default rate.</summary>
+    private void FillRate(DevCostLineDraft line)
+    {
+        if (line.Hours is not null && line.Rate is null)
+            line.Rate = Categories.FirstOrDefault(c => c.Id == line.CategoryId)?.DefaultRate;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var wasNew = draft.IsNew;
+            var id = await Svc.SaveDevProjectAsync(draft);
+            changed = true;
+            if (wasNew && await Svc.GetDevProjectAsync(id) is { } saved)
+            {
+                // Stay open so the SOW can be added straight away.
+                draft = DevProjectDraft.From(saved);
+                justCreated = true;
+                await LoadHistoryAsync();
+            }
+            else
+            {
+                await OnClose.InvokeAsync(true);
+            }
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteDevProjectAsync(draft.Id);
+        await OnClose.InvokeAsync(true);
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync(changed);
+}

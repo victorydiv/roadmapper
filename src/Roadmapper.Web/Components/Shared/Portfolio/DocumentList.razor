@@ -3,7 +3,7 @@
 
 <div class="card stack @CssClass" style="@(CssClass is null ? "margin-top:1rem" : null)">
     <div class="row">
-        <h2 style="margin:0">Documents</h2>
+        <h2 style="margin:0">@Title</h2>
         <span class="muted small">Kept in SharePoint.</span>
         <span class="spacer"></span>
         @if (Target is null && ProductId is { } pid)
@@ -38,6 +38,8 @@
     /// <summary>The product new documents belong to by default; without a <see cref="Target"/>, the product whose documents are listed.</summary>
     [Parameter] public int? ProductId { get; set; }
     [Parameter, EditorRequired] public string Name { get; set; } = "";
+    /// <summary>The card's heading.</summary>
+    [Parameter] public string Title { get; set; } = "Documents";
     /// <summary>Extra classes for the card, e.g. "wide" in a dashboard grid (which also drops its top margin).</summary>
     [Parameter] public string? CssClass { get; set; }
     /// <summary>

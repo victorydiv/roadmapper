@@ -765,6 +765,161 @@ namespace Roadmapper.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevCostCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("DefaultRate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("DevCostCategories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "DEV",
+                            SortOrder = 0
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "QA",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "EDI",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Name = "PM",
+                            SortOrder = 3
+                        });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevCostLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DevProjectId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("FixedAmount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Hours")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Rate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("DevProjectId");
+
+                    b.ToTable("DevCostLines", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevProject", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("CompletedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RoadmapItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("TargetDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("VendorId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RoadmapItemId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("DevProjects", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.DocumentFolder", b =>
                 {
                     b.Property<int>("Id")
@@ -1053,6 +1208,9 @@ namespace Roadmapper.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("DevProjectId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateOnly?>("DocumentDate")
                         .HasColumnType("TEXT");
 
@@ -1100,6 +1258,8 @@ namespace Roadmapper.Data.Migrations
 
                     b.HasIndex("ContractId");
 
+                    b.HasIndex("DevProjectId");
+
                     b.HasIndex("ProductId");
 
                     b.HasIndex("RoadmapItemId");
@@ -1108,7 +1268,7 @@ namespace Roadmapper.Data.Migrations
 
                     b.ToTable("Documents", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Documents_OneTarget", "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) <= 1");
+                            t.HasCheckConstraint("CK_Documents_OneTarget", "(\"ApplicationId\" IS NOT NULL) + (\"VendorId\" IS NOT NULL) + (\"ContractId\" IS NOT NULL) + (\"RoadmapItemId\" IS NOT NULL) + (\"DevProjectId\" IS NOT NULL) <= 1");
                         });
                 });
 
@@ -2222,6 +2382,64 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Vendor");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevCostLine", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.DevCostCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.DevProject", "DevProject")
+                        .WithMany("CostLines")
+                        .HasForeignKey("DevProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("DevProject");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevProject", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.RoadmapItem", "RoadmapItem")
+                        .WithMany()
+                        .HasForeignKey("RoadmapItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Roadmapper.Core.Portfolio.Vendor", "Vendor")
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Application");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("RoadmapItem");
+
+                    b.Navigation("Vendor");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.DocumentFolder", b =>
                 {
                     b.HasOne("Roadmapper.Core.Product", null)
@@ -2324,6 +2542,11 @@ namespace Roadmapper.Data.Migrations
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Roadmapper.Core.Portfolio.DevProject", "DevProject")
+                        .WithMany()
+                        .HasForeignKey("DevProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Roadmapper.Core.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
@@ -2342,6 +2565,8 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Contract");
+
+                    b.Navigation("DevProject");
 
                     b.Navigation("Product");
 
@@ -2617,6 +2842,11 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Alternatives");
 
                     b.Navigation("Links");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.DevProject", b =>
+                {
+                    b.Navigation("CostLines");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>

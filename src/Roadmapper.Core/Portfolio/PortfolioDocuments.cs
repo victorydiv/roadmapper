@@ -52,6 +52,8 @@ public class PortfolioDocument
     public Contract? Contract { get; set; }
     public int? RoadmapItemId { get; set; }
     public RoadmapItem? RoadmapItem { get; set; }
+    public int? DevProjectId { get; set; }
+    public DevProject? DevProject { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -61,7 +63,7 @@ public class PortfolioDocument
     public DocumentTarget? Target => DocumentTarget.Of(this);
 
     /// <summary>The attached record's name (needs its navigation loaded).</summary>
-    public string? TargetName => Application?.Name ?? Vendor?.Name ?? Contract?.Name ?? RoadmapItem?.Title;
+    public string? TargetName => Application?.Name ?? Vendor?.Name ?? Contract?.Name ?? RoadmapItem?.Title ?? DevProject?.Name;
 }
 
 /// <summary>What a document is attached to. <see cref="Key"/> ("a12", "v2", "c5", "r9") is used in select lists and URLs.</summary>
@@ -70,7 +72,7 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
     private static readonly (DocumentTargetKind Kind, string Prefix)[] Prefixes =
     [
         (DocumentTargetKind.Application, "a"), (DocumentTargetKind.Vendor, "v"),
-        (DocumentTargetKind.Contract, "c"), (DocumentTargetKind.RoadmapItem, "r"),
+        (DocumentTargetKind.Contract, "c"), (DocumentTargetKind.RoadmapItem, "r"), (DocumentTargetKind.DevProject, "d"),
     ];
 
     public string Key { get { var kind = Kind; return Prefixes.First(p => p.Kind == kind).Prefix + Id; } }
@@ -89,18 +91,20 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
         : d.VendorId is { } v ? new(DocumentTargetKind.Vendor, v)
         : d.ContractId is { } c ? new(DocumentTargetKind.Contract, c)
         : d.RoadmapItemId is { } r ? new(DocumentTargetKind.RoadmapItem, r)
+        : d.DevProjectId is { } p ? new(DocumentTargetKind.DevProject, p)
         : null;
 
     /// <summary>Points the document at <paramref name="target"/>, or at nothing.</summary>
     public static void Apply(DocumentTarget? target, PortfolioDocument d)
     {
-        (d.ApplicationId, d.VendorId, d.ContractId, d.RoadmapItemId) = (null, null, null, null);
+        (d.ApplicationId, d.VendorId, d.ContractId, d.RoadmapItemId, d.DevProjectId) = (null, null, null, null, null);
         if (target is not { } t) return;
         switch (t.Kind)
         {
             case DocumentTargetKind.Application: d.ApplicationId = t.Id; break;
             case DocumentTargetKind.Vendor: d.VendorId = t.Id; break;
             case DocumentTargetKind.Contract: d.ContractId = t.Id; break;
+            case DocumentTargetKind.DevProject: d.DevProjectId = t.Id; break;
             default: d.RoadmapItemId = t.Id; break;
         }
     }
@@ -109,7 +113,7 @@ public readonly record struct DocumentTarget(DocumentTargetKind Kind, int Id)
     public DocumentCategory DefaultCategory => Kind switch
     {
         DocumentTargetKind.Vendor or DocumentTargetKind.Contract => DocumentCategory.Contract,
-        DocumentTargetKind.RoadmapItem => DocumentCategory.Sow,
+        DocumentTargetKind.RoadmapItem or DocumentTargetKind.DevProject => DocumentCategory.Sow,
         _ => DocumentCategory.Brd,
     };
 

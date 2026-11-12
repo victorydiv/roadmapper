@@ -178,6 +178,7 @@ internal static class PortfolioAuditTrail
             [nameof(PortfolioDocument.VendorId)] = "Vendor",
             [nameof(PortfolioDocument.ContractId)] = "Contract",
             [nameof(PortfolioDocument.RoadmapItemId)] = "Roadmap item",
+            [nameof(PortfolioDocument.DevProjectId)] = "Development project",
         },
         [typeof(CapabilityFeature)] = new()
         {
@@ -214,6 +215,27 @@ internal static class PortfolioAuditTrail
             [nameof(SiteProfile.TransactionsPerMonth)] = "Transactions per month",
             [nameof(SiteProfile.Notes)] = "Notes",
         },
+        [typeof(DevProject)] = new()
+        {
+            [nameof(DevProject.Name)] = "Name",
+            [nameof(DevProject.Status)] = "Status",
+            [nameof(DevProject.Description)] = "Description",
+            [nameof(DevProject.Reference)] = "Reference",
+            [nameof(DevProject.CustomerId)] = "Customer",
+            [nameof(DevProject.ApplicationId)] = "Application",
+            [nameof(DevProject.VendorId)] = "Vendor",
+            [nameof(DevProject.RoadmapItemId)] = "Roadmap item",
+            [nameof(DevProject.TargetDate)] = "Target date",
+            [nameof(DevProject.CompletedOn)] = "Completed",
+        },
+        [typeof(DevCostLine)] = new()
+        {
+            [nameof(DevCostLine.CategoryId)] = "Category",
+            [nameof(DevCostLine.Hours)] = "Hours",
+            [nameof(DevCostLine.Rate)] = "Rate",
+            [nameof(DevCostLine.FixedAmount)] = "Amount",
+            [nameof(DevCostLine.Note)] = "Note",
+        },
         [typeof(IntegrationRisk)] = new()
         {
             [nameof(IntegrationRisk.Description)] = "Description",
@@ -235,7 +257,8 @@ internal static class PortfolioAuditTrail
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
                 or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument
-                or CapabilityFeature or FeatureAssessment or ComparisonMember or PricingLine or SiteProfile)) continue;
+                or CapabilityFeature or FeatureAssessment or ComparisonMember or PricingLine or SiteProfile
+                or DevProject or DevCostLine)) continue;
 
             switch (entry.State)
             {
@@ -422,6 +445,24 @@ internal static class PortfolioAuditTrail
                 case SiteProfile sp:
                     (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.SiteProfile, sp.Id, $"{PortfolioText.Label(sp.Category)}: {sp.Name}", field);
                     break;
+                case DevProject dp:
+                    (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.DevProject, dp.Id, dp.Name, field);
+                    break;
+                case DevCostLine cl:
+                {
+                    // Cost lines are filed under their project.
+                    var project = db.DevProjects.Local.FirstOrDefault(x => x.Id == cl.DevProjectId)?.Name
+                        ?? await db.DevProjects.AsNoTracking().Where(x => x.Id == cl.DevProjectId).Select(x => x.Name).FirstOrDefaultAsync(ct);
+                    var category = await CostCategoryNameAsync(db, cl.CategoryId, ct);
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.DevProject, cl.DevProjectId, project ?? $"#{cl.DevProjectId}");
+                    entry.Field = field is null ? $"{category} cost" : $"{category} cost · {field}";
+                    var amount = cl.Hours is { } h
+                        ? $"{h.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} h × {(cl.Rate ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}"
+                        : (cl.FixedAmount ?? 0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                    if (p.Action == AuditAction.Created) entry.NewValue = amount;
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = amount;
+                    break;
+                }
                 case PortfolioDocument doc:
                     (entry.EntityType, entry.EntityId, entry.EntityName, entry.Field) = (PortfolioEntityType.Document, doc.Id, doc.Title, field);
                     break;
@@ -457,13 +498,21 @@ internal static class PortfolioAuditTrail
             nameof(ProcessPainPoint.AddressedByItemId) or nameof(Benefit.RoadmapItemId) => await ItemTitleAsync(db, (int)value, ct),
             nameof(Benefit.KpiId) => await db.ProcessKpis.AsNoTracking().Where(k => k.Id == (int)value).Select(k => k.Name).FirstOrDefaultAsync(ct),
             nameof(Integration.SourcePartnerId) or nameof(Integration.TargetPartnerId)
-                or nameof(Contact.TradingPartnerId) => await PartnerNameAsync(db, (int)value, ct),
+                or nameof(Contact.TradingPartnerId) or nameof(DevProject.CustomerId) => await PartnerNameAsync(db, (int)value, ct),
+            nameof(DevCostLine.CategoryId) => await CostCategoryNameAsync(db, (int)value, ct),
+            nameof(PortfolioDocument.DevProjectId) => db.DevProjects.Local.FirstOrDefault(x => x.Id == (int)value)?.Name
+                ?? await db.DevProjects.AsNoTracking().Where(x => x.Id == (int)value).Select(x => x.Name).FirstOrDefaultAsync(ct),
             nameof(Integration.SourceApplicationId) or nameof(Integration.TargetApplicationId)
                 or nameof(Integration.ViaApplicationId) or nameof(ProcessPainPoint.ApplicationId) => await AppNameAsync(db, (int)value, ct),
             _ => PortfolioText.Format(value),
         };
         return Truncate(text ?? $"#{value}");
     }
+
+    private static async Task<string> CostCategoryNameAsync(RoadmapDbContext db, int id, CancellationToken ct) =>
+        db.DevCostCategories.Local.FirstOrDefault(c => c.Id == id)?.Name
+        ?? await db.DevCostCategories.AsNoTracking().Where(c => c.Id == id).Select(c => c.Name).FirstOrDefaultAsync(ct)
+        ?? $"#{id}";
 
     private static string? Truncate(string? text) => text is { Length: > 300 } ? text[..297] + "…" : text;
 

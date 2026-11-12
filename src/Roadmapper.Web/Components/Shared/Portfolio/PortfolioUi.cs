@@ -82,8 +82,13 @@ public static class PortfolioUi
         DocumentTargetKind.Application => $"/portfolio/applications/{t.Id}",
         DocumentTargetKind.Vendor => $"/portfolio/vendors/{t.Id}",
         DocumentTargetKind.Contract => d.Contract is { } c ? $"/portfolio/vendors/{c.VendorId}" : null,
+        DocumentTargetKind.DevProject => d.DevProject is { } p ? DevProjectHref(p.ProductId, p.Id) : null,
         _ => d.RoadmapItem is { } i ? $"/products/{i.ProductId}" : null,
     };
+
+    /// <summary>A product's development pipeline, opened at one project when given.</summary>
+    public static string DevProjectHref(int productId, int? projectId = null) =>
+        $"/products/{productId}/development" + (projectId is { } id ? $"?project={id}" : "");
 
     /// <summary>✓ Yes, ◐ Partial, ✗ No; empty when not rated.</summary>
     public static string Symbol(FeatureAvailability? a) => a switch
