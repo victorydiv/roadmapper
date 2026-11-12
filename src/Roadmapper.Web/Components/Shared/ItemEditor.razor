@@ -81,10 +81,10 @@
                             <InputNumber @bind-Value="draft.ProgressPct" min="0" max="100" disabled="@(RolledUp || draft.Status == ItemStatus.Done)" />
                         </label>
                         <label class="field">Start @(RolledUp ? "(rolled up)" : "")
-                            <InputDate @bind-Value="draft.StartDate" disabled="@RolledUp" />
+                            <InputDate @bind-Value="draft.StartDate" @bind-Value:after="OnStartChanged" disabled="@(RolledUp && !moveSubItems)" />
                         </label>
                         <label class="field">End @(RolledUp ? "(rolled up)" : "")
-                            <InputDate @bind-Value="draft.EndDate" disabled="@RolledUp" />
+                            <InputDate @bind-Value="draft.EndDate" @bind-Value:after="OnEndChanged" disabled="@(RolledUp && !moveSubItems)" />
                         </label>
                         <label class="field">Owner
                             <InputText @bind-Value="draft.Owner" />
@@ -96,6 +96,14 @@
                             <InputCheckbox @bind-Value="draft.IsRollupOverridden" />
                             Set dates and progress manually instead of rolling them up from children
                         </label>
+                        <label class="check">
+                            <input type="checkbox" checked="@moveSubItems" @onchange="e => moveSubItems = e.Value is true" />
+                            Move its sub-items with it, keeping their spacing
+                        </label>
+                        @if (moveSubItems)
+                        {
+                            <div class="small muted">@MovePreview</div>
+                        }
                     }
                 </fieldset>
 
@@ -551,6 +559,40 @@
         : "not enough inputs";
     private int DescendantCount => Descendants(draft.Id);
 
+    // "Move its sub-items with it": the dates as saved, and how far the edited ones moved from them.
+    private bool moveSubItems;
+    private RoadmapItem? Saved => draft.IsNew ? null : roadmap.Find(draft.Id);
+    private int DaysMoved => Saved is { } o ? ScheduleShift.DaysMoved(o.StartDate, o.EndDate, draft.StartDate, draft.EndDate) : 0;
+
+    private string MovePreview
+    {
+        get
+        {
+            var subs = roadmap.Descendants(draft.Id).ToList();
+            var dated = subs.Count(i => i.StartDate is not null || i.EndDate is not null);
+            if (dated == 0) return "None of its sub-items have dates yet, so there's nothing to move.";
+            var undated = subs.Count - dated;
+            var rest = undated > 0 ? $" ({undated} without dates stay as they are)" : "";
+            var what = dated == 1 ? "sub-item" : "sub-items";
+            return DaysMoved == 0
+                ? $"Change the start (or end) date; its {dated} dated {what} move by the same number of days{rest}."
+                : $"Saving moves {dated} {what} {ScheduleShift.Describe(DaysMoved)}{rest}.";
+        }
+    }
+
+    // A rolled-up parent's dates come from its sub-items, so moving it moves both dates together.
+    private void OnStartChanged()
+    {
+        if (moveSubItems && RolledUp && Saved is { StartDate: { } s, EndDate: { } e } && draft.StartDate is { } ns)
+            draft.EndDate = e.AddDays(ns.DayNumber - s.DayNumber);
+    }
+
+    private void OnEndChanged()
+    {
+        if (moveSubItems && RolledUp && Saved is { StartDate: { } s, EndDate: { } e } && draft.EndDate is { } ne)
+            draft.StartDate = s.AddDays(ne.DayNumber - e.DayNumber);
+    }
+
     private bool UsesRubric => roadmap.Product.ScoringModel == ScoringModel.Wsjf && !roadmap.Rubric.IsEmpty;
     private IReadOnlyList<FactorResult> RubricResults =>
         RubricCalculator.Evaluate(roadmap.Rubric, draft.Answers, draft.StartDate, DateOnly.FromDateTime(DateTime.Today));
@@ -645,6 +687,7 @@
     private void AddTask()
     {
         draft = ItemDraft.New(draft.ProductId, ItemType.Task, draft.Id);
+        moveSubItems = false;
         history = null;
         appLinks = [];
         error = notice = null;
@@ -699,7 +742,7 @@
         error = null;
         try
         {
-            await Svc.SaveItemAsync(draft);
+            await Svc.SaveItemAsync(draft, moveSubItems && HasChildren);
             changed = true;
             await CloseAsync();
         }

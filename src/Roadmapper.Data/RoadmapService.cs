@@ -93,7 +93,11 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
 
     // ---- Items ----
 
-    public async Task<int> SaveItemAsync(ItemDraft draft)
+    /// <summary>
+    /// Saves the item. With <paramref name="moveSubItems"/>, an existing item's sub-items (at every level) move by
+    /// as many days as the item moved (<see cref="ScheduleShift.DaysMoved"/>), keeping their spacing.
+    /// </summary>
+    public async Task<int> SaveItemAsync(ItemDraft draft, bool moveSubItems = false)
     {
         if (draft.Validate() is { } error) throw new InvalidOperationException(error);
 
@@ -130,8 +134,20 @@ public partial class RoadmapService(IDbContextFactory<RoadmapDbContext> dbFactor
                 item.SortOrder = await NextSortOrderAsync(db, item.ProductId, draft.ParentId);
         }
 
+        var (oldStart, oldEnd) = (item.StartDate, item.EndDate);
         draft.ApplyTo(item);
         item.UpdatedAt = DateTime.UtcNow;
+        if (moveSubItems && !draft.IsNew && ScheduleShift.DaysMoved(oldStart, oldEnd, item.StartDate, item.EndDate) is var days and not 0)
+        {
+            var all = await db.Items.Where(i => i.ProductId == item.ProductId).ToListAsync();
+            var now = DateTime.UtcNow;
+            foreach (var d in ScheduleShift.DescendantsOf(all, item.Id))
+                if (d.StartDate is not null || d.EndDate is not null)
+                {
+                    ScheduleShift.Apply([d], days);
+                    d.UpdatedAt = now;
+                }
+        }
         await ApplyRubricAsync(db, product, item, draft);
 
         var oldTags = TagList(item.Tags);

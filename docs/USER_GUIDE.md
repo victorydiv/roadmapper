@@ -121,6 +121,15 @@ Changes cascade upward: Task → Feature → Initiative → Goal. While a parent
 
 To set a parent's values yourself, tick **"Set dates and progress manually instead of rolling them up from children"** in its editor.
 
+### Moving a parent with its sub-items
+
+To move a goal, initiative or feature's whole schedule, open it and tick **"Move its sub-items with it, keeping their spacing"**. Then change its start (or end) date. Every dated item below it, at every level, moves by the same number of days, so the gaps between tasks stay the same. For example, if you move a goal from March 1 to April 12, every initiative, feature and task under it moves 42 days later. A note under the checkbox tells you how many sub-items will move and by how much before you save.
+
+- **Rolled-up parent:** the dates unlock while the box is ticked, and changing one date moves the other with it. After saving, the parent rolls up again from its moved sub-items, so it lands on the new dates.
+- **Manual parent:** the parent keeps the dates you type. Its sub-items move by however much its start moved, or by how much its end moved if the start didn't change.
+- **What moves:** sub-items without dates stay as they are, and done and cancelled items move too. Each moved item records the change in its own history.
+- **Unticked** (the default): only the item you're editing changes.
+
 ### Prioritization (scoring)
 
 Each product uses one scoring model, chosen in Settings:
@@ -196,7 +205,7 @@ The editor opens as a pop-up. Its sections are:
 
 - **Title** and **Description**.
 - **Type** (new items only) and **Parent**. The parent list only offers items of the level directly above.
-- **Status & schedule:** status, horizon, progress, start, end and owner. For a parent, this section also has the manual roll-up checkbox (see [Roll-up](#roll-up-how-parents-get-their-dates-and-progress)). Progress is locked at 100% while the status is Done.
+- **Status & schedule:** status, horizon, progress, start, end and owner. For a parent, this section also has the manual roll-up checkbox (see [Roll-up](#roll-up-how-parents-get-their-dates-and-progress)) and **Move its sub-items with it** (see [Moving a parent with its sub-items](#moving-a-parent-with-its-sub-items)). Progress is locked at 100% while the status is Done.
 - **Priority:** the inputs for the product's scoring model, a live score preview, and **Manual rank**. Under WSJF with a [scoring rubric](#scoring-wsjf-rubric), each factor shows its criteria to answer, the calculated value and how it was worked out, plus **Enter by hand** / **Use rubric** to switch between typing the value and calculating it.
 - **Links:** the item's Jira key and/or a web link, with **Open ↗**.
 - **Classification:** theme and tags.
@@ -906,7 +915,7 @@ All portfolio tables live in the same database; enums are stored as text; names 
 2. **Validation:** a title is required; End ≥ Start; progress is 0–100; manual rank is ≥ 1. Violations surface as an `InvalidOperationException` with a message for the user.
 3. **Done ⇒ 100% progress**, whether set in the editor, on the Kanban, or on import.
 4. **Every item change runs `RecalculateAsync`:** a bottom-up roll-up (`RollupService.Apply`), then a fresh score for every item.
-5. **Roll-up:** ignores Cancelled children; skips parents with `IsRollupOverridden`; leaves dates alone when no child has them.
+5. **Roll-up:** ignores Cancelled children; skips parents with `IsRollupOverridden`; leaves dates alone when no child has them. **Moving with sub-items** (`ScheduleShift`, `SaveItemAsync(draft, moveSubItems: true)`): days moved = new start − old start when both exist and differ, else new end − old end; every descendant's start and end (whichever it has) shifts by that, before the roll-up runs. Only for an existing item; undated descendants are untouched.
 6. **Dependencies:** no self-links, no duplicates, no loops (`DependencyRules.WouldCreateCycle`); both items must be in the same product.
 7. **Blocked** = at least one predecessor is not Done or Cancelled. **Schedule conflict** = successor start ≤ predecessor end.
 8. **Template application** happens in one save. Each task is created as Idea at 0% and gets one shared `TemplateBatchId` (a GUID); `UndoTemplateBatchAsync` deletes by that id.
@@ -1069,7 +1078,10 @@ A cost line uses it. **Cost categories** shows how many; change those lines to a
 Save the project first; the upload appears under **SOW & documents** once it has been saved. If it says no folder is set, set the product's SOW folder in its Settings › Document folders (or a shared one in Portfolio › Settings).
 
 **I can't edit a Feature's dates or progress.**
-They're rolled up from its tasks. Tick "Set dates and progress manually…" in the editor.
+They're rolled up from its tasks. Tick "Set dates and progress manually…" in the editor. To move the feature together with its tasks, tick "Move its sub-items with it" instead.
+
+**How do I push a whole goal (or feature) back without editing every task?**
+Open it, tick **Move its sub-items with it**, and change its start date. Everything under it moves by the same number of days. See [Moving a parent with its sub-items](#moving-a-parent-with-its-sub-items).
 
 **My parent's dates didn't change when I added a task.**
 Either the new task has no dates, or the parent is set to manual roll-up.
