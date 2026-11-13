@@ -49,6 +49,7 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<ComparisonMember> ComparisonMembers => Set<ComparisonMember>();
     public DbSet<FeatureAssessment> FeatureAssessments => Set<FeatureAssessment>();
     public DbSet<PricingLine> PricingLines => Set<PricingLine>();
+    public DbSet<AppDeployment> Deployments => Set<AppDeployment>();
     public DbSet<SiteProfile> SiteProfiles => Set<SiteProfile>();
     public DbSet<DevProject> DevProjects => Set<DevProject>();
     public DbSet<DevCostCategory> DevCostCategories => Set<DevCostCategory>();

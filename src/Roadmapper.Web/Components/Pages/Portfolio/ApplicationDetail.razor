@@ -296,6 +296,7 @@ else
     }
 
     <ApplicationFeatures ApplicationId="app.Id" Name="@app.Name" />
+    <DeploymentList ApplicationId="app.Id" Name="@app.Name" />
     <DocumentList Target="new DocumentTarget(DocumentTargetKind.Application, app.Id)" ProductId="app.ProductId" Name="@app.Name" />
     <TodoPanel Link="new TodoLink(TodoLinkKind.Application, app.Id)" Name="@app.Name" />
     <DecisionList Target="new DecisionTarget(DecisionTargetKind.Application, app.Id)" Name="@app.Name" />

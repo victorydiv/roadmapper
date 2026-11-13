@@ -15,7 +15,7 @@ public partial class PortfolioService
         return !await db.Applications.AnyAsync() && !await db.Vendors.AnyAsync() && !await db.Contacts.AnyAsync()
             && !await db.TradingPartners.AnyAsync() && !await db.BusinessProcesses.AnyAsync() && !await db.Benefits.AnyAsync() && !await db.Decisions.AnyAsync()
             && !await db.Documents.AnyAsync() && !await db.CapabilityFeatures.AnyAsync()
-            && !await db.PricingLines.AnyAsync() && !await db.SiteProfiles.AnyAsync() && !await db.DevProjects.AnyAsync() && !await db.Todos.AnyAsync();
+            && !await db.PricingLines.AnyAsync() && !await db.SiteProfiles.AnyAsync() && !await db.DevProjects.AnyAsync() && !await db.Todos.AnyAsync() && !await db.Deployments.AnyAsync();
     }
 
     /// <summary>

@@ -204,6 +204,13 @@ internal static class PortfolioAuditTrail
             [nameof(PricingLine.AsOf)] = "As of",
             [nameof(PricingLine.Note)] = "Note",
         },
+        [typeof(AppDeployment)] = new()
+        {
+            [nameof(AppDeployment.Site)] = "Site",
+            [nameof(AppDeployment.Status)] = "Status",
+            [nameof(AppDeployment.Since)] = "Since",
+            [nameof(AppDeployment.Note)] = "Note",
+        },
         [typeof(SiteProfile)] = new()
         {
             [nameof(SiteProfile.Name)] = "Name",
@@ -257,7 +264,7 @@ internal static class PortfolioAuditTrail
                 or ApplicationSupportContact or VendorEscalationContact or Integration or IntegrationRisk or TradingPartner
                 or BusinessProcess or ProcessApplication or ProcessIntegration or ProcessPainPoint or ProcessKpi
                 or Benefit or BenefitMeasurement or Decision or DecisionLink or PortfolioDocument
-                or CapabilityFeature or FeatureAssessment or ComparisonMember or PricingLine or SiteProfile
+                or CapabilityFeature or FeatureAssessment or ComparisonMember or PricingLine or SiteProfile or AppDeployment
                 or DevProject or DevCostLine)) continue;
 
             switch (entry.State)
@@ -440,6 +447,16 @@ internal static class PortfolioAuditTrail
                     var price = $"{pl.UnitPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {PortfolioText.Label(pl.Basis).ToLowerInvariant()}, {PortfolioText.Label(pl.Frequency).ToLowerInvariant()}";
                     if (p.Action == AuditAction.Created) entry.NewValue = price;
                     if (p.Action == AuditAction.Deleted) entry.OldValue = price;
+                    break;
+                }
+                case AppDeployment ad:
+                {
+                    // Deployments are filed under the customer.
+                    (entry.EntityType, entry.EntityId, entry.EntityName) = (PortfolioEntityType.TradingPartner, ad.TradingPartnerId, await PartnerNameAsync(db, ad.TradingPartnerId, ct));
+                    var name = $"{await AppNameAsync(db, ad.ApplicationId, ct)} ({PortfolioText.Label(ad.Category)}){(ad.Site is { } s ? $" at {s}" : "")}";
+                    entry.Field = field is null ? name : $"{name} · {field}";
+                    if (p.Action == AuditAction.Created) entry.NewValue = PortfolioText.Label(ad.Status);
+                    if (p.Action == AuditAction.Deleted) entry.OldValue = PortfolioText.Label(ad.Status);
                     break;
                 }
                 case SiteProfile sp:

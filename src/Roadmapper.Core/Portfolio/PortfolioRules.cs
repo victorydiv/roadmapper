@@ -204,6 +204,8 @@ public static class PortfolioText
 
     public static string Label(PartnerType t) => t.ToString();
 
+    public static string Label(DeploymentStatus s) => s.ToString();
+
     public static string Label(PartnerStatus s) => s.ToString();
 
     public static string Label(PartnerImportance i) => i == PartnerImportance.Key ? "Key partner" : "Standard";
@@ -294,6 +296,7 @@ public static class PortfolioText
         PriceFrequency pf => Label(pf),
         PriceSource ps => Label(ps),
         DevStatus ds => Label(ds),
+        DeploymentStatus dps => Label(dps),
         bool b => b ? "Yes" : "No",
         DateOnly d => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         decimal m => m.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),

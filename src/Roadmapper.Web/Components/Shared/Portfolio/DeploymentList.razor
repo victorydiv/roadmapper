@@ -1,0 +1,125 @@
+@* A card of customer deployments: on a customer's page, the applications it uses; on an application's page, the customers using it. *@
+@inject PortfolioService Svc
+
+<div class="card stack" style="margin-top:1rem">
+    <div class="row">
+        <h2 style="margin:0">@(ForCustomer ? "Applications" : "Customers")</h2>
+        <span class="muted small">@Summary</span>
+        <span class="spacer"></span>
+        @foreach (var c in rows.Select(d => d.Category).Distinct())
+        {
+            <a class="small" href="@PortfolioUi.CapabilitiesHref(c, "customers")">@PortfolioText.Label(c) customer matrix →</a>
+        }
+        <button class="btn" disabled="@(Choices.Count == 0)" title="@(Choices.Count == 0 ? "No applications to assign" : null)" @onclick="New">@(ForCustomer ? "+ Assign application" : "+ Assign to customer")</button>
+    </div>
+    @if (rows.Count == 0)
+    {
+        <div class="muted small">
+            @(ForCustomer ? $"No applications assigned yet. Record which applications {Name} uses, and at which sites." : $"No customers assigned yet. Record which customers and sites use {Name}.")
+        </div>
+    }
+    else
+    {
+        <table class="tree">
+            <thead>
+                <tr>
+                    <th>@(ForCustomer ? "Application" : "Customer")</th>
+                    @if (ShowCategory)
+                    {
+                        <th>Comparison</th>
+                    }
+                    <th>Site</th>
+                    <th>Status</th>
+                    <th>Since</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in rows)
+                {
+                    <tr style="cursor:pointer" title="Click to edit" @onclick="() => editing = DeploymentDraft.From(d)">
+                        <td>
+                            @if (ForCustomer)
+                            {
+                                <a href="/portfolio/applications/@d.ApplicationId" @onclick:stopPropagation="true">@d.Application?.Name</a>
+                            }
+                            else
+                            {
+                                <a href="/portfolio/partners/@d.TradingPartnerId" @onclick:stopPropagation="true">@d.TradingPartner?.Name</a>
+                            }
+                        </td>
+                        @if (ShowCategory)
+                        {
+                            <td class="muted small">@PortfolioText.Label(d.Category)</td>
+                        }
+                        <td>@(d.Site ?? "All sites")</td>
+                        <td><span class="dep dep-@d.Status">@PortfolioText.Label(d.Status)</span></td>
+                        <td class="small">@(d.Since is { } s ? PortfolioUi.Date(s) : "")</td>
+                        <td class="muted small">@d.Note</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (editing is not null)
+{
+    <DeploymentEditor Draft="editing" Choices="Choices" Partners="partners" LockCustomer="ForCustomer" OnClose="OnClosed" />
+}
+
+@code {
+    /// <summary>On a customer's page: its id.</summary>
+    [Parameter] public int? PartnerId { get; set; }
+    /// <summary>On an application's page: its id.</summary>
+    [Parameter] public int? ApplicationId { get; set; }
+    /// <summary>The customer's or application's name.</summary>
+    [Parameter] public string Name { get; set; } = "";
+
+    private List<AppDeployment> rows = [];
+    private List<DeploymentChoice> Choices = [];
+    private List<TradingPartner> partners = [];
+    private DeploymentDraft? editing;
+
+    private bool ForCustomer => PartnerId is not null;
+    private bool ShowCategory => ForCustomer ? rows.Any(d => d.Application?.Category != d.Category) || rows.Select(d => d.Category).Distinct().Count() > 1
+        : rows.Select(d => d.Category).Distinct().Count() > 1;
+
+    private string Summary
+    {
+        get
+        {
+            var live = rows.Where(d => d.Status == DeploymentStatus.Live).ToList();
+            var progress = rows.Count(d => DeploymentRules.InProgress(d.Status));
+            var text = ForCustomer
+                ? $"{live.Select(d => d.ApplicationId).Distinct().Count()} live application(s) across {live.Select(d => d.Site ?? "").Distinct(StringComparer.OrdinalIgnoreCase).Count()} site(s)"
+                : $"Live at {live.Count} site(s) for {live.Select(d => d.TradingPartnerId).Distinct().Count()} customer(s)";
+            return rows.Count == 0 ? "" : progress > 0 ? $"{text} · {progress} in progress" : text;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        rows = PartnerId is { } pid ? await Svc.GetDeploymentsForPartnerAsync(pid)
+            : ApplicationId is { } aid ? await Svc.GetDeploymentsForApplicationAsync(aid) : [];
+        var all = await Svc.GetDeploymentChoicesAsync();
+        Choices = ApplicationId is { } id ? all.Where(c => c.ApplicationId == id).ToList() : all;
+        partners = await Svc.GetPartnersAsync();
+    }
+
+    private void New()
+    {
+        if (Choices.Count == 0) return;
+        editing = ForCustomer
+            ? DeploymentDraft.New(Choices[0].Category, 0, PartnerId!.Value)
+            : DeploymentDraft.New(Choices[0].Category, ApplicationId!.Value);
+    }
+
+    private async Task OnClosed(bool changed)
+    {
+        editing = null;
+        if (changed) await LoadAsync();
+    }
+}

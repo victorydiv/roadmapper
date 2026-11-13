@@ -184,6 +184,9 @@ public partial class PortfolioService
                     l.Source, l.AsOf, l.Note, l.SortOrder)).ToList(),
             SiteProfiles = (await db.SiteProfiles.AsNoTracking().ToListAsync()).OrderBy(p => p.Category).ThenBy(p => p.Name)
                 .Select(p => new PfSiteProfile(p.Id, p.Category, p.Name, p.IsDefault, p.Users, p.Licenses, p.DockDoors, p.Assets, p.TransactionsPerMonth, p.Notes)).ToList(),
+            Deployments = (await db.Deployments.AsNoTracking().ToListAsync())
+                .OrderBy(d => d.Category).ThenBy(d => d.ApplicationId).ThenBy(d => d.TradingPartnerId).ThenBy(d => d.Site)
+                .Select(d => new PfDeployment(d.Category, d.ApplicationId, d.TradingPartnerId, d.Site, d.Status, d.Since, d.Note)).ToList(),
             DevCostCategories = (await db.DevCostCategories.AsNoTracking().ToListAsync()).OrderBy(c => c.SortOrder).ThenBy(c => c.Id)
                 .Select(c => new PfDevCostCategory(c.Id, c.Name, c.DefaultRate, c.SortOrder)).ToList(),
             DevProjects = (await db.DevProjects.AsNoTracking().Include(p => p.CostLines).OrderBy(p => p.Id).ToListAsync())
@@ -835,6 +838,27 @@ public partial class PortfolioService
         }
         await db.SaveChangesAsync();
         result.Count("prices", priceCount);
+
+        // Customer deployments: one per comparison, application, customer and site.
+        var deployed = (await db.Deployments.AsNoTracking().ToListAsync()).ToList();
+        var deploymentCount = 0;
+        foreach (var d in file.Deployments)
+        {
+            if (Map(appMap, d.ApplicationId) is not { } aid || Map(partnerMap, d.PartnerId) is not { } pid) continue;
+            if (deployed.Any(x => x.Category == d.Category && x.ApplicationId == aid && x.TradingPartnerId == pid && DeploymentRules.SameSite(x.Site, d.Site))) continue;
+            var draft = new DeploymentDraft
+            {
+                Id = -1, Category = d.Category, ApplicationId = aid, TradingPartnerId = pid, Sites = d.Site, Status = d.Status, Since = d.Since, Note = d.Note,
+            };
+            if (draft.Validate() is not null) { result.Skipped.Add($"Deployment of {d.Category} at {d.Site ?? "a customer"} (not valid)"); continue; }
+            var row = new AppDeployment { TradingPartnerId = pid, CreatedAt = now, UpdatedAt = now };
+            draft.ApplyTo(row, d.Site);
+            db.Deployments.Add(row);
+            deployed.Add(row);
+            deploymentCount++;
+        }
+        await db.SaveChangesAsync();
+        result.Count("customer deployments", deploymentCount);
 
         // History, on a restore: re-pointed at the new ids. Entries for records that no longer exist keep id 0.
         if (!merge)

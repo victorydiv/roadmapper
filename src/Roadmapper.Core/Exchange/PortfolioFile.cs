@@ -37,6 +37,7 @@ public sealed class PortfolioFile
     public List<PfComparisonMember> ComparisonMembers { get; set; } = [];
     public List<PfPricingLine> PricingLines { get; set; } = [];
     public List<PfSiteProfile> SiteProfiles { get; set; } = [];
+    public List<PfDeployment> Deployments { get; set; } = [];
     public List<PfDevCostCategory> DevCostCategories { get; set; } = [];
     public List<PfDevProject> DevProjects { get; set; } = [];
     public List<PfTodo> Todos { get; set; } = [];
@@ -82,7 +83,7 @@ public sealed class PortfolioFile
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
         Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; PricingLines ??= []; SiteProfiles ??= []; History ??= [];
-        DevCostCategories ??= []; DevProjects ??= []; Todos ??= [];
+        DevCostCategories ??= []; DevProjects ??= []; Todos ??= []; Deployments ??= [];
         foreach (var p in DevProjects) p.Costs ??= [];
         foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
@@ -198,6 +199,12 @@ public sealed class PortfolioFile
         foreach (var l in PricingLines) Ref(l.ApplicationId, apps, "application", $"Price “{l.Label}”");
         Named(PricingLines.Select(l => l.Label), "price");
         Named(SiteProfiles.Select(p => p.Name), "site profile");
+        foreach (var d in Deployments)
+        {
+            var where = $"The {d.Category} deployment at {d.Site ?? "a customer"}";
+            Ref(d.ApplicationId, apps, "application", where);
+            Ref(d.PartnerId, partners, "trading partner", where);
+        }
         foreach (var d in Documents)
         {
             var where = $"Document “{d.Title}”";
@@ -511,6 +518,9 @@ public sealed record PfComparisonMember(AppCategory Category, int ApplicationId)
 /// <summary>A line of an application's pricing in a category's comparison.</summary>
 public sealed record PfPricingLine(AppCategory Category, int ApplicationId, string Label, PricingBasis Basis, string? Unit, decimal? Quantity,
     decimal UnitPrice, PriceFrequency Frequency, decimal? Minimum, PriceSource Source, DateOnly? AsOf, string? Note, int SortOrder);
+
+/// <summary>An application in use for a customer (a trading partner) at a site, in a category's comparison.</summary>
+public sealed record PfDeployment(AppCategory Category, int ApplicationId, int PartnerId, string? Site, DeploymentStatus Status, DateOnly? Since, string? Note);
 
 /// <summary>
 /// A to-do. It's about at most one record: a roadmap <see cref="Item"/> (by path), else an application, decision,

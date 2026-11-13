@@ -29,6 +29,7 @@ else
     <nav class="tabs">
         <a class="@(View == "matrix" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, null, Only)">Comparison matrix</a>
         <a class="@(View == "heatmap" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "heatmap", Only)">Heat map</a>
+        <a class="@(View == "customers" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "customers", Only)">Customers</a>
         <a class="@(View == "cost" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "cost", Only)">Cost</a>
         <a class="@(View == "features" ? "active" : "")" href="@PortfolioUi.CapabilitiesHref(cat, "features", Only)">Features &amp; applications</a>
     </nav>
@@ -145,6 +146,118 @@ else
                 <label class="check"><input type="checkbox" checked="@includeRetired" @onchange="ToggleRetiredAsync" /><span>Show retired applications</span></label>
             </div>
         </div>
+    }
+    else if (View == "customers")
+    {
+        <div class="toolbar">
+            <div class="segmented" title="Which deployments to show">
+                <button class="@(customerShow == "all" ? "on" : "")" @onclick='() => SetCustomerShow("all")'>All</button>
+                <button class="@(customerShow == "live" ? "on" : "")" @onclick='() => SetCustomerShow("live")'>Live</button>
+                <button class="@(customerShow == "progress" ? "on" : "")" @onclick='() => SetCustomerShow("progress")'>In progress</button>
+            </div>
+            <input placeholder="Find a customer or site…" @bind="customerSearch" @bind:event="oninput" style="min-width:200px;width:auto" />
+            <span class="spacer"></span>
+            <span class="small">
+                @foreach (var s in Enum.GetValues<DeploymentStatus>())
+                {
+                    <span class="dep dep-@s">@PortfolioText.Label(s)</span><text> </text>
+                }
+                · Click a cell to assign or edit.
+            </span>
+            <button class="btn sm primary" disabled="@(matrix.Apps.Count == 0)" @onclick="() => deploying = DeploymentDraft.New(cat)">+ Assign application</button>
+        </div>
+        @if (matrix.Apps.Count == 0)
+        {
+            <div class="card empty">No applications to compare yet. <a href="@PortfolioUi.CapabilitiesHref(cat, "features")">Set up applications →</a></div>
+        }
+        else if (customers is { } cm)
+        {
+            var rows = CustomerRows(cm);
+            <div class="card matrix-wrap" style="padding:0">
+                <table class="matrix customer-matrix">
+                    <thead>
+                        <tr>
+                            <th class="feature">Customer</th>
+                            <th>Site</th>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                <th class="app">
+                                    <a href="/portfolio/applications/@a.Id">@a.Name</a>
+                                    @if (a.Application.Status != LifecycleStatus.Active) { <div><LifecycleBadge Status="a.Application.Status" /></div> }
+                                    @if (a.Added) { <div><span class="badge added">@PortfolioText.Label(a.Application.Category)</span></div> }
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (rows.Count == 0)
+                        {
+                            <tr><td colspan="@(matrix.Apps.Count + 2)" class="muted" style="padding:1rem;text-align:center">
+                                @(cm.Rows.Count == 0 && customerShow == "all" ? $"No customers assigned yet. Use + Assign application to record which customers and sites use each {Title} application." : "No customers match.")
+                            </td></tr>
+                        }
+                        @foreach (var group in rows.GroupBy(r => r.PartnerId))
+                        {
+                            var first = true;
+                            var span = group.Count();
+                            foreach (var row in group)
+                            {
+                                <tr>
+                                    @if (first)
+                                    {
+                                        <th class="feature" rowspan="@span"><a href="/portfolio/partners/@row.PartnerId">@row.Customer</a>@if (span > 1) { <div class="muted small">@span sites</div> }</th>
+                                        first = false;
+                                    }
+                                    <td class="site">@(row.Site ?? "All sites")</td>
+                                    @foreach (var a in matrix.Apps)
+                                    {
+                                        var d = cm.Cell(row, a.Id);
+                                        <td class="cell dep-cell" title="@DeploymentTip(a, row, d)" @onclick="() => Deploy(row, a, d)">
+                                            @if (d is not null)
+                                            {
+                                                <span class="dep dep-@d.Status">@PortfolioText.Label(d.Status)</span>@if (d.Note is not null) { <span class="note-dot">●</span> }
+                                            }
+                                            else
+                                            {
+                                                <span class="dep-add">+</span>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" style="text-align:left"><b>Live at</b> <span class="muted">· @cm.Customers customer@(cm.Customers == 1 ? "" : "s") shown</span></td>
+                            @foreach (var a in matrix.Apps)
+                            {
+                                var reach = cm.Reach[a.Id];
+                                <td>
+                                    @if (reach.NoneLive)
+                                    {
+                                        <span class="muted" title="No live customer site recorded">No site confirmed</span>
+                                    }
+                                    else
+                                    {
+                                        <b>@reach.LiveSites</b><span> site@(reach.LiveSites == 1 ? "" : "s")</span>
+                                        <div class="muted">@reach.LiveCustomers customer@(reach.LiveCustomers == 1 ? "" : "s")</div>
+                                    }
+                                    @if (reach.InProgress > 0)
+                                    {
+                                        <div class="muted" title="Pipeline, evaluating or implementing">+@reach.InProgress in progress</div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="muted small" style="margin-top:.5rem">
+                Which customers and sites use each @Title application. Customers are <a href="/portfolio/partners">trading partners</a>;
+                a customer's page lists everything assigned to it. “No site confirmed” means no live site is recorded, not that it isn't deployed anywhere.
+            </div>
+        }
     }
     else if (View == "cost")
     {
@@ -422,6 +535,10 @@ else
     {
         <PricingLineEditor Draft="pr.Draft" AppName="@pr.App" OnClose="OnPriced" />
     }
+    @if (deploying is not null)
+    {
+        <DeploymentEditor Draft="deploying" Choices="DeploymentChoices" Partners="partners" OnClose="OnDeployed" />
+    }
     @if (editingProfile is { } ep)
     {
         <SiteProfileEditor Draft="ep" OnClose="OnProfileSaved" />
@@ -457,10 +574,14 @@ else
     private SiteProfileDraft? editingProfile;
     private (PricingLineDraft Draft, string App)? pricing;
     private AppCategory? loadedCategory;
+    private CustomerMatrix? customers;
+    private List<TradingPartner> partners = [];
+    private DeploymentDraft? deploying;
+    private string customerShow = "all", customerSearch = "";
     /// <summary>Applications ticked on the matrix, to compare.</summary>
     private readonly HashSet<int> picked = [];
 
-    private string View => ViewParam is "heatmap" or "features" or "cost" ? ViewParam : "matrix";
+    private string View => ViewParam is "heatmap" or "features" or "cost" or "customers" ? ViewParam : "matrix";
     private string? ViewKey => View == "matrix" ? null : View;
     /// <summary>The applications the comparison is narrowed to, from the address (null: all).</summary>
     private IReadOnlyList<int>? Only => CapabilityMatrix.ParseIds(AppsParam);
@@ -488,6 +609,7 @@ else
         matrix = await Svc.GetCapabilityMatrixAsync(cat, includeRetired, profileId > 0 ? profileId : null, profileId == 0 ? trial.ToProfile() : null,
             View == "features" ? null : Only);
         if (profileId < 0 && matrix.Site.Id > 0) profileId = matrix.Site.Id;
+        if (View == "customers") await LoadCustomersAsync();
         var inMatrix = matrix.Apps.Select(a => a.Id).ToHashSet();
         others = (await Svc.GetApplicationsAsync())
             .Where(a => a.Category != cat && !inMatrix.Contains(a.Id) && a.Status != LifecycleStatus.Retired)
@@ -589,6 +711,51 @@ else
     private IEnumerable<MatrixApp> CostOrder() => matrix!.Apps
         .OrderBy(a => matrix.Cost(a.Id) switch { { IsComplete: true } => 0, { IsPriced: true } => 1, _ => 2 })
         .ThenBy(a => matrix.Cost(a.Id).Monthly).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase);
+
+    private async Task LoadCustomersAsync()
+    {
+        if (category is not { } cat || matrix is null) return;
+        IReadOnlyCollection<DeploymentStatus>? statuses = customerShow switch
+        {
+            "live" => [DeploymentStatus.Live],
+            "progress" => [DeploymentStatus.Pipeline, DeploymentStatus.Evaluating, DeploymentStatus.Implementing],
+            _ => null,
+        };
+        customers = CustomerMatrix.Build(matrix.Apps.Select(a => a.Id).ToList(), await Svc.GetDeploymentsAsync(cat), statuses);
+        partners = await Svc.GetPartnersAsync();
+    }
+
+    private async Task SetCustomerShow(string value)
+    {
+        customerShow = value;
+        await LoadCustomersAsync();
+    }
+
+    /// <summary>The matrix rows matching the search (customer or site).</summary>
+    private List<CustomerSite> CustomerRows(CustomerMatrix cm) => cm.Rows
+        .Where(r => customerSearch is not { Length: > 0 } q || r.Customer.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || (r.Site?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    private List<DeploymentChoice> DeploymentChoices => matrix is null || category is not { } cat ? []
+        : matrix.Apps.Select(a => new DeploymentChoice(cat, a.Id, a.Name, a.Added)).ToList();
+
+    private void Deploy(CustomerSite row, MatrixApp a, AppDeployment? d)
+    {
+        if (category is not { } cat) return;
+        deploying = d is not null ? DeploymentDraft.From(d) : DeploymentDraft.New(cat, a.Id, row.PartnerId, row.Site);
+    }
+
+    private async Task OnDeployed(bool saved)
+    {
+        deploying = null;
+        if (saved) await LoadAsync();
+    }
+
+    private static string DeploymentTip(MatrixApp a, CustomerSite row, AppDeployment? d) => d is null
+        ? $"Assign {a.Name} to {DeploymentRules.Where(row.Customer, row.Site)}"
+        : $"{a.Name} at {DeploymentRules.Where(row.Customer, row.Site)}: {PortfolioText.Label(d.Status)}"
+          + (d.Since is { } s ? $" since {PortfolioUi.Date(s)}" : "") + (d.Note is { } n ? $"\n{n}" : "");
 
     private async Task OnRated(bool saved)
     {

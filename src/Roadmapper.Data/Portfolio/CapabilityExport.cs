@@ -20,7 +20,8 @@ public static class CapabilityExport
         [FeatureAvailability.Yes] = "#d6efe2", [FeatureAvailability.Partial] = "#fde7c4", [FeatureAvailability.No] = "#eeeeee",
     };
 
-    public static byte[] ToXlsx(CapabilityMatrix m)
+    /// <summary>The workbook; with <paramref name="deployments"/> (the category's, customer loaded) it adds a "Customers" sheet.</summary>
+    public static byte[] ToXlsx(CapabilityMatrix m, IEnumerable<AppDeployment>? deployments = null)
     {
         using var wb = new XLWorkbook();
         var label = PortfolioText.Label(m.Category);
@@ -87,10 +88,63 @@ public static class CapabilityExport
         Finish(heat, m.Apps.Count + 1);
 
         if (m.AnyPriced) CostSheet(wb, m);
+        if (deployments is not null) CustomersSheet(wb, m, CustomerMatrix.Build(m.Apps.Select(a => a.Id).ToList(), deployments));
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
         return ms.ToArray();
+    }
+
+    private static readonly Dictionary<DeploymentStatus, string> DeploymentFill = new()
+    {
+        [DeploymentStatus.Live] = "#d6efe2", [DeploymentStatus.Implementing] = "#e8ecfd", [DeploymentStatus.Evaluating] = "#fff3d6",
+        [DeploymentStatus.Pipeline] = "#f1f3f6", [DeploymentStatus.Retired] = "#eeeeee",
+    };
+
+    /// <summary>"Customers": customers and sites × applications, with each deployment's status, and each application's reach.</summary>
+    private static void CustomersSheet(XLWorkbook wb, CapabilityMatrix m, CustomerMatrix cm)
+    {
+        var ws = wb.AddWorksheet("Customers");
+        ws.Cell(1, 1).Value = "Customer";
+        ws.Cell(1, 2).Value = "Site";
+        for (var c = 0; c < m.Apps.Count; c++) ws.Cell(1, c + 3).Value = m.Apps[c].Name;
+        var header = ws.Row(1);
+        header.Style.Font.Bold = true;
+        header.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f3f6");
+        header.Style.Alignment.WrapText = true;
+        var r = 2;
+        foreach (var row in cm.Rows)
+        {
+            ws.Cell(r, 1).Value = row.Customer;
+            ws.Cell(r, 2).Value = row.Site ?? "All sites";
+            for (var c = 0; c < m.Apps.Count; c++)
+            {
+                if (cm.Cell(row, m.Apps[c].Id) is not { } d) continue;
+                var cell = ws.Cell(r, c + 3);
+                cell.Value = PortfolioText.Label(d.Status);
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml(DeploymentFill[d.Status]);
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                var note = string.Join("\n", new[] { d.Since is { } s ? $"Since {s:yyyy-MM-dd}" : null, d.Note }.Where(x => x is not null));
+                if (note.Length > 0) cell.CreateComment().AddText(note);
+            }
+            r++;
+        }
+        ws.Cell(r, 1).Value = "Live sites";
+        ws.Cell(r + 1, 1).Value = "Live customers";
+        ws.Cell(r + 2, 1).Value = "In progress";
+        for (var c = 0; c < m.Apps.Count; c++)
+        {
+            var reach = cm.Reach[m.Apps[c].Id];
+            if (reach.NoneLive) ws.Cell(r, c + 3).Value = "No site confirmed";
+            else ws.Cell(r, c + 3).Value = reach.LiveSites;
+            ws.Cell(r + 1, c + 3).Value = reach.LiveCustomers;
+            ws.Cell(r + 2, c + 3).Value = reach.InProgress;
+        }
+        ws.Range(r, 1, r + 2, m.Apps.Count + 2).Style.Font.Bold = true;
+        ws.SheetView.Freeze(1, 2);
+        ws.Column(1).Width = 32;
+        ws.Column(2).Width = 20;
+        for (var c = 3; c <= m.Apps.Count + 2; c++) ws.Column(c).Width = 16;
     }
 
     /// <summary>"Cost": one row per price line, costed for the comparison's site profile, with each application's totals.</summary>

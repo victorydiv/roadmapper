@@ -382,6 +382,21 @@ internal static class PortfolioModel
             e.HasIndex(l => l.ApplicationId);
         });
 
+        // Customer matrix: which customers and sites use each application, per comparison.
+        b.Entity<AppDeployment>(e =>
+        {
+            e.ToTable("Deployments");
+            e.Property(d => d.Category).HasConversion<string>().HasMaxLength(30);
+            e.Property(d => d.Site).HasMaxLength(DeploymentRules.MaxSiteLength).UseCollation("NOCASE");
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(d => d.Note).HasMaxLength(CapabilityRules.MaxNoteLength);
+            e.HasOne(d => d.Application).WithMany().HasForeignKey(d => d.ApplicationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(d => d.TradingPartner).WithMany().HasForeignKey(d => d.TradingPartnerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(d => new { d.Category, d.ApplicationId });
+            e.HasIndex(d => d.ApplicationId);
+            e.HasIndex(d => d.TradingPartnerId);
+        });
+
         b.Entity<SiteProfile>(e =>
         {
             e.ToTable("SiteProfiles");

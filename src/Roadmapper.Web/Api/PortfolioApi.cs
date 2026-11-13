@@ -147,6 +147,13 @@ public static class PortfolioApi
                 : Results.NotFound());
         api.MapGet("/capabilities/{category}/profiles", async (string category, PortfolioService svc) =>
             Parse<AppCategory>(category) is { } c ? Results.Ok(await svc.GetSiteProfilesAsync(c)) : Results.NotFound());
+        // The customer matrix: which customers and sites use each application in the comparison, by customer then site.
+        api.MapGet("/capabilities/{category}/customers", async (string category, PortfolioService svc) =>
+            Parse<AppCategory>(category) is { } c
+                ? Results.Ok((await svc.GetDeploymentsAsync(c))
+                    .OrderBy(d => d.TradingPartner!.Name, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Site ?? "", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(d => d.Application!.Name, StringComparer.OrdinalIgnoreCase).Select(DeploymentDto.From).ToList())
+                : Results.NotFound());
 
         // A product's development pipeline: projects with status, cost lines and documents, and totals by status.
         api.MapGet("/products/{productId:int}/development", async (int productId, PortfolioService svc) =>
@@ -509,4 +516,12 @@ public record CapabilityDto(AppCategory Category, IReadOnlyList<CapabilityDto.Fe
                         l.Line.Minimum, l.Line.Source, l.Line.AsOf, l.Line.Note, l.Quantity, l.Charge)).ToList()));
         }).ToList(),
         new SiteRow(m.Site.Id, m.Site.Name, m.Site.Users, m.Site.Licenses, m.Site.DockDoors, m.Site.Assets, m.Site.TransactionsPerMonth));
+}
+
+/// <summary>An application in use (or on the way) for a customer at a site, in a category's comparison.</summary>
+public record DeploymentDto(int Id, AppCategory Category, int ApplicationId, string Application, int CustomerId, string Customer, string? Site,
+    DeploymentStatus Status, DateOnly? Since, string? Note)
+{
+    public static DeploymentDto From(AppDeployment d) => new(d.Id, d.Category, d.ApplicationId, d.Application?.Name ?? "", d.TradingPartnerId,
+        d.TradingPartner?.Name ?? "", d.Site, d.Status, d.Since, d.Note);
 }

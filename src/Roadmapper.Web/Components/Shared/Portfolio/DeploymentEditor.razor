@@ -1,0 +1,152 @@
+@* Assign an application to a customer (one or more sites), or change or remove one assignment. *@
+@inject PortfolioService Svc
+
+<div class="modal-backdrop">
+    <div class="modal" style="max-width:560px">
+        <div class="modal-head">
+            <div>
+                <h2 style="margin:0">@(draft.IsNew ? "Assign an application to a customer" : "Edit customer deployment")</h2>
+                <div class="muted small">Which customers and sites use it, for the customer matrix.</div>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="btn icon" title="Close" @onclick="() => OnClose.InvokeAsync(false)">✕</button>
+        </div>
+        <div class="modal-body">
+            @if (error is not null)
+            {
+                <div class="alert">@error</div>
+            }
+            <label class="field">Application
+                <select @bind="ChoiceKey">
+                    <option value="">— pick an application —</option>
+                    @foreach (var g in Choices.GroupBy(c => c.Category))
+                    {
+                        <optgroup label="@PortfolioText.Label(g.Key) comparison">
+                            @foreach (var c in g)
+                            {
+                                <option value="@c.Key">@c.Name@(c.Added ? " (added to this comparison)" : "")</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </label>
+            @if (LockCustomer)
+            {
+                <div class="field">Customer <span style="color:var(--text, inherit);font-weight:400">@Partners.FirstOrDefault(p => p.Id == draft.TradingPartnerId)?.Name</span></div>
+            }
+            else
+            {
+                <label class="field">Customer
+                    <select @bind="draft.TradingPartnerId">
+                        <option value="0">— pick a customer —</option>
+                        @foreach (var p in Partners.OrderBy(p => p.Type != PartnerType.Customer).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@p.Id">@p.Name@(p.Type == PartnerType.Customer ? "" : $" ({PortfolioText.Label(p.Type)})")</option>
+                        }
+                        <option value="-1">+ New customer…</option>
+                    </select>
+                </label>
+                @if (draft.TradingPartnerId < 0)
+                {
+                    <label class="field">New customer's name <span class="muted small">added to Trading partners as a customer</span>
+                        <input @bind="draft.NewCustomerName" placeholder="e.g. Interstate Batteries" />
+                    </label>
+                }
+            }
+            <label class="field">@(draft.IsNew ? "Sites" : "Site")
+                <span class="muted small" style="font-weight:400">
+                    @(draft.IsNew ? "One or more, separated by commas (e.g. AZ, CO, FL). One entry is added per site. Leave blank for the whole customer." : "Leave blank for the whole customer.")
+                </span>
+                <input @bind="draft.Sites" placeholder="@(draft.IsNew ? "e.g. AZ, CO, FL" : "e.g. Ontario Corporate")" />
+            </label>
+            <div class="row" style="align-items:flex-end">
+                <label class="field" style="flex:1">Status
+                    <select @bind="draft.Status">
+                        @foreach (var s in Enum.GetValues<DeploymentStatus>())
+                        {
+                            <option value="@s">@PortfolioText.Label(s)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field" style="flex:1">Since <span class="muted small">optional</span>
+                    <input type="date" @bind="draft.Since" />
+                </label>
+            </div>
+            <div class="muted small">@StatusHint</div>
+            <label class="field">Note
+                <textarea rows="2" @bind="draft.Note" placeholder="e.g. On the October 2026 billing; QR codes only, not connected to Blue Yonder"></textarea>
+            </label>
+        </div>
+        <div class="modal-foot">
+            @if (!draft.IsNew)
+            {
+                @if (confirmDelete)
+                {
+                    <button type="button" class="btn danger" @onclick="DeleteAsync">Remove this deployment</button>
+                }
+                else
+                {
+                    <button type="button" class="btn danger" @onclick="() => confirmDelete = true">Remove</button>
+                }
+            }
+            <span class="spacer"></span>
+            <button type="button" class="btn" @onclick="() => OnClose.InvokeAsync(false)">Cancel</button>
+            <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DeploymentDraft Draft { get; set; } = new();
+    /// <summary>The applications it can be, per comparison.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<DeploymentChoice> Choices { get; set; } = [];
+    [Parameter] public IReadOnlyList<TradingPartner> Partners { get; set; } = [];
+    /// <summary>On a customer's own page: the customer can't be changed.</summary>
+    [Parameter] public bool LockCustomer { get; set; }
+    /// <summary>Called with true when something was saved or removed.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private DeploymentDraft draft = new();
+    private string? error;
+    private bool saving, confirmDelete;
+
+    protected override void OnInitialized() => draft = Draft;
+
+    private string ChoiceKey
+    {
+        get => draft.ApplicationId > 0 ? $"{draft.Category}:{draft.ApplicationId}" : "";
+        set
+        {
+            if (Choices.FirstOrDefault(c => c.Key == value) is { } c) (draft.Category, draft.ApplicationId) = (c.Category, c.ApplicationId);
+            else draft.ApplicationId = 0;
+        }
+    }
+
+    private string StatusHint => draft.Status switch
+    {
+        DeploymentStatus.Pipeline => "Pipeline: an opportunity, not agreed yet.",
+        DeploymentStatus.Evaluating => "Evaluating: a demo, trial or evaluation.",
+        DeploymentStatus.Implementing => "Implementing: agreed and being set up.",
+        DeploymentStatus.Live => "Live: in production use there.",
+        _ => "Retired: no longer used there.",
+    };
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            await Svc.SaveDeploymentAsync(draft);
+            await OnClose.InvokeAsync(true);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Svc.DeleteDeploymentAsync(draft.Id);
+        await OnClose.InvokeAsync(true);
+    }
+}

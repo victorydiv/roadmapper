@@ -578,3 +578,17 @@ table.dev-cost td.num input { max-width: 110px; text-align: right; }
 .card.todo-dash { margin: 0 0 1rem; }
 .todo-row.reminding { box-shadow: inset 3px 0 0 #e0a100; padding-left: .5rem; }
 .badge.todo-remind { background: #fff7e6; color: #8a5a00; border-color: #f2d9a0; }
+
+/* Customer matrix: which customers and sites use each application. */
+.dep { display: inline-block; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.dep-Live { background: #e0f4ea; color: #1d7a52; border-color: #b7dfc4; }
+.dep-Implementing { background: #e8ecfd; color: var(--accent); }
+.dep-Evaluating { background: #fff3d6; color: #8a5d00; }
+.dep-Pipeline { background: #f6f7f9; color: #555f6d; border: 1px dashed #b9c0cb; }
+.dep-Retired { background: #f1f3f6; color: #98a2b3; text-decoration: line-through; }
+table.matrix td.dep-cell { font-size: .85rem; }
+table.matrix td.dep-cell .dep-add { color: transparent; font-weight: 600; }
+table.matrix td.dep-cell:hover .dep-add { color: var(--muted); }
+table.matrix.customer-matrix td.site { white-space: nowrap; }
+table.matrix.customer-matrix tbody th.feature { vertical-align: top; }
+@media print { table.matrix td.dep-cell .dep-add { display: none; } }

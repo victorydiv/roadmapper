@@ -169,6 +169,57 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("ItemScores");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.AppDeployment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("Since")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Site")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TradingPartnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("TradingPartnerId");
+
+                    b.HasIndex("Category", "ApplicationId");
+
+                    b.ToTable("Deployments", (string)null);
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Application", b =>
                 {
                     b.Property<int>("Id")
@@ -2210,6 +2261,25 @@ namespace Roadmapper.Data.Migrations
                         .HasForeignKey("Roadmapper.Core.ItemScore", "ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.AppDeployment", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "TradingPartner")
+                        .WithMany()
+                        .HasForeignKey("TradingPartnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
+
+                    b.Navigation("TradingPartner");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Application", b =>
