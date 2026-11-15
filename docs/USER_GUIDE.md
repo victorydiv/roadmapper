@@ -4,9 +4,11 @@ Roadmapper is a product roadmap app. You use it to plan your work as a hierarchy
 
 Above the roadmaps, the **application portfolio** records the systems you run, their vendors and contracts, the trading partners you exchange data with, the integrations between them, the business processes that depend on them, the value roadmap work delivers and the decisions behind it, so you can see what a change will touch before you make it.
 
+Alongside both are a **to-do list** with deadlines and reminders, and **statements of work (SOWs)** you price from a rate card and print as Kenco-branded PDFs.
+
 This guide is for two audiences:
 
-- **People using the app.** Sections 1–9 explain the roadmap screens and how to get common jobs done. Section 10 covers the application portfolio, including **Capabilities** (comparing applications feature by feature). Section 13 introduces the three scoring models for anyone who hasn't used them before.
+- **People using the app.** Sections 1–9 explain the roadmap screens and how to get common jobs done. Section 5 also covers the to-do list. Section 10 covers the application portfolio, including **Capabilities** (comparing applications feature by feature, the customer matrix and cost of adoption) and **statements of work**. Section 13 introduces the three scoring models for anyone who hasn't used them before.
 - **AI assistants and developers.** Section 11 gives exact rules, the data model, and where each behavior lives in the code. The rules there are written so they can be relied on when answering questions or changing the app.
 
 ---
@@ -61,7 +63,7 @@ You can change the location with the `Database:Path` setting in `appsettings.jso
 
 On a brand-new database, Roadmapper creates a demo product, **Sample: Customer Portal**, for you to explore. Delete it from its Settings tab when you're done.
 
-**Backups:** the easiest way to back up one product is to export a [Roadmapper file (.rmp)](#roadmapper-files-rmp), which holds the complete product. Back up the application portfolio as a [portfolio file (.rpf)](#portfolio-settings-backup-and-export) from Portfolio › Settings. To back up everything at once, stop the app and copy `roadmapper.db`.
+**Backups:** the easiest way to back up one product is to export a [Roadmapper file (.rmp)](#roadmapper-files-rmp), which holds the complete product. Back up the application portfolio, along with your to-dos, development projects and SOWs, as a [portfolio file (.rpf)](#portfolio-settings-backup-and-export) from Portfolio › Settings. To back up everything at once, stop the app and copy `roadmapper.db`.
 
 ### Moving around
 
@@ -71,7 +73,9 @@ On a brand-new database, Roadmapper creates a demo product, **Sample: Customer P
 - Opening a product shows its tabs: **Dashboard · Tree · Timeline · Now / Next / Later · Kanban · Priorities · Scoring · Development · Snapshots · Import / Export · Settings**.
 - Clicking any item title, bar or card anywhere in the app opens the [item editor](#4-editing-an-item).
 - **Portfolio** at the top of every page opens the [application portfolio](#10-application-portfolio).
+- **Capabilities** at the top of every page [compares applications](#capabilities-comparing-applications) feature by feature, with the customer matrix and cost of adoption.
 - **SOWs** at the top of every page opens the [statements of work](#statements-of-work-sows).
+- **To-do** at the top of every page opens your [to-do list](#to-do-list-and-reminders); the number beside it counts reminders due.
 
 ---
 
@@ -233,6 +237,8 @@ A one-page health check:
 - **Status by level:** how many Goals, Initiatives, Features and Tasks are in each status. Toggle between bars and a table.
 - **Upcoming deadlines:** open items due in the next 30, 60 or 90 days.
 - **Blocked items** and **Recent activity**.
+- **To-do:** the open [to-dos](#to-do-list-and-reminders) about this product or its roadmap items, reminders due first.
+- **Benefits** (the top five, at-risk first; see [Benefits](#benefits)) and **Documents** (this product's; see [Documents](#documents-sharepoint)).
 
 ### Timeline
 
@@ -341,7 +347,7 @@ The **Development** tab tracks each piece of development work for the product, s
 
 **Cost breakdown:** one line per piece of the cost. The **+ DEV**, **+ QA**, **+ EDI**, **+ PM** buttons add a line of that category, with its default rate filled in. Each line is either **hours × rate** or, with the hours left blank, a fixed **amount** (a flat fee, a license). The totals show at the bottom. Lines with nothing in them are ignored.
 
-**SOW & documents:** once a project is saved (a new one stays open after its first save), upload its SOW or link one that's already in SharePoint. Uploads go to the product's **SOW** folder (set in the product's Settings › Document folders, or the shared one), like any other [document](#documents-sharepoint). The documents list on the Documents tab shows the project in **Attached to**, and links back to it. Deleting a project keeps its documents; they stay with the product, unattached.
+**SOW & documents:** to write the SOW itself, use [SOWs](#statements-of-work-sows) and upload its PDF here. Once a project is saved (a new one stays open after its first save), upload its SOW or link one that's already in SharePoint. Uploads go to the product's **SOW** folder (set in the product's Settings › Document folders, or the shared one), like any other [document](#documents-sharepoint). The documents list on the Documents tab shows the project in **Attached to**, and links back to it. Deleting a project keeps its documents; they stay with the product, unattached.
 
 **The tab** shows:
 
@@ -352,8 +358,6 @@ The **Development** tab tracks each piece of development work for the product, s
 - **Export to Excel:** a **Projects** sheet (one row per project, a column per cost category, totals) and a **Cost lines** sheet.
 
 Each project has its own change history (status, fields and cost lines) at the bottom of its editor.
-
----
 
 ### To-do list and reminders
 
@@ -579,7 +583,7 @@ Import is a three-step wizard:
 
 The portfolio sits above your roadmaps. It records the systems you own and run (applications), the companies behind them (vendors and contracts), the customers and carriers you exchange data with (trading partners), how data moves between all of them (integrations), the business processes that depend on them, what roadmap work is expected to deliver (benefits), why things were decided (the decision log), and where the paperwork is (documents kept in SharePoint). It links back into your roadmaps instead of copying them, so status, dates and progress always come from the roadmap.
 
-Open it with **Portfolio** at the top of any page; **Capabilities**, next to it, compares applications feature by feature (see [Capabilities](#capabilities-comparing-applications)). Its tabs are **Dashboard · Applications · Trading partners · Integrations · Map · Processes · Impact analysis · Benefits · Decisions · Documents · Vendors & contracts · Contacts · Settings**.
+Open it with **Portfolio** at the top of any page; **Capabilities**, next to it, compares applications feature by feature (see [Capabilities](#capabilities-comparing-applications)), and **SOWs** holds your [statements of work](#statements-of-work-sows). Its tabs are **Dashboard · Applications · Trading partners · Integrations · Map · Processes · Impact analysis · Benefits · Decisions · Documents · Vendors & contracts · Contacts · Settings**.
 
 On a brand-new database, Roadmapper adds a made-up 3PL sample portfolio (a WMS, TMS, ERP, EDI provider, customer portal and more) linked to the sample roadmap. In an existing portfolio, the Integrations, Processes, Benefits and Decisions pages offer **Add sample …** buttons while they're empty and the sample applications are present.
 
@@ -627,7 +631,7 @@ The first page of the portfolio, for a one-page status update.
 | Business fit, technical fit | 1–5 each. Together they place the application in a **TIME** quadrant: **Invest** (both 3+), **Migrate** (business 3+, technical below 3), **Tolerate** (technical 3+, business below 3), **Eliminate** (both below 3). |
 | Go-live, retire date, description, notes | Free. |
 
-An application's page also shows its **health**, support contacts (with roles such as L1 support or key user), its **integrations**, a **dependencies** list and map, the **business processes** that use it, the **roadmap items** linked to it (from any roadmap, with the kind of impact: Enhances, Implements, Replaces, Retires, Integrates, Upgrades), its **benefits**, its **decisions** and its history. **Impact analysis** opens the [impact report](#impact-analysis) for it.
+An application's page also shows its **health**, support contacts (with roles such as L1 support or key user), its **integrations**, a **dependencies** list and map, the **business processes** that use it, the **roadmap items** linked to it (from any roadmap, with the kind of impact: Enhances, Implements, Replaces, Retires, Integrates, Upgrades), its **benefits**, its **decisions**, the **customers** and sites using it (see [Customer matrix](#customer-matrix-who-uses-what)), its **features and cost** in each comparison, its **to-dos** and its history. **Impact analysis** opens the [impact report](#impact-analysis) for it.
 
 You can't delete an application that integrations still use; set it to Retired instead, or delete the integrations first.
 
@@ -661,7 +665,7 @@ Customers, carriers, suppliers and other outside companies that exchange data wi
 - **Identifiers:** account/customer code (your ID for them in the WMS or ERP), EDI qualifier and ID (ISA, shown as `01:123456789`), and GS ID if different.
 - **Relationship owner** and the partner's own people (EDI coordinator, IT contact).
 
-A partner's page shows the applications it uses (see [Customer matrix](#customer-matrix-who-uses-what)), its integrations, the applications its flows pass through (dependencies and map), decisions and history. A partner with integrations can't be deleted; set it to Inactive instead. Deleting a partner removes its customer-matrix entries.
+A partner's page shows the applications it uses (see [Customer matrix](#customer-matrix-who-uses-what)), its [statements of work](#statements-of-work-sows), its integrations, the applications its flows pass through (dependencies and map), decisions and history. A partner with integrations can't be deleted; set it to Inactive instead. Deleting a partner removes its customer-matrix entries.
 
 ### Integrations
 
@@ -924,9 +928,9 @@ SOWs, the rate card and the SOW settings are included in the [portfolio backup](
 - Roadmap links with no matching roadmap or item are listed after the import instead of failing it. Import the missing roadmaps' .rmp files, then merge again, or link them by hand.
 - The import runs in one transaction: if anything fails, nothing is added.
 
-**Export to Excel** (Dashboard) writes one sheet each for Applications (with health), Vendors, Contracts, Trading partners, Integrations, Risks, Processes, Pain points, KPIs, Benefits, Decisions, Documents, Features (every rating in every category) and Contacts.
+**Export to Excel** (Dashboard) writes one sheet each for Applications (with health), Vendors, Contracts, Trading partners, Integrations, Risks, Processes, Pain points, KPIs, Benefits, Decisions, Documents, Features (every rating in every category) and Contacts. To-dos, development projects and SOWs aren't in it; the customer matrix and costs are in each category's [comparison workbook](#capabilities-comparing-applications), and a product's development projects in its own workbook.
 
-**Read-only API:** everything is also available as JSON under `/api/portfolio/` (for Power BI or Excel's **Get Data › From Web**). See [Portfolio API](#portfolio-api).
+**Read-only API:** the portfolio, capabilities (with the customer matrix), to-dos and development projects are also available as JSON under `/api/portfolio/` (SOWs aren't yet) (for Power BI or Excel's **Get Data › From Web**). See [Portfolio API](#portfolio-api).
 
 ### Linking roadmap items to Jira
 
@@ -944,13 +948,14 @@ Roadmapper isn't a replacement for Jira; Jira stays the system of record for sto
 
 | Project | Responsibility |
 |---|---|
-| `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `ScoringRubric` (`RubricCalculator`, `RubricScale`, `RubricRules`, `StarterRubric`), `TimelineLayout`, `RoadmapColors`. `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
+| `src/Roadmapper.Core` | Domain model and pure rules, with no database access: `Entities.cs`, `Enums.cs`, `HierarchyRules`, `RollupService`, `Scoring`, `PriorityMatrix`, `DependencyRules`, `ProductRoadmap` (a read-only in-memory view), `Snapshots`, `TaskTemplates` (`TemplateRules`, `StarterTemplates`), `ScoringRubric` (`RubricCalculator`, `RubricScale`, `RubricRules`, `StarterRubric`), `TimelineLayout`, `RoadmapColors`, `ScheduleShift` (moving a parent with its sub-items). `Exchange/` holds the CSV, column, import-planning and template-sheet code. |
 | `src/Roadmapper.Data` | `RoadmapDbContext`, migrations, and `RoadmapService` (all reads and writes; a short-lived DbContext per call). `RoadmapService.Templates.cs` holds the template operations and `RoadmapService.Rubric.cs` the scoring rubric. `AuditTrail` produces the change history. `Exchange/` holds the XLSX/CSV export, the table reader, and the PDF report (`RoadmapPdf`, `GanttPdf`). |
 | `src/Roadmapper.Web` | Blazor pages (`Components/Pages/Product*.razor`) and shared components (`ItemEditor`, `TemplateEditor`, `TemplatePicker`, `DragBoard`, …). `Exports/ExportEndpoints.cs` provides the file downloads. `Launcher.cs` handles start-up for the packaged exe (port choice, opening the browser). `UserGuide.cs` renders this guide (embedded from `docs/USER_GUIDE.md`) for `/guide`. The assembly, and so the packaged exe, is named `Roadmapper`. |
-| `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, `Capabilities.cs` (`CapabilityMatrix`, `CapabilityRules`), and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
-| `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Capabilities, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook and `CapabilityExport` a category's comparison workbook. |
-| `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
-| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`, `CapabilityCostTests`, `DevelopmentTests`, `TodoTests`, `ScheduleShiftTests`). |
+| `src/Roadmapper.Core/Portfolio` | The portfolio's entities, enums, drafts (`Validate`/`ApplyTo`) and pure rules: `PortfolioRules` (notice deadlines, TIME, risk level, process tree, KPI progress), `PortfolioText` (labels), `PortfolioGraph` (dependency walks), `MapLayout`, `ImpactAnalyzer`, `BenefitMath`, `PortfolioHealth`, `Capabilities.cs` (`CapabilityMatrix`, `CapabilityRules`), `CapabilityCost.cs` (`CostEstimate`), `Deployments.cs` (`CustomerMatrix`, `DeploymentRules`), `Development.cs` (`DevRules`), `Todos.cs` (`TodoRules`), `Sows.cs` (`SowRules` and the SOW drafts), and `PortfolioDocuments.cs` (`DocumentLibrary`: SharePoint addresses and file names). `Core/Exchange/PortfolioFile.cs` is the .rpf format; `Core/ExternalLinks.cs` the Jira link rules. |
+| `src/Roadmapper.Data/Portfolio` | `PortfolioModel` (EF mapping, applied by `RoadmapDbContext`), `PortfolioAuditTrail` (portfolio history, captured in the same `SaveChangesAsync` override), and the partial `PortfolioService` (one file per area: Applications, Vendors, Contacts, Partners, Integrations, Processes (with impact), Benefits, Decisions, Documents, Capabilities, Deployments, Development, Todos, Sows, Dashboard, Files (.rpf), Sample). `PortfolioExport` writes the portfolio workbook, `CapabilityExport` a category's comparison workbook and `DevelopmentExport` a product's pipeline. |
+| `src/Roadmapper.Data/Sow` | `SowModel` (EF mapping and the seeded rate card), `SowPdf` (the SOW PDF, MigraDoc) and `kenco-logo.png` (embedded resource). PDF writers call `WindowsFontResolver.Install()` first. |
+| `src/Roadmapper.Web` (portfolio) | `Components/Pages/Portfolio/*.razor`, `Pages/Capabilities/*`, `Pages/Sows/*` (`SowList`, `SowEdit`, `SowSettingsPage`), `Pages/Todos.razor` and `Components/Shared/Portfolio/*` (editors, badges, `PortfolioHeader` tabs, `PortfolioUi` formatting). `Api/PortfolioApi.cs` is the read-only JSON API; `Exports/IntegrationMapSvg.cs` draws the map. |
+| `tests/Roadmapper.Tests` | xUnit tests, including the Task Templates acceptance checks (`TaskTemplateTests.cs`) and the portfolio tests (`PortfolioServiceTests`, `IntegrationServiceTests`, `TradingPartnerTests`, `PortfolioGraphTests`, `ImpactAnalyzerTests`, `ProcessServiceTests`, `BenefitTests`, `DashboardAndDecisionTests`, `PortfolioFileTests`, `DocumentTests`, `CapabilityTests`, `CapabilityCostTests`, `DevelopmentTests`, `TodoTests`, `ScheduleShiftTests`, `DeploymentTests`, `SowTests`). |
 
 ### Data model
 
@@ -1132,7 +1137,7 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 - **User guide in the app:** `docs/USER_GUIDE.md` is embedded at build time, so edits appear in the app after a rebuild. Links between sections use GitHub-style heading ids, which work on GitHub and in the app. Rendering uses Markdig (BSD-2-Clause).
 - **NuGet:** `nuget.config` adds nuget.org because the machine has no global source.
 - **Licensing:** **PDFsharp-MigraDoc is pinned to 6.2.4 (MIT).** Version 6.5 and later is AGPL-3.0, so don't upgrade it without a license review. Excel files are produced with ClosedXML.
-- **No JavaScript frameworks.** Drag-and-drop uses native HTML5 events; the PNG export is the only JS interop.
+- **No JavaScript frameworks.** Drag-and-drop uses native HTML5 events. JS interop is limited to the PNG export, copying the impact report, printing, and the SOW page's "leave without saving?" confirmation.
 
 ### Glossary
 
@@ -1140,6 +1145,7 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 |---|---|
 | Adjuster | A rubric criterion that moves a WSJF factor up or down the scale instead of setting it. |
 | Baseline | A snapshot used for comparison. |
+| Customer matrix | Which customers and sites use each application in a comparison, and at what status (Pipeline to Retired). |
 | Batch | All tasks created by one "apply template" action. |
 | Blocked | Has an unfinished predecessor. |
 | Gap | Days of wait before a template task starts, after the previous task (or the Feature start). |
@@ -1154,7 +1160,11 @@ An item with a theme uses the theme's color instead of its level's color (`Roadm
 | Open | Status not Done or Cancelled. |
 | Overdue | Open, with an End date in the past. |
 | Roll-up | A parent's dates and progress calculated from its children. |
+| Rate card | The standard SOW rates (by cost category) offered when pricing a SOW. |
+| Reminder | A to-do whose reminder day (its Remind me date, else its due date) has come. |
 | Rubric | A product's criteria for working out WSJF factors from answers. |
+| Site profile | A typical site's sizes (users, dock doors…) used to cost applications for comparison. |
+| SOW | Statement of work: scope and cost for a customer project, printed as a PDF for signature. |
 | Slip | Change in end date versus the baseline (+ = later). |
 
 ---
