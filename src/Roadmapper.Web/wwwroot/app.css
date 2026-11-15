@@ -592,3 +592,18 @@ table.matrix td.dep-cell:hover .dep-add { color: var(--muted); }
 table.matrix.customer-matrix td.site { white-space: nowrap; }
 table.matrix.customer-matrix tbody th.feature { vertical-align: top; }
 @media print { table.matrix td.dep-cell .dep-add { display: none; } }
+
+/* ---------- Statements of work ---------- */
+.sow-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1rem; align-items: start; }
+.sow-summary { position: sticky; top: 1rem; }
+.sow-summary table.tree td { padding: .3rem .4rem; }
+.sow-summary tr.sow-total td { border-top: 2px solid #004b5d; }
+@media (max-width: 1100px) { .sow-layout { grid-template-columns: 1fr; } .sow-summary { position: static; } }
+table.sow-lines td { padding: .25rem .35rem; }
+table.sow-lines input, table.sow-lines select { padding: .25rem .4rem; }
+.badge.sow-Draft { background: #eef2f6; color: #4a5a6a; border-color: #d5dde6; }
+.badge.sow-Sent { background: #e7f4f8; color: #1c6077; border-color: #c4e2ec; }
+.badge.sow-Approved { background: #e6f4ea; color: #1e6b3a; border-color: #b7dfc4; }
+.badge.sow-Declined { background: #fdecec; color: #b42318; border-color: #f5c2c0; }
+.badge.sow-Cancelled { background: var(--surface-2); color: var(--muted); border-color: var(--border); text-decoration: line-through; }
+.badge.sow-expired { background: #fff7e6; color: #8a5d00; border-color: #f2d9a0; margin-left: .25rem; }

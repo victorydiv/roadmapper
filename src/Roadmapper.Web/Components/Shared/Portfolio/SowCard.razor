@@ -1,0 +1,48 @@
+@* A trading partner's statements of work, on its page. *@
+@inject PortfolioService Svc
+
+<div class="card stack" style="margin-top:1rem">
+    <div class="row">
+        <h2 style="margin:0">Statements of work</h2>
+        @if (sows.Count > 0)
+        {
+            <span class="muted small">@sows.Count SOW@(sows.Count == 1 ? "" : "s") · @PortfolioUi.Money(sows.Where(s => s.Status == SowStatus.Approved).Sum(s => s.Totals.OneTime)) signed</span>
+        }
+        <span class="spacer"></span>
+        <a class="btn" href="/sows/new?customer=@PartnerId">+ New SOW</a>
+    </div>
+    @if (sows.Count == 0)
+    {
+        <div class="muted small">No SOWs for @Name yet.</div>
+    }
+    else
+    {
+        <table class="tree">
+            <thead><tr><th>SOW #</th><th>Project</th><th>Site</th><th>Status</th><th class="num">One-time</th><th class="num">Annual</th><th>Prepared</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in sows)
+                {
+                    <tr>
+                        <td class="mono">@s.Number</td>
+                        <td style="white-space:normal"><a href="/sows/@s.Id">@s.ProjectName</a></td>
+                        <td>@s.Site</td>
+                        <td><SowStatusBadge Status="s.Status" Expired="SowRules.IsExpired(s, Svc.Today)" /></td>
+                        <td class="num">@PortfolioUi.Money(s.Totals.OneTime)</td>
+                        <td class="num">@(s.Totals.Annual == 0 ? "–" : PortfolioUi.Money(s.Totals.Annual))</td>
+                        <td class="small">@PortfolioUi.Date(s.PreparedOn)</td>
+                        <td><a class="btn sm" href="/export/sows/@(s.Id).pdf" target="_blank">PDF</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int PartnerId { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+
+    private List<Sow> sows = [];
+
+    protected override async Task OnParametersSetAsync() => sows = await Svc.GetSowsAsync(PartnerId);
+}

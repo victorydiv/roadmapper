@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Roadmapper.Core;
 using Roadmapper.Core.Portfolio;
 using Roadmapper.Data.Portfolio;
+using Roadmapper.Data.Sows;
 
 namespace Roadmapper.Data;
 
@@ -56,6 +57,12 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
     public DbSet<DevCostLine> DevCostLines => Set<DevCostLine>();
     public DbSet<TodoItem> Todos => Set<TodoItem>();
     public DbSet<PortfolioAuditEntry> PortfolioAuditEntries => Set<PortfolioAuditEntry>();
+
+    // Statements of work
+    public DbSet<Sow> Sows => Set<Sow>();
+    public DbSet<SowLine> SowLines => Set<SowLine>();
+    public DbSet<SowRate> SowRates => Set<SowRate>();
+    public DbSet<SowSettings> SowSettings => Set<SowSettings>();
 
     /// <summary>Turned off while re-deriving rollups and scores, so history only shows deliberate edits.</summary>
     public bool AuditEnabled { get; set; } = true;
@@ -207,5 +214,6 @@ public class RoadmapDbContext(DbContextOptions<RoadmapDbContext> options) : DbCo
         });
 
         b.ConfigurePortfolio();
+        b.ConfigureSows();
     }
 }

@@ -18,7 +18,7 @@ public static class RoadmapPdf
     static RoadmapPdf()
     {
         // PDFsharp's core build needs to be told where fonts live.
-        GlobalFontSettings.FontResolver ??= new WindowsFontResolver();
+        WindowsFontResolver.Install();
     }
 
     public static byte[] Render(ProductRoadmap roadmap, DateTime generatedAt, GanttOptions? gantt = null)

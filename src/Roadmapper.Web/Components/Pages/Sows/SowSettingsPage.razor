@@ -1,0 +1,208 @@
+@page "/sows/settings"
+@inject PortfolioService Svc
+
+<PageTitle>SOW rates &amp; settings · Roadmapper</PageTitle>
+
+<div class="product-header">
+    <div>
+        <div class="muted small"><a href="/sows">Statements of work</a> ›</div>
+        <h1>Rates &amp; settings</h1>
+        <div class="muted small">The rate card offered when pricing a SOW, and the wording every SOW shares. Changing a rate doesn't change SOWs already written.</div>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert" style="margin-bottom:1rem">@error</div>
+}
+
+@if (settings is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="card stack" style="margin-bottom:1rem">
+        <div class="row">
+            <h2 style="margin:0">Rate card</h2>
+            <span class="muted small">@rows.Count(r => r.Draft.IsActive) active rates. Untick <b>Active</b> to stop offering one without deleting it.</span>
+        </div>
+        <div class="table-wrap">
+            <table class="tree sow-lines">
+                <thead>
+                    <tr><th>Name</th><th>Frequency</th><th class="num">Rate</th><th>Per</th><th>Guidance (shown as the line's note)</th><th>Active</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in SowRules.Categories)
+                    {
+                        <tr class="depth-0">
+                            <td colspan="6"><b>@PortfolioText.Label(c)</b> <span class="muted small">@rows.Count(r => r.Draft.Category == c)</span></td>
+                            <td><button class="btn sm" @onclick="() => adding = SowRateDraft.New(c)">+ Add</button></td>
+                        </tr>
+                        @foreach (var r in rows.Where(r => r.Draft.Category == c))
+                        {
+                            <tr class="@(r.Draft.IsActive ? "" : "faded")">
+                                <td><input @bind="r.Draft.Name" @bind:event="oninput" style="min-width:200px" /></td>
+                                <td>
+                                    <select @bind="r.Draft.Frequency">
+                                        <option value="@SowFrequency.OneTime">One-time</option>
+                                        <option value="@SowFrequency.Annual">Annual</option>
+                                    </select>
+                                </td>
+                                <td class="num"><input type="number" min="0" step="0.01" @bind="r.Draft.Rate" style="width:7rem" /></td>
+                                <td><input @bind="r.Draft.Unit" @bind:event="oninput" style="width:5.5rem" placeholder="hour" /></td>
+                                <td><input @bind="r.Draft.Note" @bind:event="oninput" style="min-width:240px" placeholder="optional" /></td>
+                                <td><input type="checkbox" @bind="r.Draft.IsActive" /></td>
+                                <td class="nowrap">
+                                    @if (r.Changed)
+                                    {
+                                        <button class="btn sm primary" @onclick="() => SaveAsync(r.Draft)">Save</button>
+                                        <button class="btn sm" @onclick="() => r.Reset()">Undo</button>
+                                    }
+                                    else if (deleting == r.Draft.Id)
+                                    {
+                                        <button class="btn sm danger" @onclick="() => DeleteAsync(r.Draft.Id)">Delete?</button>
+                                        <button class="btn sm" @onclick="() => deleting = null">No</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn icon sm" title="Delete this rate" @onclick="() => deleting = r.Draft.Id">✕</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (adding is { } a && a.Category == c)
+                        {
+                            <tr class="hl">
+                                <td><input @bind="a.Name" @bind:event="oninput" placeholder="e.g. Network engineer" style="min-width:200px" /></td>
+                                <td>
+                                    <select @bind="a.Frequency">
+                                        <option value="@SowFrequency.OneTime">One-time</option>
+                                        <option value="@SowFrequency.Annual">Annual</option>
+                                    </select>
+                                </td>
+                                <td class="num"><input type="number" min="0" step="0.01" @bind="a.Rate" style="width:7rem" /></td>
+                                <td><input @bind="a.Unit" style="width:5.5rem" /></td>
+                                <td><input @bind="a.Note" style="min-width:240px" placeholder="optional" /></td>
+                                <td></td>
+                                <td class="nowrap">
+                                    <button class="btn sm primary" @onclick="() => SaveAsync(a)">Add</button>
+                                    <button class="btn sm" @onclick="() => adding = null">Cancel</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card stack">
+        <div class="row">
+            <h2 style="margin:0">SOW wording &amp; defaults</h2>
+            <span class="spacer"></span>
+            @if (settingsSaved) { <span class="badge cheapest">Saved</span> }
+            <button class="btn primary" @onclick="SaveSettingsAsync">Save settings</button>
+        </div>
+        <div class="row" style="align-items:flex-end">
+            <label class="field" style="flex:1;min-width:200px" title="Filled in on every new SOW">Default SOW manager
+                <input @bind="settings.DefaultManager" placeholder="e.g. Sean Estes" />
+            </label>
+            <label class="field" style="width:200px" title="A new SOW expires this many days after it's prepared; 0 leaves the date blank">Expires after (days)
+                <input type="number" min="0" max="3650" @bind="settings.ExpirationDays" />
+            </label>
+        </div>
+        <div class="grid-2">
+            <label class="field">Kenco companies that sign (one per line; the customer signs after them)
+                <textarea rows="3" @bind="settings.Signatories"></textarea>
+            </label>
+            <label class="field">Cost footnote (printed under the cost table after an asterisk; leave blank for none)
+                <textarea rows="3" @bind="settings.CostFootnote"></textarea>
+            </label>
+        </div>
+        <label class="field">Agreement (the paragraph above the signatures)
+            <textarea rows="3" @bind="settings.Agreement"></textarea>
+        </label>
+        <div class="muted small">A new SOW starts with this text. Start a line with <b>-</b> for a bullet.</div>
+        <div class="grid-3">
+            <label class="field">Standard scope of services
+                <textarea rows="6" @bind="settings.DefaultScope"></textarea>
+            </label>
+            <label class="field">Standard assumptions
+                <textarea rows="6" @bind="settings.DefaultAssumptions"></textarea>
+            </label>
+            <label class="field">Standard schedule
+                <textarea rows="6" @bind="settings.DefaultSchedule"></textarea>
+            </label>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed class RateRow(SowRate original)
+    {
+        public SowRateDraft Draft { get; private set; } = SowRateDraft.From(original);
+        private readonly string snapshot = System.Text.Json.JsonSerializer.Serialize(SowRateDraft.From(original));
+        public bool Changed => System.Text.Json.JsonSerializer.Serialize(Draft) != snapshot;
+        public void Reset() => Draft = SowRateDraft.From(original);
+    }
+
+    private List<RateRow> rows = [];
+    private SowSettingsDraft? settings;
+    private SowRateDraft? adding;
+    private int? deleting;
+    private string? error;
+    private bool settingsSaved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRatesAsync();
+        settings = SowSettingsDraft.From(await Svc.GetSowSettingsAsync());
+    }
+
+    private async Task LoadRatesAsync() => rows = (await Svc.GetSowRatesAsync()).Select(r => new RateRow(r)).ToList();
+
+    private async Task SaveAsync(SowRateDraft draft)
+    {
+        error = null;
+        try
+        {
+            // Keep other rows' unsaved edits when reloading.
+            var pending = rows.Where(r => r.Changed && r.Draft.Id != draft.Id).ToDictionary(r => r.Draft.Id, r => r.Draft);
+            await Svc.SaveSowRateAsync(draft);
+            if (draft.IsNew) adding = null;
+            await LoadRatesAsync();
+            foreach (var r in rows.Where(r => pending.ContainsKey(r.Draft.Id)).ToList())
+                rows[rows.IndexOf(r)] = WithDraft(r, pending[r.Draft.Id]);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+
+    private static RateRow WithDraft(RateRow row, SowRateDraft draft)
+    {
+        var d = row.Draft;
+        (d.Name, d.Frequency, d.Rate, d.Unit, d.Note, d.IsActive, d.Category) = (draft.Name, draft.Frequency, draft.Rate, draft.Unit, draft.Note, draft.IsActive, draft.Category);
+        return row;
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Svc.DeleteSowRateAsync(id);
+        deleting = null;
+        rows.RemoveAll(r => r.Draft.Id == id);
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (settings is null) return;
+        error = null;
+        settingsSaved = false;
+        try
+        {
+            await Svc.SaveSowSettingsAsync(settings);
+            settings = SowSettingsDraft.From(await Svc.GetSowSettingsAsync());
+            settingsSaved = true;
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+    }
+}

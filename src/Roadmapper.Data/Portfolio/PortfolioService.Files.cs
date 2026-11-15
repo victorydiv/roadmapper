@@ -204,6 +204,22 @@ public partial class PortfolioService
                 Item = t.RoadmapItemId is { } ti ? index.RefOf(ti) : null,
                 ApplicationId = t.ApplicationId, DecisionId = t.DecisionId, VendorId = t.VendorId, ContactId = t.ContactId, CreatedAt = t.CreatedAt,
             }).ToList(),
+            SowSettings = await db.SowSettings.AsNoTracking().FirstOrDefaultAsync() is { } ss ? new PfSowSettings
+            {
+                ExpirationDays = ss.ExpirationDays, DefaultManager = ss.DefaultManager, Signatories = ss.Signatories, CostFootnote = ss.CostFootnote,
+                Agreement = ss.Agreement, DefaultScope = ss.DefaultScope, DefaultAssumptions = ss.DefaultAssumptions, DefaultSchedule = ss.DefaultSchedule,
+            } : null,
+            SowRates = (await db.SowRates.AsNoTracking().ToListAsync()).OrderBy(r => r.Category).ThenBy(r => r.SortOrder).ThenBy(r => r.Id)
+                .Select(r => new PfSowRate(r.Category, r.Frequency, r.Name, r.Rate, r.Unit, r.Note, r.IsActive, r.SortOrder)).ToList(),
+            Sows = (await db.Sows.AsNoTracking().Include(s => s.Lines).OrderBy(s => s.Id).ToListAsync()).Select(s => new PfSow
+            {
+                Number = s.Number, ProjectName = s.ProjectName, CustomerId = s.CustomerId, CustomerName = s.CustomerName, Site = s.Site, Manager = s.Manager,
+                Status = s.Status, PreparedOn = s.PreparedOn, ExpiresOn = s.ExpiresOn, Overview = s.Overview, Scope = s.Scope,
+                DetailedDescription = s.DetailedDescription, Assumptions = s.Assumptions, Schedule = s.Schedule, IncludeCostDetail = s.IncludeCostDetail,
+                CreatedAt = s.CreatedAt,
+                Lines = s.Lines.OrderBy(l => l.SortOrder).ThenBy(l => l.Id)
+                    .Select(l => new PfSowLine(l.Category, l.Frequency, l.Description, l.Quantity, l.Unit, l.Rate, l.Note)).ToList(),
+            }).ToList(),
             History = (await db.PortfolioAuditEntries.AsNoTracking().OrderBy(a => a.Id).ToListAsync())
                 .Select(a => new PfHistory(a.EntityType, a.EntityId, a.EntityName, a.Action, a.Field, a.OldValue, a.NewValue, a.ChangedAt)).ToList(),
         };
@@ -859,6 +875,75 @@ public partial class PortfolioService
         }
         await db.SaveChangesAsync();
         result.Count("customer deployments", deploymentCount);
+
+        // Statements of work. A restore brings its settings, and its rate card replaces the standard one; a merge adds
+        // rates not on the card (same category, frequency and name) and SOWs not already here (same number, project and customer).
+        if (!merge && file.SowSettings is { } fs)
+        {
+            var draft = new SowSettingsDraft
+            {
+                ExpirationDays = fs.ExpirationDays, DefaultManager = fs.DefaultManager, Signatories = fs.Signatories ?? SowRules.DefaultSignatories,
+                CostFootnote = fs.CostFootnote, Agreement = fs.Agreement, DefaultScope = fs.DefaultScope, DefaultAssumptions = fs.DefaultAssumptions,
+                DefaultSchedule = fs.DefaultSchedule,
+            };
+            if (draft.Validate() is { } bad) result.Skipped.Add($"SOW settings ({bad})");
+            else draft.ApplyTo(await db.SowSettings.FirstOrDefaultAsync() ?? db.SowSettings.Add(new SowSettings()).Entity);
+        }
+        if (!merge && file.SowRates.Count > 0) db.SowRates.RemoveRange(await db.SowRates.ToListAsync());
+        await db.SaveChangesAsync();
+        var rates = await db.SowRates.AsNoTracking().ToListAsync();
+        var rateCount = 0;
+        foreach (var r in file.SowRates.OrderBy(r => r.Category).ThenBy(r => r.SortOrder))
+        {
+            if (rates.Any(x => x.Category == r.Category && x.Frequency == r.Frequency && string.Equals(x.Name, r.Name.Trim(), StringComparison.OrdinalIgnoreCase))) continue;
+            var draft = new SowRateDraft { Category = r.Category, Frequency = r.Frequency, Name = r.Name, Rate = r.Rate, Unit = r.Unit, Note = r.Note, IsActive = r.IsActive };
+            if (draft.Validate() is not null) { result.Skipped.Add($"SOW rate {r.Name} (not valid)"); continue; }
+            var row = new SowRate { SortOrder = rates.Where(x => x.Category == r.Category).Select(x => x.SortOrder + 1).DefaultIfEmpty(0).Max() };
+            draft.ApplyTo(row);
+            db.SowRates.Add(row);
+            rates.Add(row);
+            rateCount++;
+        }
+        await db.SaveChangesAsync();
+        result.Count("SOW rates", rateCount);
+
+        var sows = (await db.Sows.AsNoTracking().Select(s => new { s.Number, s.ProjectName, s.CustomerName }).ToListAsync())
+            .Select(s => (s.Number, s.ProjectName, s.CustomerName)).ToList();
+        var sowCount = 0;
+        foreach (var fsow in file.Sows)
+        {
+            if (sows.Any(x => string.Equals(x.Number ?? "", fsow.Number?.Trim() ?? "", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(x.ProjectName, fsow.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(x.CustomerName, fsow.CustomerName.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                result.Skipped.Add($"SOW {fsow.ProjectName} (already here)");
+                continue;
+            }
+            var draft = new SowDraft
+            {
+                Number = fsow.Number, ProjectName = fsow.ProjectName, CustomerId = Map(partnerMap, fsow.CustomerId), CustomerName = fsow.CustomerName, Site = fsow.Site,
+                Manager = fsow.Manager, Status = fsow.Status, PreparedOn = fsow.PreparedOn, ExpiresOn = fsow.ExpiresOn, Overview = fsow.Overview, Scope = fsow.Scope,
+                DetailedDescription = fsow.DetailedDescription, Assumptions = fsow.Assumptions, Schedule = fsow.Schedule, IncludeCostDetail = fsow.IncludeCostDetail,
+                Lines = fsow.Lines.Select(l => new SowLineDraft
+                {
+                    Category = l.Category, Frequency = l.Frequency, Description = l.Description, Quantity = l.Quantity, Unit = l.Unit, Rate = l.Rate, Note = l.Note,
+                }).ToList(),
+            };
+            if (draft.Validate() is { } bad) { result.Skipped.Add($"SOW {fsow.ProjectName} ({bad})"); continue; }
+            var row = new Sow { CreatedAt = fsow.CreatedAt == default ? now : fsow.CreatedAt, UpdatedAt = now };
+            draft.ApplyTo(row);
+            for (var i = 0; i < draft.Lines.Count; i++)
+            {
+                var line = new SowLine();
+                draft.Lines[i].ApplyTo(line, i);
+                row.Lines.Add(line);
+            }
+            db.Sows.Add(row);
+            sows.Add((row.Number, row.ProjectName, row.CustomerName));
+            sowCount++;
+        }
+        await db.SaveChangesAsync();
+        result.Count("SOWs", sowCount);
 
         // History, on a restore: re-pointed at the new ids. Entries for records that no longer exist keep id 0.
         if (!merge)

@@ -57,6 +57,16 @@ public static class ExportEndpoints
             return download == true ? Results.File(bytes, "image/svg+xml", $"{c}-heatmap.svg") : Results.Bytes(bytes, "image/svg+xml");
         });
 
+        // A statement of work as a Kenco-branded PDF, shown in the browser (Save or Print from there).
+        app.MapGet("/export/sows/{id:int}.pdf", async (int id, Roadmapper.Data.Portfolio.PortfolioService svc, HttpContext http) =>
+        {
+            if (await svc.GetSowAsync(id) is not { } sow) return Results.NotFound();
+            var pdf = Roadmapper.Data.Sows.SowPdf.Render(sow, await svc.GetSowSettingsAsync());
+            var name = Roadmapper.Core.Portfolio.SowRules.FileName(sow);
+            http.Response.Headers.ContentDisposition = $"inline; filename=\"{name.Replace("\"", "")}\"; filename*=UTF-8''{Uri.EscapeDataString(name)}";
+            return Results.Bytes(pdf, "application/pdf");
+        });
+
         var export = app.MapGroup("/export/{productId:int}");
 
         export.MapGet("/roadmap.csv", async (int productId, RoadmapService svc) =>

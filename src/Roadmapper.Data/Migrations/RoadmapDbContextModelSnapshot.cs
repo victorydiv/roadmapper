@@ -1605,6 +1605,695 @@ namespace Roadmapper.Data.Migrations
                     b.ToTable("SiteProfiles", (string)null);
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Sow", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Assumptions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DetailedDescription")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ExpiresOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeCostDetail")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Manager")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Overview")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PreparedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProjectName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Schedule")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Site")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Sows", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.SowLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SowId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SowId");
+
+                    b.ToTable("SowLines", (string)null);
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.SowRate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SowRates", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Category = "LaborItPm",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Project management",
+                            Note = "Project management and oversight",
+                            Rate = 150m,
+                            SortOrder = 0,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Category = "LaborItPm",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Product management",
+                            Note = "Design review and as-needed support",
+                            Rate = 150m,
+                            SortOrder = 1,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Design",
+                            Rate = 150m,
+                            SortOrder = 0,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Development",
+                            Rate = 215m,
+                            SortOrder = 1,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Configuration",
+                            Rate = 150m,
+                            SortOrder = 2,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Testing",
+                            Rate = 150m,
+                            SortOrder = 3,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Support",
+                            Rate = 150m,
+                            SortOrder = 4,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "BSA labor (non-bill)",
+                            Note = "BSA labor for oversight, testing, and support.",
+                            Rate = 0m,
+                            SortOrder = 5,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Vendor labor",
+                            Note = "Don't change unless the vendor's rate is higher.",
+                            Rate = 150m,
+                            SortOrder = 6,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Category = "LaborWms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Contingency",
+                            Note = "Usually about 10% of the WMS hours, rounded up.",
+                            Rate = 150m,
+                            SortOrder = 7,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Category = "LaborEdi",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Design",
+                            Note = "Kenco development hours",
+                            Rate = 80m,
+                            SortOrder = 0,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Category = "LaborEdi",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Development",
+                            Note = "Cleo hours",
+                            Rate = 175m,
+                            SortOrder = 1,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Category = "LaborEdi",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Configuration",
+                            Rate = 150m,
+                            SortOrder = 2,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Category = "LaborEdi",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Testing",
+                            Rate = 150m,
+                            SortOrder = 3,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Category = "LaborEdi",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Support",
+                            Rate = 150m,
+                            SortOrder = 4,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Category = "LaborTms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Design",
+                            Rate = 150m,
+                            SortOrder = 0,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Category = "LaborTms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Development",
+                            Rate = 150m,
+                            SortOrder = 1,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Category = "LaborTms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Configuration",
+                            Rate = 150m,
+                            SortOrder = 2,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Category = "LaborTms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Testing",
+                            Rate = 150m,
+                            SortOrder = 3,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Category = "LaborTms",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Support",
+                            Rate = 150m,
+                            SortOrder = 4,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Application readiness",
+                            Rate = 150m,
+                            SortOrder = 0,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Application functional",
+                            Rate = 150m,
+                            SortOrder = 1,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Application regression",
+                            Rate = 150m,
+                            SortOrder = 2,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Application performance",
+                            Rate = 150m,
+                            SortOrder = 3,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Solution end-to-end",
+                            Rate = 150m,
+                            SortOrder = 4,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Solution integration",
+                            Rate = 150m,
+                            SortOrder = 5,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Solution regression",
+                            Rate = 150m,
+                            SortOrder = 6,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 28,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Interface failure",
+                            Rate = 150m,
+                            SortOrder = 7,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 29,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Interface performance",
+                            Rate = 150m,
+                            SortOrder = 8,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Installation qualification (IQ)",
+                            Rate = 150m,
+                            SortOrder = 9,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Operational qualification (OQ)",
+                            Rate = 150m,
+                            SortOrder = 10,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Category = "LaborTesting",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Performance qualification (PQ)",
+                            Rate = 150m,
+                            SortOrder = 11,
+                            Unit = "hour"
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Category = "Software",
+                            Frequency = "Annual",
+                            IsActive = true,
+                            Name = "WMS license",
+                            Rate = 1200m,
+                            SortOrder = 0,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 34,
+                            Category = "Software",
+                            Frequency = "Annual",
+                            IsActive = true,
+                            Name = "LMS license",
+                            Rate = 300m,
+                            SortOrder = 1,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 35,
+                            Category = "Software",
+                            Frequency = "Annual",
+                            IsActive = true,
+                            Name = "AS2 license maintenance",
+                            Rate = 500m,
+                            SortOrder = 2,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 36,
+                            Category = "Software",
+                            Frequency = "Annual",
+                            IsActive = true,
+                            Name = "EDI annual support",
+                            Note = "Enter the support amount as the quantity.",
+                            Rate = 1m,
+                            SortOrder = 3,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 37,
+                            Category = "Software",
+                            Frequency = "Annual",
+                            IsActive = true,
+                            Name = "MercuryGate license",
+                            Rate = 0m,
+                            SortOrder = 4,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 38,
+                            Category = "Software",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "AS2 license",
+                            Rate = 2500m,
+                            SortOrder = 5,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 39,
+                            Category = "Software",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "MercuryGate license",
+                            Rate = 0m,
+                            SortOrder = 6,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 40,
+                            Category = "Software",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Software license",
+                            Note = "For a Blue Yonder software license, add 9.25% sales tax to the cost.",
+                            Rate = 0m,
+                            SortOrder = 7,
+                            Unit = "each"
+                        },
+                        new
+                        {
+                            Id = 41,
+                            Category = "Travel",
+                            Frequency = "OneTime",
+                            IsActive = true,
+                            Name = "Travel",
+                            Note = "Per trip: airfare, hotel, car and meals.",
+                            Rate = 1800m,
+                            SortOrder = 0,
+                            Unit = "trip"
+                        });
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.SowSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Agreement")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CostFootnote")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultAssumptions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultManager")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultSchedule")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultScope")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ExpirationDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Signatories")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SowSettings", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Agreement = "This Statement of Work describes the services Kenco shall supply, perform, and deliver in accordance with this Statement of Work and the Master Agreement. This Statement of Work is executed by a duly authorized representative of the parties as of the date set forth below.",
+                            CostFootnote = "Total costs above do not include any charges from Kenco Logistics Services (KLS) such as management fees, G&A fees, or Cost of Working Capital charges.",
+                            DefaultAssumptions = "- Standard documents and labels will be used",
+                            DefaultSchedule = "- Development to commence upon approval\n- QA schedule based on code completion\n- Go-live based upon testing completion\n- Once a firm schedule is determined, the customer will be notified",
+                            DefaultScope = "- Project management\n- Configuration of the WMS\n- Unit testing, quality assurance testing\n- Production deployment\n- Go-live support",
+                            ExpirationDays = 90,
+                            Signatories = "Kenco Management Services, LLC\nKenco Logistics Services, LLC"
+                        });
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.TodoItem", b =>
                 {
                     b.Property<int>("Id")
@@ -2805,6 +3494,27 @@ namespace Roadmapper.Data.Migrations
                     b.Navigation("Process");
                 });
 
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Sow", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.TradingPartner", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.SowLine", b =>
+                {
+                    b.HasOne("Roadmapper.Core.Portfolio.Sow", "Sow")
+                        .WithMany("Lines")
+                        .HasForeignKey("SowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sow");
+                });
+
             modelBuilder.Entity("Roadmapper.Core.Portfolio.TodoItem", b =>
                 {
                     b.HasOne("Roadmapper.Core.Portfolio.Application", "Application")
@@ -3042,6 +3752,11 @@ namespace Roadmapper.Data.Migrations
             modelBuilder.Entity("Roadmapper.Core.Portfolio.Integration", b =>
                 {
                     b.Navigation("Risks");
+                });
+
+            modelBuilder.Entity("Roadmapper.Core.Portfolio.Sow", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Roadmapper.Core.Portfolio.TradingPartner", b =>

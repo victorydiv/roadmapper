@@ -1,0 +1,407 @@
+@page "/sows/new"
+@page "/sows/{Id:int}"
+@inject PortfolioService Svc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(draft is null ? "SOW" : draft.IsNew ? "New SOW" : draft.ProjectName) · Roadmapper</PageTitle>
+
+<NavigationLock ConfirmExternalNavigation="Dirty" OnBeforeInternalNavigation="OnNavigatingAsync" />
+
+@if (notFound)
+{
+    <div class="card empty">
+        <h2>SOW not found</h2>
+        <p>It may have been deleted. <a href="/sows">Back to statements of work</a></p>
+    </div>
+}
+else if (draft is null || settings is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="product-header">
+        <div>
+            <div class="muted small"><a href="/sows">Statements of work</a> ›</div>
+            <h1>@(draft.IsNew ? "New SOW" : string.IsNullOrWhiteSpace(draft.ProjectName) ? "Untitled SOW" : draft.ProjectName)</h1>
+            <div class="row small">
+                <SowStatusBadge Status="draft.Status" Expired="Expired" />
+                @if (draft.Number is { Length: > 0 } n) { <span class="muted">SOW @n</span> }
+                @if (!string.IsNullOrWhiteSpace(draft.CustomerName)) { <span class="muted">· @draft.CustomerName@(draft.Site is { Length: > 0 } st ? $", {st}" : "")</span> }
+                @if (Dirty) { <span class="badge todo-remind">Unsaved changes</span> }
+                else if (savedFlash) { <span class="badge cheapest">Saved</span> }
+            </div>
+        </div>
+        <span class="spacer"></span>
+        @if (!draft.IsNew)
+        {
+            <a class="btn" href="/sows/new?copy=@draft.Id" title="Start a new SOW from this one: same customer, text and costs">Duplicate</a>
+            @if (confirmDelete)
+            {
+                <button class="btn danger" @onclick="DeleteAsync">Delete this SOW</button>
+                <button class="btn" @onclick="() => confirmDelete = false">Keep</button>
+            }
+            else
+            {
+                <button class="btn danger" @onclick="() => confirmDelete = true">Delete</button>
+            }
+            <a class="btn @(Dirty ? "disabled" : "")" href="@(Dirty ? null : $"/export/sows/{draft.Id}.pdf")" target="_blank"
+               title="@(Dirty ? "Save your changes first; the PDF is made from the saved SOW" : "Open the Kenco-branded PDF in a new tab")">PDF</a>
+        }
+        <button class="btn primary" disabled="@(saving || (!Dirty && !draft.IsNew))" @onclick="SaveAsync">@(saving ? "Saving…" : draft.IsNew ? "Create SOW" : "Save")</button>
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="alert" style="margin-bottom:1rem">@error</div>
+    }
+
+    <div class="sow-layout">
+        <div class="stack">
+            <div class="card stack">
+                <h2 style="margin:0">Summary</h2>
+                <div class="row" style="align-items:flex-end">
+                    <label class="field" style="flex:3;min-width:260px">Project name
+                        <input @bind="draft.ProjectName" @bind:event="oninput" placeholder="e.g. McCormick EDI Implementation" />
+                    </label>
+                    <label class="field" style="flex:1;min-width:130px" title="The Kenco SOW number, e.g. 953100">Kenco SOW number
+                        <input @bind="draft.Number" @bind:event="oninput" placeholder="e.g. 953100" />
+                    </label>
+                    <label class="field" style="flex:1;min-width:170px">Status
+                        <select @bind="draft.Status">
+                            @foreach (var s in Enum.GetValues<SowStatus>())
+                            {
+                                <option value="@s">@PortfolioText.Label(s)</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <div class="row" style="align-items:flex-end">
+                    <label class="field" style="flex:1;min-width:200px" title="Link it to a trading partner: the SOW then shows on the partner's page">Customer (trading partner)
+                        <select value="@(draft.CustomerId?.ToString() ?? "")" @onchange="CustomerChangedAsync">
+                            <option value="">— not in Trading partners —</option>
+                            @foreach (var p in partners)
+                            {
+                                <option value="@p.Id">@p.Name@(p.Type != PartnerType.Customer ? $" ({PortfolioText.Label(p.Type)})" : "")</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field" style="flex:1;min-width:200px" title="The name printed on the SOW and its customer signature block">Customer name on the SOW
+                        <input @bind="draft.CustomerName" @bind:event="oninput" placeholder="e.g. McCormick" />
+                    </label>
+                    <label class="field" style="flex:1;min-width:160px">Site
+                        <input @bind="draft.Site" @bind:event="oninput" list="sow-sites" placeholder="e.g. Hutchins 1, TX" />
+                        <datalist id="sow-sites">
+                            @foreach (var s in suggestions.Sites) { <option value="@s"></option> }
+                        </datalist>
+                    </label>
+                </div>
+                <div class="row" style="align-items:flex-end">
+                    <label class="field" style="flex:2;min-width:200px">Kenco SOW manager
+                        <input @bind="draft.Manager" @bind:event="oninput" list="sow-managers" placeholder="Who manages the work" />
+                        <datalist id="sow-managers">
+                            @foreach (var m in suggestions.Managers) { <option value="@m"></option> }
+                        </datalist>
+                    </label>
+                    <label class="field" style="flex:1;min-width:150px" title="Printed in the footer of every page">Prepared on
+                        <InputDate @bind-Value="draft.PreparedOn" />
+                    </label>
+                    <label class="field" style="flex:1;min-width:150px" title="The offer lapses after this date if it isn't signed">SOW expiration
+                        <InputDate @bind-Value="draft.ExpiresOn" />
+                    </label>
+                    @if (settings.ExpirationDays > 0)
+                    {
+                        <button type="button" class="btn sm" style="margin-bottom:.3rem" title="Set the expiration to @settings.ExpirationDays days after the prepared date"
+                                @onclick="() => draft.ExpiresOn = draft.PreparedOn.AddDays(settings.ExpirationDays)">+@settings.ExpirationDays days</button>
+                    }
+                </div>
+            </div>
+
+            <div class="card stack">
+                <div class="row">
+                    <h2 style="margin:0">Description</h2>
+                    <span class="muted small">One item per line. Start a line with <b>-</b> for a bullet; indent it two spaces for a sub-bullet. Empty sections are left out of the PDF.</span>
+                    <span class="spacer"></span>
+                    @if (CanFillStandard)
+                    {
+                        <button type="button" class="btn sm" title="Fill the empty scope, assumptions and schedule with the standard text from Rates & settings" @onclick="FillStandard">Insert standard text</button>
+                    }
+                </div>
+                <label class="field">Overview
+                    <textarea rows="2" @bind="draft.Overview" @bind:event="oninput" placeholder="e.g. Integration of existing Hutchins 1 customer McCormick"></textarea>
+                </label>
+                <label class="field">Scope of services
+                    <textarea rows="5" @bind="draft.Scope" @bind:event="oninput" placeholder="- Project management&#10;- Configuration of Synapse WMS"></textarea>
+                </label>
+                <label class="field">Detailed description
+                    <textarea rows="8" @bind="draft.DetailedDescription" @bind:event="oninput" placeholder="What will be built or configured, document by document or step by step"></textarea>
+                </label>
+                <div class="grid-2">
+                    <label class="field">Assumptions
+                        <textarea rows="5" @bind="draft.Assumptions" @bind:event="oninput"></textarea>
+                    </label>
+                    <label class="field">Schedule
+                        <textarea rows="5" @bind="draft.Schedule" @bind:event="oninput"></textarea>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card stack">
+                <div class="row">
+                    <h2 style="margin:0">Costs</h2>
+                    <span class="muted small">Quantity × rate. Rates are copied from the rate card, so later rate changes don't alter this SOW.</span>
+                </div>
+                <div class="row">
+                    <select value="" @onchange="AddFromRateCard" style="width:auto;min-width:280px" title="Add a line at a standard rate">
+                        <option value="">+ Add from the rate card…</option>
+                        @foreach (var group in rates.GroupBy(r => r.Category))
+                        {
+                            <optgroup label="@PortfolioText.Label(group.Key)">
+                                @if (group.Count() > 1)
+                                {
+                                    <option value="all:@group.Key">All @group.Count() @PortfolioText.Label(group.Key) rates</option>
+                                }
+                                @foreach (var r in group)
+                                {
+                                    <option value="r:@r.Id">@r.Name · @PortfolioUi.Money(r.Rate)@(r.Unit is { } u ? $"/{u}" : "")@(r.Frequency == SowFrequency.Annual ? " a year" : "")</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <button type="button" class="btn" @onclick="AddCustom">+ Custom line</button>
+                    <span class="spacer"></span>
+                    @if (draft.Lines.Any(l => l.Quantity == 0))
+                    {
+                        <button type="button" class="btn sm" title="Remove every line with no quantity" @onclick="() => draft.Lines.RemoveAll(l => l.Quantity == 0)">Remove empty lines (@draft.Lines.Count(l => l.Quantity == 0))</button>
+                    }
+                    <label class="row small" style="gap:.3rem" title="Adds a page after the signatures listing every line: quantity, rate and amount">
+                        <input type="checkbox" @bind="draft.IncludeCostDetail" /> Cost detail page in the PDF
+                    </label>
+                </div>
+                @if (draft.Lines.Count == 0)
+                {
+                    <div class="muted small">No costs yet. Add lines from the rate card (e.g. <b>All Labor - EDI rates</b>, then fill in the hours) or a custom line.</div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="tree sow-lines">
+                            <thead>
+                                <tr>
+                                    <th>Category</th><th>Description</th><th>Frequency</th><th class="num">Quantity</th><th>Unit</th>
+                                    <th class="num">Rate</th><th class="num">Amount</th><th>Note (not printed)</th><th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in draft.Lines)
+                                {
+                                    <tr class="@(line.Quantity == 0 ? "faded" : "")">
+                                        <td>
+                                            <select @bind="line.Category">
+                                                @foreach (var c in SowRules.Categories)
+                                                {
+                                                    <option value="@c">@PortfolioText.Label(c)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td><input @bind="line.Description" @bind:event="oninput" placeholder="e.g. Development" style="min-width:170px" /></td>
+                                        <td>
+                                            <select @bind="line.Frequency">
+                                                <option value="@SowFrequency.OneTime">One-time</option>
+                                                <option value="@SowFrequency.Annual">Annual</option>
+                                            </select>
+                                        </td>
+                                        <td class="num"><input type="number" min="0" step="0.25" @bind="line.Quantity" style="width:6.5rem" /></td>
+                                        <td><input @bind="line.Unit" placeholder="hour" style="width:5.5rem" /></td>
+                                        <td class="num"><input type="number" min="0" step="0.01" @bind="line.Rate" style="width:7rem" /></td>
+                                        <td class="num"><b>@PortfolioUi.Money(line.Amount)</b></td>
+                                        <td><input @bind="line.Note" placeholder="optional" style="min-width:140px" title="@line.Note" /></td>
+                                        <td class="nowrap">
+                                            <button type="button" class="btn icon sm" title="Move up" disabled="@(draft.Lines.IndexOf(line) == 0)" @onclick="() => Move(line, -1)">↑</button>
+                                            <button type="button" class="btn icon sm" title="Move down" disabled="@(draft.Lines.IndexOf(line) == draft.Lines.Count - 1)" @onclick="() => Move(line, 1)">↓</button>
+                                            <button type="button" class="btn icon sm" title="Remove this line" @onclick="() => draft.Lines.Remove(line)">✕</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <aside class="card stack sow-summary">
+            <h2 style="margin:0">Cost summary</h2>
+            <div class="muted small">As it prints on the SOW.</div>
+            <table class="tree">
+                <thead><tr><th>Category</th><th class="num">One-time</th><th class="num">Annual</th></tr></thead>
+                <tbody>
+                    @foreach (var r in totals.Rows)
+                    {
+                        <tr class="@(r.OneTime == 0 && r.Annual == 0 ? "faded" : "")">
+                            <td>@PortfolioText.Label(r.Category)</td>
+                            <td class="num">@(r.OneTime == 0 ? "–" : PortfolioUi.Money(r.OneTime))</td>
+                            <td class="num">@(r.Annual == 0 ? "–" : PortfolioUi.Money(r.Annual))</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="sow-total">
+                        <td><b>Total</b></td>
+                        <td class="num"><b>@PortfolioUi.Money(totals.OneTime)</b></td>
+                        <td class="num"><b>@PortfolioUi.Money(totals.Annual)</b></td>
+                    </tr>
+                </tfoot>
+            </table>
+            @if (LaborHours > 0)
+            {
+                <div class="muted small">@LaborHours.ToString("#,0.##") labor hours.</div>
+            }
+            @if (settings.CostFootnote is { } note)
+            {
+                <div class="muted small">* @note</div>
+            }
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    /// <summary>?copy=5 starts a new SOW from SOW 5; ?customer=12 starts one for trading partner 12.</summary>
+    [SupplyParameterFromQuery(Name = "copy")] public int? CopyId { get; set; }
+    [SupplyParameterFromQuery(Name = "customer")] public int? CustomerParam { get; set; }
+
+    private SowDraft? draft;
+    private SowSettings? settings;
+    private List<TradingPartner> partners = [];
+    private List<SowRate> rates = [];
+    private SowSuggestions suggestions = new([], []);
+    private string savedSnapshot = "", loadedKey = "-";
+    private string? error;
+    private bool notFound, saving, savedFlash, confirmDelete;
+    private DateOnly today;
+
+    private SowTotals totals => draft?.Totals ?? SowRules.Totals([]);
+    private decimal LaborHours => draft?.Lines.Where(l => SowRules.IsLabor(l.Category) && (l.Unit ?? "hour").StartsWith("hour", StringComparison.OrdinalIgnoreCase)).Sum(l => l.Quantity) ?? 0;
+    private bool Expired => draft is { } d && d.Status is SowStatus.Draft or SowStatus.Sent && d.ExpiresOn is { } e && e < today;
+    private bool Dirty => draft is not null && Snapshot(draft) != savedSnapshot;
+    private bool CanFillStandard => draft is { } d && settings is { } s
+        && ((string.IsNullOrWhiteSpace(d.Scope) && s.DefaultScope is not null) || (string.IsNullOrWhiteSpace(d.Assumptions) && s.DefaultAssumptions is not null)
+            || (string.IsNullOrWhiteSpace(d.Schedule) && s.DefaultSchedule is not null));
+
+    private static string Snapshot(SowDraft d) => System.Text.Json.JsonSerializer.Serialize(d);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{Id}|{CopyId}|{CustomerParam}";
+        if (key == loadedKey) return;
+        loadedKey = key;
+        today = Svc.Today;
+        settings = await Svc.GetSowSettingsAsync();
+        partners = (await Svc.GetPartnersAsync()).OrderBy(p => p.Type != PartnerType.Customer).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        rates = await Svc.GetSowRatesAsync(includeInactive: false);
+        notFound = false;
+        if (Id is { } id)
+        {
+            if (await Svc.GetSowAsync(id) is not { } sow) { notFound = true; return; }
+            draft = SowDraft.From(sow);
+            savedSnapshot = Snapshot(draft);
+        }
+        else
+        {
+            draft = CopyId is { } copy && await Svc.GetSowAsync(copy) is { } source ? SowDraft.Copy(source, settings, today) : SowDraft.New(settings, today);
+            if (CopyId is null && CustomerParam is { } cid && partners.FirstOrDefault(p => p.Id == cid) is { } partner)
+            {
+                draft.CustomerId = partner.Id;
+                draft.CustomerName = partner.Name;
+            }
+            savedSnapshot = Snapshot(draft);
+        }
+        suggestions = await Svc.GetSowSuggestionsAsync(draft.CustomerId);
+    }
+
+    private async Task CustomerChangedAsync(ChangeEventArgs e)
+    {
+        if (draft is null) return;
+        var old = partners.FirstOrDefault(p => p.Id == draft.CustomerId);
+        draft.CustomerId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        var chosen = partners.FirstOrDefault(p => p.Id == draft.CustomerId);
+        // Follow the partner's name unless it was typed differently on purpose.
+        if (chosen is not null && (string.IsNullOrWhiteSpace(draft.CustomerName) || draft.CustomerName == old?.Name)) draft.CustomerName = chosen.Name;
+        suggestions = await Svc.GetSowSuggestionsAsync(draft.CustomerId);
+    }
+
+    private void FillStandard()
+    {
+        if (draft is null || settings is null) return;
+        if (string.IsNullOrWhiteSpace(draft.Scope)) draft.Scope = settings.DefaultScope;
+        if (string.IsNullOrWhiteSpace(draft.Assumptions)) draft.Assumptions = settings.DefaultAssumptions;
+        if (string.IsNullOrWhiteSpace(draft.Schedule)) draft.Schedule = settings.DefaultSchedule;
+    }
+
+    private void AddFromRateCard(ChangeEventArgs e)
+    {
+        if (draft is null || e.Value?.ToString() is not { Length: > 0 } value) return;
+        if (value.StartsWith("all:") && Enum.TryParse<SowCostCategory>(value[4..], out var cat))
+            foreach (var r in rates.Where(r => r.Category == cat)) Insert(SowLineDraft.From(r));
+        else if (value.StartsWith("r:") && int.TryParse(value[2..], out var id) && rates.FirstOrDefault(r => r.Id == id) is { } rate)
+            Insert(SowLineDraft.From(rate));
+    }
+
+    private void AddCustom()
+    {
+        if (draft is null) return;
+        var category = draft.Lines.LastOrDefault()?.Category ?? SowCostCategory.LaborItPm;
+        draft.Lines.Add(new SowLineDraft { Category = category, Unit = SowRules.DefaultUnit(category) });
+    }
+
+    /// <summary>Adds a line after the last one of its category (or where its category falls in print order), keeping categories together.</summary>
+    private void Insert(SowLineDraft line)
+    {
+        var lines = draft!.Lines;
+        var at = lines.FindLastIndex(l => l.Category <= line.Category);
+        lines.Insert(at + 1, line);
+    }
+
+    private void Move(SowLineDraft line, int by)
+    {
+        var lines = draft!.Lines;
+        var i = lines.IndexOf(line);
+        var j = i + by;
+        if (j < 0 || j >= lines.Count) return;
+        (lines[i], lines[j]) = (lines[j], lines[i]);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (draft is null) return;
+        error = null;
+        saving = true;
+        try
+        {
+            var wasNew = draft.IsNew;
+            draft.Id = await Svc.SaveSowAsync(draft);
+            savedSnapshot = Snapshot(draft);
+            savedFlash = true;
+            if (wasNew) Nav.NavigateTo($"/sows/{draft.Id}", replace: true);
+            suggestions = await Svc.GetSowSuggestionsAsync(draft.CustomerId);
+        }
+        catch (InvalidOperationException ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (draft is null) return;
+        await Svc.DeleteSowAsync(draft.Id);
+        savedSnapshot = Snapshot(draft); // nothing left to lose
+        Nav.NavigateTo("/sows");
+    }
+
+    private async Task OnNavigatingAsync(LocationChangingContext context)
+    {
+        if (!Dirty) return;
+        if (!await JS.InvokeAsync<bool>("confirm", "This SOW has unsaved changes. Leave without saving?")) context.PreventNavigation();
+    }
+}

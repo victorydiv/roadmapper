@@ -206,6 +206,28 @@ public static class PortfolioText
 
     public static string Label(DeploymentStatus s) => s.ToString();
 
+    public static string Label(SowStatus s) => s switch
+    {
+        SowStatus.Sent => "Sent to customer",
+        SowStatus.Approved => "Approved (signed)",
+        _ => s.ToString(),
+    };
+
+    /// <summary>The cost row's name as it prints on the SOW: "IT Infrastructure", "Labor - WMS"…</summary>
+    public static string Label(SowCostCategory c) => c switch
+    {
+        SowCostCategory.ItInfrastructure => "IT Infrastructure",
+        SowCostCategory.LaborItPm => "Labor - IT PM",
+        SowCostCategory.LaborWms => "Labor - WMS",
+        SowCostCategory.LaborTms => "Labor - TMS",
+        SowCostCategory.LaborEdi => "Labor - EDI",
+        SowCostCategory.LaborTesting => "Labor - Testing",
+        SowCostCategory.LaborInfrastructure => "Labor - Infrastructure",
+        _ => c.ToString(),
+    };
+
+    public static string Label(SowFrequency f) => f == SowFrequency.OneTime ? "One-time" : "Annual";
+
     public static string Label(PartnerStatus s) => s.ToString();
 
     public static string Label(PartnerImportance i) => i == PartnerImportance.Key ? "Key partner" : "Standard";

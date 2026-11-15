@@ -1,0 +1,10 @@
+@* A SOW's status as a coloured pill; a draft or sent SOW past its expiration date shows "Expired" beside it. *@
+<span class="badge sow-@Status">@PortfolioText.Label(Status)</span>@if (Expired)
+{
+    <span class="badge sow-expired" title="Past its expiration date and not signed">Expired</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public SowStatus Status { get; set; }
+    [Parameter] public bool Expired { get; set; }
+}

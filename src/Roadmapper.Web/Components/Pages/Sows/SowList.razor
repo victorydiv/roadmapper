@@ -1,0 +1,132 @@
+@page "/sows"
+@inject PortfolioService Svc
+
+<PageTitle>Statements of work · Roadmapper</PageTitle>
+
+<div class="product-header">
+    <div>
+        <h1>Statements of work</h1>
+        <div class="muted small">Write a SOW, price it from the rate card, and print it as a Kenco-branded PDF for signature. This replaces the SOW estimation spreadsheet.</div>
+    </div>
+    <span class="spacer"></span>
+    <a class="btn" href="/sows/settings">Rates &amp; settings</a>
+    <a class="btn primary" href="/sows/new">+ New SOW</a>
+</div>
+
+@if (sows is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="tiles" style="margin-bottom:1rem">
+        <div class="card tile"><span class="tile-label">Drafts</span><span class="tile-value">@sows.Count(s => s.Status == SowStatus.Draft)</span></div>
+        <div class="card tile" title="Sent to the customer, not yet signed"><span class="tile-label">Awaiting signature</span><span class="tile-value">@sows.Count(s => s.Status == SowStatus.Sent)</span></div>
+        <div class="card tile"><span class="tile-label">Expired</span><span class="tile-value @(Expired > 0 ? "overdue" : "")">@Expired</span></div>
+        <div class="card tile" title="One-time total of the SOWs signed this year"><span class="tile-label">Signed this year</span><span class="tile-value">@PortfolioUi.MoneyShort(SignedThisYear)</span></div>
+    </div>
+
+    <div class="toolbar">
+        <div class="segmented">
+            <button class="@(show == "open" ? "on" : "")" @onclick='() => show = "open"' title="Drafts and SOWs awaiting signature">Open</button>
+            <button class="@(show == "approved" ? "on" : "")" @onclick='() => show = "approved"'>Signed</button>
+            <button class="@(show == "all" ? "on" : "")" @onclick='() => show = "all"'>All</button>
+        </div>
+        <input placeholder="Find a SOW, customer or site…" @bind="search" @bind:event="oninput" style="min-width:240px;width:auto" />
+    </div>
+
+    @if (Visible.Count == 0)
+    {
+        <div class="card empty">
+            @if (sows.Count == 0)
+            {
+                <span>No SOWs yet. <a href="/sows/new">Write the first one →</a></span>
+            }
+            else
+            {
+                <span>No SOWs match.</span>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card table-wrap" style="padding:0">
+            <table class="tree">
+                <thead>
+                    <tr>
+                        <th>SOW #</th><th>Project</th><th>Customer</th><th>Site</th><th>Status</th>
+                        <th class="num">One-time</th><th class="num">Annual</th><th>Prepared</th><th>Expires</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Visible)
+                    {
+                        var totals = s.Totals;
+                        <tr>
+                            <td class="mono">@s.Number</td>
+                            <td style="white-space:normal;min-width:220px"><a href="/sows/@s.Id"><b>@s.ProjectName</b></a></td>
+                            <td>
+                                @if (s.CustomerId is { } cid)
+                                {
+                                    <a href="/portfolio/partners/@cid">@s.CustomerName</a>
+                                }
+                                else
+                                {
+                                    @s.CustomerName
+                                }
+                            </td>
+                            <td>@s.Site</td>
+                            <td><SowStatusBadge Status="s.Status" Expired="SowRules.IsExpired(s, today)" /></td>
+                            <td class="num">@PortfolioUi.Money(totals.OneTime)</td>
+                            <td class="num">@(totals.Annual == 0 ? "–" : PortfolioUi.Money(totals.Annual))</td>
+                            <td class="small">@PortfolioUi.Date(s.PreparedOn)</td>
+                            <td class="small @(SowRules.IsExpired(s, today) ? "overdue" : "")">@PortfolioUi.Date(s.ExpiresOn)</td>
+                            <td><a class="btn sm" href="/export/sows/@(s.Id).pdf" target="_blank" title="Open the PDF">PDF</a></td>
+                        </tr>
+                    }
+                </tbody>
+                @if (Visible.Count > 1)
+                {
+                    <tfoot>
+                        <tr>
+                            <td colspan="5"><b>@Visible.Count SOWs</b></td>
+                            <td class="num"><b>@PortfolioUi.Money(Visible.Sum(s => s.Totals.OneTime))</b></td>
+                            <td class="num"><b>@PortfolioUi.Money(Visible.Sum(s => s.Totals.Annual))</b></td>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private List<Sow>? sows;
+    private string show = "open", search = "";
+    private DateOnly today;
+
+    private int Expired => (sows ?? []).Count(s => SowRules.IsExpired(s, today));
+
+    private decimal SignedThisYear => (sows ?? []).Where(s => s.Status == SowStatus.Approved && s.PreparedOn.Year == today.Year).Sum(s => s.Totals.OneTime);
+
+    private List<Sow> Visible => (sows ?? [])
+        .Where(s => show switch
+        {
+            "open" => s.Status is SowStatus.Draft or SowStatus.Sent,
+            "approved" => s.Status == SowStatus.Approved,
+            _ => true,
+        })
+        .Where(s => search is not { Length: > 0 } q
+            || s.ProjectName.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || s.CustomerName.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || (s.Number?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (s.Site?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = Svc.Today;
+        sows = await Svc.GetSowsAsync();
+    }
+}

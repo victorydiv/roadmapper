@@ -41,6 +41,9 @@ public sealed class PortfolioFile
     public List<PfDevCostCategory> DevCostCategories { get; set; } = [];
     public List<PfDevProject> DevProjects { get; set; } = [];
     public List<PfTodo> Todos { get; set; } = [];
+    public PfSowSettings? SowSettings { get; set; }
+    public List<PfSowRate> SowRates { get; set; } = [];
+    public List<PfSow> Sows { get; set; } = [];
     public List<PfHistory> History { get; set; } = [];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -83,7 +86,8 @@ public sealed class PortfolioFile
         // Null lists can come from hand-edited or older files; treat them as empty.
         Contacts ??= []; Vendors ??= []; Partners ??= []; Applications ??= []; Integrations ??= []; Processes ??= [];
         Benefits ??= []; Decisions ??= []; Documents ??= []; Features ??= []; ComparisonMembers ??= []; PricingLines ??= []; SiteProfiles ??= []; History ??= [];
-        DevCostCategories ??= []; DevProjects ??= []; Todos ??= []; Deployments ??= [];
+        DevCostCategories ??= []; DevProjects ??= []; Todos ??= []; Deployments ??= []; SowRates ??= []; Sows ??= [];
+        foreach (var s in Sows) s.Lines ??= [];
         foreach (var p in DevProjects) p.Costs ??= [];
         foreach (var f in Features) f.Ratings ??= [];
         if (Settings is not null) Settings.DocumentFolders ??= [];
@@ -127,6 +131,8 @@ public sealed class PortfolioFile
         Named(DevProjects.Select(p => p.Name), "development project");
         if (DevProjects.Any(p => string.IsNullOrWhiteSpace(p.Product))) errors.Add("A development project has no product.");
         if (Todos.Any(t => string.IsNullOrWhiteSpace(t.Title))) errors.Add("A to-do has no title.");
+        Named(Sows.Select(s => s.ProjectName), "SOW");
+        Named(SowRates.Select(r => r.Name), "SOW rate");
         if (errors.Count > 0) return errors;
 
         var contacts = Contacts.Select(c => c.Id).ToHashSet();
@@ -218,6 +224,7 @@ public sealed class PortfolioFile
                 case DocumentTargetKind.DevProject: Ref(d.TargetId ?? 0, devProjects, "development project", where); break;
             }
         }
+        foreach (var s in Sows) Ref(s.CustomerId, partners, "trading partner", $"SOW “{s.ProjectName}”");
         foreach (var t in Todos)
         {
             var where = $"To-do “{t.Title}”";
@@ -542,6 +549,47 @@ public sealed class PfTodo
     public int? ContactId { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>The SOW settings: expiration, default manager, who signs for Kenco, and the standard wording.</summary>
+public sealed class PfSowSettings
+{
+    public int ExpirationDays { get; set; } = 90;
+    public string? DefaultManager { get; set; }
+    public string? Signatories { get; set; }
+    public string? CostFootnote { get; set; }
+    public string? Agreement { get; set; }
+    public string? DefaultScope { get; set; }
+    public string? DefaultAssumptions { get; set; }
+    public string? DefaultSchedule { get; set; }
+}
+
+/// <summary>A rate on the SOW rate card.</summary>
+public sealed record PfSowRate(SowCostCategory Category, SowFrequency Frequency, string Name, decimal Rate, string? Unit, string? Note, bool IsActive, int SortOrder);
+
+/// <summary>A statement of work and its cost lines. <see cref="CustomerId"/> is a trading partner's id, when it's linked to one.</summary>
+public sealed class PfSow
+{
+    public string? Number { get; set; }
+    public string ProjectName { get; set; } = "";
+    public int? CustomerId { get; set; }
+    public string CustomerName { get; set; } = "";
+    public string? Site { get; set; }
+    public string? Manager { get; set; }
+    public SowStatus Status { get; set; }
+    public DateOnly PreparedOn { get; set; }
+    public DateOnly? ExpiresOn { get; set; }
+    public string? Overview { get; set; }
+    public string? Scope { get; set; }
+    public string? DetailedDescription { get; set; }
+    public string? Assumptions { get; set; }
+    public string? Schedule { get; set; }
+    public bool IncludeCostDetail { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<PfSowLine> Lines { get; set; } = [];
+}
+
+/// <summary>One cost line of a SOW.</summary>
+public sealed record PfSowLine(SowCostCategory Category, SowFrequency Frequency, string Description, decimal Quantity, string? Unit, decimal Rate, string? Note);
 
 /// <summary>A development cost category (DEV, QA, EDI, PM…).</summary>
 public sealed record PfDevCostCategory(int Id, string Name, decimal? DefaultRate, int SortOrder);
